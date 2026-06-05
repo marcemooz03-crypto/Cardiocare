@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat Socket.io</title>
+</head>
+<body>
+
+  <h2>Chat en tiempo real</h2>
+
+  <input id="msg" placeholder="Escribe mensaje">
+  <button onclick="send()">Enviar</button>
+
+  <ul id="chat"></ul>
+
+  <!-- Socket.io client -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+  <script>
+    // 🔌 conectar al backend
+    const socket = io("http://localhost:3000");
+
+    const chat = document.getElementById("chat");
+
+    // 🟢 conexión
+    socket.on("connect", () => {
+      console.log("Conectado:", socket.id);
+
+      // entrar a sala
+      socket.emit("join_room", "chat1");
+    });
+
+    // 💬 recibir mensajes
+    socket.on("new_message", (data) => {
+      const li = document.createElement("li");
+      li.innerText = data.message;
+      chat.appendChild(li);
+    });
+
+    // 📤 enviar mensaje
+    function send() {
+      const input = document.getElementById("msg");
+
+      socket.emit("new_message", {
+        conversationId: "chat1",
+        message: input.value,
+        senderId: 1,
+        createdAt: new Date()
+      });
+
+      input.value = "";
+    }
+  </script>
+
+</body>
+</html>
