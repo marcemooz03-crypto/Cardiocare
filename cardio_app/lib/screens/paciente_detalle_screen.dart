@@ -95,13 +95,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Row(
-          children: [
-            Icon(isError ? Icons.error_outline : Icons.check_circle, color: Colors.white, size: 20),
-            const SizedBox(width: 12),
-            Expanded(child: Text(msg)),
-          ],
-        ),
+        content: Text(msg),
         backgroundColor: isError ? AppTheme.danger : AppTheme.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -119,7 +113,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       );
       if (idConversacion != null) loadNotificaciones();
     } catch (e) {
-      debugPrint("❌ ERROR INIT CHAT => $e");
+      debugPrint("ERROR INIT CHAT => $e");
     }
   }
 
@@ -147,7 +141,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         ),
       ).then((_) => loadNotificaciones());
     } catch (e) {
-      debugPrint("❌ ERROR CHAT => $e");
+      debugPrint("ERROR CHAT => $e");
     }
   }
 
@@ -397,7 +391,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── ADHERENCIA ───
+  // ADHERENCIA
   Widget _buildAdherenciaView() {
     if (adherencia == null) {
       return _buildEmptyPage(
@@ -414,8 +408,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 500),
+          Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -498,7 +491,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── RECOMENDACIONES ───
+  // RECOMENDACIONES
   Widget _buildRecomendacionesView() {
     return Column(
       children: [
@@ -543,8 +536,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _buildRecomendacionCard(Map<String, dynamic> r) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+    return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -584,7 +576,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── ALERTAS MEJORADAS ───
+  // ALERTAS
   Widget _alertasView() {
     if (alertas.isEmpty) {
       return _buildEmptyPage("Sin alertas", Icons.notifications_none, "No hay alertas registradas para este paciente.");
@@ -601,75 +593,52 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         final descripcion = a["descripcion"]?.toString() ?? "";
 
         Color color;
-        Color bgColor;
-        IconData icono;
         String titulo;
 
         switch (nivel.toLowerCase()) {
           case "alto":
             color = AppTheme.danger;
-            bgColor = AppTheme.danger.withOpacity(0.1);
-            icono = Icons.warning_amber_rounded;
-            titulo = "⚠️ ALERTA CRÍTICA";
+            titulo = "ALERTA CRÍTICA";
             break;
           case "medio":
             color = AppTheme.warning;
-            bgColor = AppTheme.warning.withOpacity(0.1);
-            icono = Icons.info_outline;
-            titulo = "⚡ ALERTA IMPORTANTE";
+            titulo = "ALERTA IMPORTANTE";
             break;
           default:
             color = AppTheme.info;
-            bgColor = AppTheme.info.withOpacity(0.1);
-            icono = Icons.check_circle_outline;
-            titulo = "ℹ️ INFORMACIÓN";
+            titulo = "INFORMACIÓN";
         }
 
         String origenTexto = "";
-        String origenIcono = "";
         switch (origen.toUpperCase()) {
           case "SIGNO":
             origenTexto = "Signos vitales";
-            origenIcono = "🩺";
             break;
           case "SINTOMA":
             origenTexto = "Síntomas reportados";
-            origenIcono = "🤒";
             break;
           case "MANUAL":
             origenTexto = "Registro manual";
-            origenIcono = "📝";
             break;
           default:
             origenTexto = "Sistema";
-            origenIcono = "⚙️";
         }
 
-        String infoEspecifica = "";
-        String accionRecomendada = "";
-        
+        String infoEspecifica = descripcion;
+        String accionRecomendada = "Monitorear la evolución del paciente";
+
         if (descripcion.toLowerCase().contains("presion") || descripcion.toLowerCase().contains("presión")) {
           infoEspecifica = "La presión arterial está fuera de los rangos normales";
-          accionRecomendada = "Tomar medicación según indicación médica y monitorear cada 2 horas";
+          accionRecomendada = "Tomar medicación según indicación médica";
         } else if (descripcion.toLowerCase().contains("frecuencia") || descripcion.toLowerCase().contains("cardiaca")) {
           infoEspecifica = "La frecuencia cardíaca presenta valores anormales";
-          accionRecomendada = "Reposar y verificar nuevamente en 15 minutos";
+          accionRecomendada = "Reposar y verificar nuevamente";
         } else if (descripcion.toLowerCase().contains("saturacion") || descripcion.toLowerCase().contains("oxígeno")) {
           infoEspecifica = "La saturación de oxígeno está baja";
-          accionRecomendada = "Mantener posición semi-sentada y contactar al médico";
-        } else if (descripcion.toLowerCase().contains("sintoma") || descripcion.toLowerCase().contains("síntoma")) {
-          infoEspecifica = "El paciente ha reportado síntomas preocupantes";
-          accionRecomendada = "Realizar seguimiento y evaluar necesidad de cita médica";
-        } else if (descripcion.toLowerCase().contains("cita")) {
-          infoEspecifica = "Hay una cita médica pendiente o próxima a vencer";
-          accionRecomendada = "Confirmar asistencia o reprogramar si es necesario";
-        } else {
-          infoEspecifica = descripcion;
-          accionRecomendada = "Monitorear la evolución del paciente";
+          accionRecomendada = "Contactar al médico";
         }
 
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
+        return Container(
           margin: const EdgeInsets.only(bottom: 12),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -683,7 +652,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: bgColor,
+                  color: color.withOpacity(0.1),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(19),
                     topRight: Radius.circular(19),
@@ -697,7 +666,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                         color: color.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Icon(icono, color: color, size: 28),
+                      child: Icon(Icons.warning_amber_rounded, color: color, size: 28),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -706,24 +675,19 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                         children: [
                           Text(titulo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
                           const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Text("$origenIcono $origenTexto", style: const TextStyle(fontSize: 12, color: AppTheme.gray500)),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: estado == "ATENDIDA" ? AppTheme.success.withOpacity(0.1) : AppTheme.warning.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  estado == "ATENDIDA" ? "✓ Atendida" : "⏳ Pendiente",
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: estado == "ATENDIDA" ? AppTheme.success : AppTheme.warning),
-                                ),
-                              ),
-                            ],
-                          ),
+                          Text(origenTexto, style: const TextStyle(fontSize: 12, color: AppTheme.gray500)),
                         ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: estado == "ATENDIDA" ? AppTheme.success.withOpacity(0.1) : AppTheme.warning.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        estado == "ATENDIDA" ? "Atendida" : "Pendiente",
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: estado == "ATENDIDA" ? AppTheme.success : AppTheme.warning),
                       ),
                     ),
                   ],
@@ -743,15 +707,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.description, size: 16, color: AppTheme.primary),
-                              SizedBox(width: 8),
-                              Text("¿Qué ocurrió?", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.gray700)),
-                            ],
-                          ),
+                          const Text("Detalle:", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.gray700)),
                           const SizedBox(height: 6),
-                          Text(infoEspecifica, style: const TextStyle(fontSize: 13, height: 1.4, color: AppTheme.gray700)),
+                          Text(infoEspecifica, style: const TextStyle(fontSize: 13, color: AppTheme.gray700)),
                         ],
                       ),
                     ),
@@ -761,16 +719,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                       decoration: BoxDecoration(
                         color: color.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: color.withOpacity(0.2)),
                       ),
                       child: Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                            child: Icon(Icons.medical_services, size: 18, color: color),
-                          ),
-                          const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -799,7 +750,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                                 final ok = await alertaService.marcarAlertaLeida(id);
                                 if (ok && mounted) {
                                   setState(() => a["leida"] = 1);
-                                  _snack("✅ Alerta marcada como atendida");
+                                  _snack("Alerta marcada como atendida");
                                   await loadAlertas();
                                 }
                               }
@@ -809,8 +760,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                               foregroundColor: Colors.white,
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
                             child: const Text("Marcar atendida", style: TextStyle(fontSize: 12)),
                           ),
@@ -826,7 +775,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── SIGNOS ───
+  // SIGNOS
   Widget _signosView() {
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -947,21 +896,15 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.show_chart, size: 18, color: AppTheme.primary),
-                  SizedBox(width: 8),
-                  Text("Historial de mediciones", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                ],
-              ),
+              const Text("Historial de mediciones", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               Wrap(
                 spacing: 16,
                 runSpacing: 6,
                 children: [
-                  _leyenda(const Color(0xFFEF4444), "Sistólica (Presión)"),
-                  _leyenda(const Color(0xFF3B82F6), "Diastólica (Presión)"),
-                  _leyenda(const Color(0xFFEC4899), "FC (Frecuencia Cardiaca)"),
+                  _leyenda(const Color(0xFFEF4444), "Sistólica"),
+                  _leyenda(const Color(0xFF3B82F6), "Diastólica"),
+                  _leyenda(const Color(0xFFEC4899), "FC"),
                 ],
               ),
               const SizedBox(height: 16),
@@ -981,7 +924,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                           showTitles: true,
                           reservedSize: 45,
                           interval: (maxY - minY) / 4,
-                          getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                          getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(fontSize: 11)),
                         ),
                       ),
                       bottomTitles: AxisTitles(
@@ -999,7 +942,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                                 padding: const EdgeInsets.only(top: 8),
                                 child: Column(
                                   children: [
-                                    Text("${f.day}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                                    Text("${f.day}", style: const TextStyle(fontSize: 11)),
                                     Text(_meses[f.month - 1], style: const TextStyle(fontSize: 9, color: AppTheme.gray500)),
                                   ],
                                 ),
@@ -1029,8 +972,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                               case 1: nombre = "Presión Diastólica"; break;
                               default: nombre = "Frecuencia Cardiaca";
                             }
-                            String unidad = touchedSpot.barIndex == 2 ? " lpm" : " mmHg";
-                            return LineTooltipItem("$nombre: ${touchedSpot.y.toInt()}$unidad", const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600));
+                            return LineTooltipItem("$nombre: ${touchedSpot.y.toInt()}", const TextStyle(color: Colors.white, fontSize: 12));
                           }).toList();
                         },
                       ),
@@ -1154,7 +1096,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 icono: Icons.air,
                 iconColor: const Color(0xFF0F766E),
                 iconBg: const Color(0xFFCCFBF1),
-                titulo: "Oxígeno en sangre",
+                titulo: "Oxígeno",
                 valor: "$spo2",
                 unidad: "%",
                 valorColor: const Color(0xFF0F766E),
@@ -1274,21 +1216,21 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
   Widget _estadoBadgePresion(int sistolica) {
     if (sistolica < 120) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1), AppTheme.success);
-    if (sistolica < 130) return _badgeWidget("Un poco elevada — consulta tu médico", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
-    if (sistolica < 140) return _badgeWidget("Elevada — avisa a tu médico pronto", AppTheme.warning.withOpacity(0.15), AppTheme.warning);
-    return _badgeWidget("Muy alta — busca atención médica", AppTheme.danger.withOpacity(0.1), AppTheme.danger);
+    if (sistolica < 130) return _badgeWidget("Leve", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
+    if (sistolica < 140) return _badgeWidget("Elevada", AppTheme.warning.withOpacity(0.15), AppTheme.warning);
+    return _badgeWidget("Muy alta", AppTheme.danger.withOpacity(0.1), AppTheme.danger);
   }
 
   Widget _estadoBadgeFC(int fc) {
     if (fc >= 60 && fc <= 100) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1), AppTheme.success);
-    if (fc < 60) return _badgeWidget("Baja — informa a tu médico", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
-    return _badgeWidget("Alta — informa a tu médico", AppTheme.warning.withOpacity(0.15), AppTheme.warning);
+    if (fc < 60) return _badgeWidget("Baja", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
+    return _badgeWidget("Alta", AppTheme.warning.withOpacity(0.15), AppTheme.warning);
   }
 
   Widget _estadoBadgeSpo2(int spo2) {
     if (spo2 >= 95) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1), AppTheme.success);
-    if (spo2 >= 90) return _badgeWidget("Un poco bajo — avisa a tu médico", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
-    return _badgeWidget("Muy bajo — busca atención urgente", AppTheme.danger.withOpacity(0.1), AppTheme.danger);
+    if (spo2 >= 90) return _badgeWidget("Bajo", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
+    return _badgeWidget("Crítico", AppTheme.danger.withOpacity(0.1), AppTheme.danger);
   }
 
   Widget _badgeWidget(String texto, Color bg, Color fg) {
@@ -1350,17 +1292,11 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.info_outline, size: 16, color: AppTheme.primary),
-              const SizedBox(width: 8),
-              Text("Valores normales de referencia", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primary)),
-            ],
-          ),
+          const Text("Valores normales de referencia", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primary)),
           const SizedBox(height: 12),
           _filaReferencia("Presión arterial", "menos de 120/80 mmHg"),
-          _filaReferencia("Frecuencia cardiaca", "entre 60 y 100 lpm"),
-          _filaReferencia("Oxígeno en sangre", "entre 95% y 100%"),
+          _filaReferencia("Frecuencia cardiaca", "60-100 lpm"),
+          _filaReferencia("Oxígeno en sangre", "95-100%"),
         ],
       ),
     );
@@ -1393,8 +1329,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _buildSignoCard(Map<String, dynamic> s) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -1452,8 +1387,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         final s = sintomas[i];
         final prioridad = s["prioridad"]?.toString() ?? "MEDIA";
         final color = prioridad == "ALTA" ? AppTheme.danger : prioridad == "BAJA" ? AppTheme.success : AppTheme.warning;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
+        return Container(
           margin: const EdgeInsets.only(bottom: 10),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -1539,8 +1473,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                   itemCount: tratamientos.length,
                   itemBuilder: (_, i) {
                     final t = tratamientos[i];
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
+                    return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -1645,8 +1578,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     final estado = c["estado"]?.toString().toLowerCase() ?? "pendiente";
     final estadoColor = estado == "aprobada" ? AppTheme.success : estado == "rechazada" || estado == "cancelada" ? AppTheme.danger : AppTheme.warning;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+    return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(

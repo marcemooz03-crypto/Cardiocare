@@ -66,4 +66,19 @@ class RecordatorioService {
       throw Exception("Error ${res.statusCode}");
     }
   }
+
+// En recordatorio_service.dart agregar:
+Future<bool> actualizarHora(int idRecordatorio, String nuevaHora) async {
+  try {
+    final res = await http.put(
+      Uri.parse("$_base/$idRecordatorio/hora"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({"hora": nuevaHora}),
+    );
+    return res.statusCode == 200;
+  } catch (e) {
+    print("Error actualizando hora: $e");
+    return false;
+  }
+}
 }

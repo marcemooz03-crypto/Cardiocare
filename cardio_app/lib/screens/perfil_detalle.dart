@@ -135,7 +135,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     try {
       final data = await citaService.getByPaciente(widget.idPaciente);
       if (!mounted) return;
-      setState(() => citas = List<Map<String, dynamic>>.from(data));
+      setState(() => citas = List<Map<String, dynamic>>.from(data as Iterable<dynamic>));
     } catch (_) {}
   }
 
@@ -302,45 +302,88 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   int _toInt(dynamic v) => int.tryParse(v?.toString() ?? "") ?? 0;
 
   Future<void> _toggleRecordatorio(String key, bool nuevoValor, Map<String, dynamic> med) async {
-    setState(() => _activoLocal[key] = nuevoValor);
-    try {
-      final recExistente = _recordatoriosBD[key];
-      if (recExistente != null) {
-        final idRec = _toInt(recExistente["idRecordatorio"]);
-        if (idRec == 0) throw Exception("idRecordatorio inválido");
-        await recordatorioService.toggleActivo(idRec, activo: nuevoValor);
-        setState(() {
-          _recordatoriosBD[key] = {
-            ...recExistente,
-            "activo": nuevoValor ? 1 : 0,
-          };
-        });
-      } else if (nuevoValor) {
-        final idTratamiento = int.tryParse(key.split("_").first) ?? 0;
-        if (idTratamiento == 0) {
-          setState(() => _activoLocal[key] = false);
-          _snack("Error interno: tratamiento no identificado");
-          return;
-        }
-        final idRec = await recordatorioService.crear(
-          idTratamiento: idTratamiento,
-          hora: "08:00",
-          activo: true,
-        );
-        setState(() {
-          _recordatoriosBD[key] = {
-            "idRecordatorio": idRec,
-            "idTratamiento": idTratamiento,
-            "hora": "08:00",
-            "activo": 1,
-          };
-        });
+    if (nuevoValor) {
+      // Mostrar selector de hora
+      final TimeOfDay? horaSeleccionada = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.now(),
+        helpText: "Selecciona la hora del recordatorio",
+        cancelText: "Cancelar",
+        confirmText: "Activar",
+      );
+      
+      if (horaSeleccionada == null) {
+        setState(() => _activoLocal[key] = false);
+        return;
       }
-      _snack(nuevoValor ? "✓ Recordatorio activado para ${med["nombre"]}" : "✗ Recordatorio desactivado");
-    } catch (e) {
-      setState(() => _activoLocal[key] = !nuevoValor);
-      _snack("Error al actualizar recordatorio");
-      debugPrint("❌ _toggleRecordatorio: $e");
+      
+      final horaFormateada = "${horaSeleccionada.hour.toString().padLeft(2, '0')}:${horaSeleccionada.minute.toString().padLeft(2, '0')}";
+      
+      setState(() => _activoLocal[key] = true);
+      
+      try {
+        final recExistente = _recordatoriosBD[key];
+        if (recExistente != null) {
+          final idRec = _toInt(recExistente["idRecordatorio"]);
+          if (idRec == 0) throw Exception("idRecordatorio inválido");
+          await recordatorioService.actualizarHora(idRec, horaFormateada);
+          await recordatorioService.toggleActivo(idRec, activo: true);
+          setState(() {
+            _recordatoriosBD[key] = {
+              ...recExistente,
+              "hora": horaFormateada,
+              "activo": 1,
+            };
+          });
+        } else {
+          final idTratamiento = int.tryParse(key.split("_").first) ?? 0;
+          if (idTratamiento == 0) {
+            setState(() => _activoLocal[key] = false);
+            _snack("Error interno: tratamiento no identificado");
+            return;
+          }
+          final idRec = await recordatorioService.crear(
+            idTratamiento: idTratamiento,
+            hora: horaFormateada,
+            activo: true,
+          );
+          setState(() {
+            _recordatoriosBD[key] = {
+              "idRecordatorio": idRec,
+              "idTratamiento": idTratamiento,
+              "hora": horaFormateada,
+              "activo": 1,
+            };
+          });
+        }
+        _snack("✓ Recordatorio activado para ${med["nombre"]} a las $horaFormateada");
+      } catch (e) {
+        setState(() => _activoLocal[key] = false);
+        _snack("Error al activar recordatorio");
+        debugPrint("❌ _toggleRecordatorio: $e");
+      }
+    } else {
+      setState(() => _activoLocal[key] = false);
+      try {
+        final recExistente = _recordatoriosBD[key];
+        if (recExistente != null) {
+          final idRec = _toInt(recExistente["idRecordatorio"]);
+          if (idRec != 0) {
+            await recordatorioService.toggleActivo(idRec, activo: false);
+            setState(() {
+              _recordatoriosBD[key] = {
+                ...recExistente,
+                "activo": 0,
+              };
+            });
+          }
+        }
+        _snack("✗ Recordatorio desactivado para ${med["nombre"]}");
+      } catch (e) {
+        setState(() => _activoLocal[key] = true);
+        _snack("Error al desactivar recordatorio");
+        debugPrint("❌ _toggleRecordatorio: $e");
+      }
     }
   }
 
@@ -349,7 +392,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         context,
         MaterialPageRoute(builder: (_) => AgendarCitaScreen(idPaciente: widget.idPaciente, medicos: medicos)),
       ).then((_) => loadCitas());
-  void abrirCalendario() => Navigator.push(context, MaterialPageRoute(builder: (_) => const CalendarioScreen()));
+  void abrirCalendario() => Navigator.push(context, MaterialPageRoute(builder: (_) => CalendarioScreen(idPaciente: widget.idPaciente)));
   void abrirConfiguracion() => Navigator.push(
         context,
         MaterialPageRoute(
@@ -1518,7 +1561,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         final key = m["key"] as String;
         final activo = _activoLocal[key] ?? false;
         final rec = _recordatoriosBD[key];
-        final hora = rec?["hora"]?.toString().substring(0, 5) ?? "--:--";
+        final hora = rec?["hora"]?.toString() ?? "--:--";
+        final horaMostrar = hora.length >= 5 ? hora.substring(0, 5) : hora;
+        
         return AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           margin: const EdgeInsets.only(bottom: 12),
@@ -1530,7 +1575,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           ),
           child: Row(
             children: [
-              Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppTheme.success.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.medication, color: AppTheme.success, size: 26)),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: AppTheme.success.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                child: const Icon(Icons.medication, color: AppTheme.success, size: 26),
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -1541,12 +1590,27 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     Text("${m["dosis"]}  ·  Cada ${m["frecuencia"]}", style: const TextStyle(fontSize: 13, color: AppTheme.gray500)),
                     if (activo) ...[
                       const SizedBox(height: 6),
-                      Row(children: [const Icon(Icons.access_time, size: 14, color: AppTheme.success), const SizedBox(width: 6), Text("⏰ Recordatorio activo · $hora", style: const TextStyle(fontSize: 13, color: AppTheme.success, fontWeight: FontWeight.w500))]),
+                      Row(
+                        children: [
+                          const Icon(Icons.access_time, size: 14, color: AppTheme.success),
+                          const SizedBox(width: 6),
+                          Text("⏰ Recordatorio activo · $horaMostrar hrs", 
+                            style: const TextStyle(fontSize: 13, color: AppTheme.success, fontWeight: FontWeight.w500)),
+                        ],
+                      ),
+                    ] else ...[
+                      const SizedBox(height: 6),
+                      Text("💡 Activa el recordatorio para elegir la hora", 
+                        style: TextStyle(fontSize: 12, color: AppTheme.gray500)),
                     ],
                   ],
                 ),
               ),
-              Switch(value: activo, activeColor: AppTheme.success, onChanged: (v) => _toggleRecordatorio(key, v, m)),
+              Switch(
+                value: activo,
+                activeColor: AppTheme.success,
+                onChanged: (v) => _toggleRecordatorio(key, v, m),
+              ),
             ],
           ),
         );
