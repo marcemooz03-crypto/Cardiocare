@@ -69,77 +69,8 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
           notificaciones.insert(0, notificacion);
           notificacionesNoLeidas++;
         });
-        _mostrarNotificacionEnTiempoReal(notificacion);
+        // Las notificaciones ya no muestran SnackBar, solo se acumulan en la campanita
       },
-    );
-  }
-
-  void _mostrarNotificacionEnTiempoReal(Map<String, dynamic> notificacion) {
-    final tipo = notificacion["tipo"] ?? "info";
-    final mensaje = notificacion["mensaje"] ?? "Nueva actualización";
-    final pacienteNombre = notificacion["pacienteNombre"] ?? "Un paciente";
-    
-    Color color;
-    IconData icono;
-    
-    switch (tipo) {
-      case "signo":
-        color = AppTheme.danger;
-        icono = Icons.monitor_heart;
-        break;
-      case "sintoma":
-        color = AppTheme.warning;
-        icono = Icons.healing;
-        break;
-      case "cita":
-        color = AppTheme.info;
-        icono = Icons.event;
-        break;
-      case "alerta":
-        color = AppTheme.danger;
-        icono = Icons.warning_amber;
-        break;
-      default:
-        color = AppTheme.primary;
-        icono = Icons.notifications;
-    }
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icono, color: color, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(pacienteNombre, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                  Text(mensaje, style: const TextStyle(fontSize: 12)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.grey.shade900,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 4),
-        margin: const EdgeInsets.all(16),
-        action: SnackBarAction(
-          label: "VER",
-          textColor: color,
-          onPressed: () => _abrirDetalleNotificacion(notificacion),
-        ),
-      ),
     );
   }
 
@@ -562,6 +493,11 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
   }
 
   void _mostrarPanelNotificaciones() {
+    // Marcar todas como leídas al abrir el panel
+    if (notificacionesNoLeidas > 0) {
+      marcarTodasComoLeidas();
+    }
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -586,8 +522,6 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
                     const Icon(Icons.notifications, color: AppTheme.primary, size: 28),
                     const SizedBox(width: 12),
                     const Expanded(child: Text("Notificaciones", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-                    if (notificacionesNoLeidas > 0)
-                      TextButton(onPressed: marcarTodasComoLeidas, child: const Text("Marcar todas como leídas")),
                     IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
                   ],
                 ),
@@ -654,7 +588,7 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
                                         const SizedBox(height: 4),
                                         Text(n["mensaje"] ?? "", style: const TextStyle(fontSize: 13, color: AppTheme.gray500)),
                                         const SizedBox(height: 4),
-                                        Text(n["fechaFormateada"] ?? "", style: const TextStyle(fontSize: 11, color: AppTheme.gray400)),
+                                        Text(_formatFecha(n["fecha"]), style: const TextStyle(fontSize: 11, color: AppTheme.gray400)),
                                       ],
                                     ),
                                   ),
@@ -672,6 +606,33 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
         },
       ),
     );
+  }
+
+  String _formatFecha(dynamic fecha) {
+    try {
+      if (fecha != null && fecha.toString().isNotEmpty) {
+        if (fecha is DateTime) {
+          final ahora = DateTime.now();
+          final diferencia = ahora.difference(fecha);
+          
+          if (diferencia.inMinutes < 1) {
+            return "Ahora";
+          } else if (diferencia.inHours < 1) {
+            return "Hace ${diferencia.inMinutes} min";
+          } else if (diferencia.inDays < 1) {
+            return "Hace ${diferencia.inHours} horas";
+          } else if (diferencia.inDays < 7) {
+            return "Hace ${diferencia.inDays} días";
+          } else {
+            return "${fecha.day}/${fecha.month}/${fecha.year}";
+          }
+        }
+        return fecha.toString();
+      }
+      return "Fecha no disponible";
+    } catch (_) {
+      return "Fecha no disponible";
+    }
   }
 
   Widget _buildHeader(Size screen) {

@@ -1,5 +1,6 @@
 // lib/services/log_service.dart
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class LogService {
@@ -16,22 +17,50 @@ class LogService {
       );
       
       print("📦 LOGS RESPONSE: ${res.statusCode}");
-      print("📦 LOGS BODY: ${res.body}");
       
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        List<Map<String, dynamic>> logs = [];
+        
         if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
+          logs = List<Map<String, dynamic>>.from(data);
+        } else if (data is Map && data["data"] is List) {
+          logs = List<Map<String, dynamic>>.from(data["data"]);
         }
-        if (data is Map && data["data"] is List) {
-          return List<Map<String, dynamic>>.from(data["data"]);
-        }
+        
+        // Marcar cada log como sistema o admin
+        return _marcarOrigenLogs(logs);
       }
       return [];
     } catch (e) {
       print("❌ ERROR getLogs: $e");
       return [];
     }
+  }
+
+  // =========================
+  // 🏷️ MARCAR ORIGEN DE LOGS (SISTEMA vs ADMIN)
+  // =========================
+  List<Map<String, dynamic>> _marcarOrigenLogs(List<Map<String, dynamic>> logs) {
+    // Marcar cada log individualmente
+    for (var log in logs) {
+      final ip = log['ip']?.toString() ?? '';
+      
+      // Si la IP es 0.0.0.0 o null, es del sistema
+      if (ip == '0.0.0.0' || ip.isEmpty || ip == 'null') {
+        log['origen'] = 'sistema';
+        log['origen_icon'] = Icons.computer;
+        log['origen_color'] = '#6B7280'; // Gris
+        log['origen_label'] = 'Sistema';
+      } else {
+        log['origen'] = 'admin';
+        log['origen_icon'] = Icons.admin_panel_settings;
+        log['origen_color'] = '#4F46E5'; // Azul/Indigo
+        log['origen_label'] = 'Admin';
+      }
+    }
+    
+    return logs;
   }
 
   // =========================
@@ -46,9 +75,13 @@ class LogService {
       
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        List<Map<String, dynamic>> logs = [];
         if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
+          logs = List<Map<String, dynamic>>.from(data);
+        } else if (data is Map && data["data"] is List) {
+          logs = List<Map<String, dynamic>>.from(data["data"]);
         }
+        return _marcarOrigenLogs(logs);
       }
       return [];
     } catch (e) {
@@ -69,9 +102,13 @@ class LogService {
       
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        List<Map<String, dynamic>> logs = [];
         if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
+          logs = List<Map<String, dynamic>>.from(data);
+        } else if (data is Map && data["data"] is List) {
+          logs = List<Map<String, dynamic>>.from(data["data"]);
         }
+        return _marcarOrigenLogs(logs);
       }
       return [];
     } catch (e) {

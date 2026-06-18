@@ -29,6 +29,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   int? idPaciente;
   bool loading = true;
   int notificacionesNoLeidas = 0;
+  List<Map<String, dynamic>> listaNotificaciones = [];
 
   @override
   void initState() {
@@ -51,71 +52,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         if (!mounted) return;
         setState(() {
           notificacionesNoLeidas++;
+          listaNotificaciones.insert(0, notificacion);
         });
-        _mostrarNotificacionEnTiempoReal(notificacion);
       },
-    );
-  }
-
-  void _mostrarNotificacionEnTiempoReal(Map<String, dynamic> notificacion) {
-    final tipo = notificacion["tipo"] ?? "info";
-    final mensaje = notificacion["mensaje"] ?? "Nueva actualización";
-    
-    Color color;
-    IconData icono;
-    
-    switch (tipo) {
-      case "signo":
-        color = AppTheme.danger;
-        icono = Icons.monitor_heart;
-        break;
-      case "sintoma":
-        color = AppTheme.warning;
-        icono = Icons.healing;
-        break;
-      case "cita":
-        color = AppTheme.info;
-        icono = Icons.event;
-        break;
-      case "recomendacion":
-        color = AppTheme.primary;
-        icono = Icons.lightbulb_outline;
-        break;
-      default:
-        color = AppTheme.primary;
-        icono = Icons.notifications;
-    }
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icono, color: color, size: 20),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(mensaje, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.grey.shade900,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 4),
-        margin: const EdgeInsets.all(16),
-      ),
     );
   }
 
@@ -188,6 +127,12 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         ),
       ),
     ).then((_) => loadProfile());
+  }
+
+  void _marcarComoLeidas() {
+    setState(() {
+      notificacionesNoLeidas = 0;
+    });
   }
 
   @override
@@ -326,6 +271,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   void _mostrarPanelNotificaciones() {
+    _marcarComoLeidas();
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -356,7 +303,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               ),
               const Divider(),
               Expanded(
-                child: notificacionesNoLeidas == 0
+                child: listaNotificaciones.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -369,37 +316,97 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                       )
                     : ListView.builder(
                         controller: scrollController,
-                        itemCount: notificacionesNoLeidas,
+                        itemCount: listaNotificaciones.length,
                         itemBuilder: (context, index) {
+                          final notificacion = listaNotificaciones[index];
+                          final tipo = notificacion["tipo"] ?? "info";
+                          final mensaje = notificacion["mensaje"] ?? "Nueva actualización";
+                          final fecha = notificacion["fecha"] ?? DateTime.now();
+                          
+                          Color colorNotificacion;
+                          IconData iconoNotificacion;
+                          
+                          switch (tipo) {
+                            case "signo":
+                              colorNotificacion = AppTheme.danger;
+                              iconoNotificacion = Icons.monitor_heart;
+                              break;
+                            case "sintoma":
+                              colorNotificacion = AppTheme.warning;
+                              iconoNotificacion = Icons.healing;
+                              break;
+                            case "cita":
+                              colorNotificacion = AppTheme.info;
+                              iconoNotificacion = Icons.event;
+                              break;
+                            case "recomendacion":
+                              colorNotificacion = AppTheme.primary;
+                              iconoNotificacion = Icons.lightbulb_outline;
+                              break;
+                            default:
+                              colorNotificacion = AppTheme.primary;
+                              iconoNotificacion = Icons.notifications;
+                          }
+                          
                           return Container(
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: AppTheme.white,
+                              color: index == 0 && notificacionesNoLeidas == 0 && listaNotificaciones.isNotEmpty
+                                  ? AppTheme.primary.withOpacity(0.05)
+                                  : AppTheme.white,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppTheme.gray300),
+                              border: Border.all(color: AppTheme.gray200),
                             ),
                             child: Row(
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: AppTheme.primary.withOpacity(0.1),
+                                    color: colorNotificacion.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: const Icon(Icons.notifications, color: AppTheme.primary, size: 22),
+                                  child: Icon(iconoNotificacion, color: colorNotificacion, size: 22),
                                 ),
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text("Nueva actualización", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                                      Text(
+                                        mensaje,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
                                       const SizedBox(height: 4),
-                                      Text("Hay novedades en tu perfil médico", style: TextStyle(fontSize: 13, color: AppTheme.gray500)),
+                                      Text(
+                                        _formatFecha(fecha),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppTheme.gray500,
+                                        ),
+                                      ),
                                     ],
                                   ),
                                 ),
+                                if (index == 0 && notificacionesNoLeidas == 0 && listaNotificaciones.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primary,
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Text(
+                                      "NUEVA",
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
                               ],
                             ),
                           );
@@ -411,6 +418,30 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         },
       ),
     );
+  }
+
+  String _formatFecha(dynamic fecha) {
+    try {
+      if (fecha is DateTime) {
+        final ahora = DateTime.now();
+        final diferencia = ahora.difference(fecha);
+        
+        if (diferencia.inMinutes < 1) {
+          return "Ahora";
+        } else if (diferencia.inHours < 1) {
+          return "Hace ${diferencia.inMinutes} min";
+        } else if (diferencia.inDays < 1) {
+          return "Hace ${diferencia.inHours} horas";
+        } else if (diferencia.inDays < 7) {
+          return "Hace ${diferencia.inDays} días";
+        } else {
+          return "${fecha.day}/${fecha.month}/${fecha.year}";
+        }
+      }
+      return "Fecha no disponible";
+    } catch (_) {
+      return "Fecha no disponible";
+    }
   }
 
   Widget _buildHeader() {
@@ -558,8 +589,6 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   Widget _infoRow(IconData icon, String label, String value) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
     return Row(
       children: [
         Icon(icon, color: AppTheme.primary, size: 18),

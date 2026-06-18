@@ -345,7 +345,7 @@ router.get('/perfil/:idUsuario', (req, res) => {
   const { idUsuario } = req.params;
   
   const sql = `
-    SELECT u.idUsuario, u.nombre, u.correo, r.nombre as rol
+    SELECT u.idUsuario, u.nombre, u.correo, r.nombrerol as rol
     FROM usuario u
     JOIN rol r ON u.idRol = r.idRol
     WHERE u.idUsuario = ?

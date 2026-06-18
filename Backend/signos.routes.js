@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const db = require("./db");
 
-
 // ============================
 // 🧠 VALIDACIONES
 // ============================
@@ -24,9 +23,8 @@ function existeProfesional(id, callback) {
   });
 }
 
-
 // ============================
-// 🚨 GENERAR ALERTA AUTOMÁTICA
+// 🚨 GENERAR ALERTA AUTOMÁTICA CON NOMBRE DEL PACIENTE
 // ============================
 
 function crearAlertaAutomatica(idUsuario, signo) {
@@ -39,7 +37,7 @@ function crearAlertaAutomatica(idUsuario, signo) {
   const fc = signo.frecuenciaCardiaca;
   const spo2 = signo.saturacionOxigeno;
 
-  // 🔴 reglas simples (puedes mejorar esto luego)
+  // 🔴 reglas simples
   if (sist >= 160 || diast >= 100 || fc >= 120 || spo2 < 90) {
     nivel = "ALTO";
     descripcion = "Valores críticos detectados";
@@ -48,26 +46,53 @@ function crearAlertaAutomatica(idUsuario, signo) {
     descripcion = "Valores alterados";
   }
 
-  const sql = `
-    INSERT INTO alerta (
-      idPaciente,
-      tipo,
-      nivel,
-      descripcion,
-      origen,
-      estado,
-      fecha
-    )
-    VALUES (?, ?, ?, ?, 'SIGNO', 'PENDIENTE', NOW())
+  // ✅ OBTENER EL NOMBRE DEL PACIENTE
+  const sqlPaciente = `
+    SELECT u.nombre 
+    FROM usuario u
+    WHERE u.idUsuario = ?
   `;
 
-  db.query(sql, [idUsuario, tipo, nivel, descripcion], (err) => {
+  db.query(sqlPaciente, [idUsuario], (err, paciente) => {
     if (err) {
-      console.log("❌ ERROR CREANDO ALERTA:", err);
+      console.log('❌ ERROR al obtener nombre del paciente:', err);
+      insertarAlerta('Paciente');
+      return;
     }
-  });
-}
 
+    const nombrePaciente = paciente && paciente.length > 0 
+      ? paciente[0].nombre 
+      : 'Paciente';
+
+    console.log(`✅ Nombre paciente para alerta de signos: ${nombrePaciente}`);
+    insertarAlerta(nombrePaciente);
+  });
+
+  function insertarAlerta(nombrePaciente) {
+    // ✅ AHORA CON nombre_origen
+    const sql = `
+      INSERT INTO alerta (
+        idPaciente,
+        tipo,
+        nivel,
+        descripcion,
+        origen,
+        nombre_origen,
+        estado,
+        fecha
+      )
+      VALUES (?, ?, ?, ?, 'SIGNO', ?, 'PENDIENTE', NOW())
+    `;
+
+    db.query(sql, [idUsuario, tipo, nivel, descripcion, nombrePaciente], (err) => {
+      if (err) {
+        console.log("❌ ERROR CREANDO ALERTA:", err);
+      } else {
+        console.log(`✅ Alerta de signos creada para ${nombrePaciente}`);
+      }
+    });
+  }
+}
 
 // ============================
 // 🫀 REGISTRAR SIGNOS VITALES
@@ -135,7 +160,7 @@ router.post("/registrar", (req, res) => {
           return res.status(500).json({ ok: false, err });
         }
 
-        // 🚨 AQUÍ ES DONDE NACEN LAS ALERTAS
+        // 🚨 CREAR ALERTA CON NOMBRE
         crearAlertaAutomatica(idUsuario, req.body);
 
         return res.json({
@@ -147,7 +172,6 @@ router.post("/registrar", (req, res) => {
     });
   });
 });
-
 
 // ============================
 // 📈 GET SIGNOS

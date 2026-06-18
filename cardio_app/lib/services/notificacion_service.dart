@@ -20,6 +20,10 @@ class NotificacionService {
   final List<Map<String, dynamic>> _notificaciones = [];
   final Set<String> _notificacionesIds = {};
   
+  // Configuración
+  static const Duration _pollingInterval = Duration(seconds: 30);
+  static const int _maxNotificaciones = 100;
+  
   // ==============================================
   // ESCUCHAR NOTIFICACIONES DEL MÉDICO
   // ==============================================
@@ -27,20 +31,22 @@ class NotificacionService {
     int idMedico, {
     required Function(Map<String, dynamic>) onNuevaNotificacion,
   }) {
-    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(_pollingInterval, (timer) async {
       await _verificarNuevosEventosMedico(idMedico, onNuevaNotificacion);
     });
     _verificarNuevosEventosMedico(idMedico, onNuevaNotificacion);
   }
   
   // ==============================================
-  // ESCUCHAR NOTIFICACIONES DEL PACIENTE (NUEVO)
+  // ESCUCHAR NOTIFICACIONES DEL PACIENTE
   // ==============================================
   void escucharNotificacionesPaciente(
     int idUsuario, {
     required Function(Map<String, dynamic>) onNuevaNotificacion,
   }) {
-    _pollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(_pollingInterval, (timer) async {
       await _verificarNuevosEventosPaciente(idUsuario, onNuevaNotificacion);
     });
     _verificarNuevosEventosPaciente(idUsuario, onNuevaNotificacion);
@@ -59,10 +65,12 @@ class NotificacionService {
         
         if (idPaciente == 0) continue;
         
-        await _verificarAlertas(idPaciente, nombrePaciente, onNuevaNotificacion);
-        await _verificarSignos(idPaciente, nombrePaciente, onNuevaNotificacion);
-        await _verificarSintomas(paciente, nombrePaciente, onNuevaNotificacion);
-        await _verificarCitas(idPaciente, nombrePaciente, onNuevaNotificacion);
+        await Future.wait([
+          _verificarAlertas(idPaciente, nombrePaciente, onNuevaNotificacion),
+          _verificarSignos(idPaciente, nombrePaciente, onNuevaNotificacion),
+          _verificarSintomas(paciente, nombrePaciente, onNuevaNotificacion),
+          _verificarCitas(idPaciente, nombrePaciente, onNuevaNotificacion),
+        ]);
       }
     } catch (e) {
       debugPrint("❌ Error verificando eventos médico: $e");
@@ -70,21 +78,18 @@ class NotificacionService {
   }
   
   // ==============================================
-  // VERIFICAR EVENTOS DEL PACIENTE (NUEVO)
+  // VERIFICAR EVENTOS DEL PACIENTE
   // ==============================================
   Future<void> _verificarNuevosEventosPaciente(int idUsuario, Function(Map<String, dynamic>) onNuevaNotificacion) async {
     try {
-      // 1. Verificar nuevas recomendaciones médicas
-      await _verificarRecomendaciones(idUsuario, onNuevaNotificacion);
-      
-      // 2. Verificar estado de citas
-      await _verificarEstadoCitasPaciente(idUsuario, onNuevaNotificacion);
-      
-      // 3. Verificar alertas propias
       final perfil = await _medicoService.getPacientePorUsuario(idUsuario);
-      if (perfil != null && perfil["idPaciente"] != null) {
-        await _verificarAlertasPaciente(perfil["idPaciente"], onNuevaNotificacion);
-      }
+      if (perfil == null || perfil["idPaciente"] == null) return;
+      
+      await Future.wait([
+        _verificarRecomendaciones(idUsuario, onNuevaNotificacion),
+        _verificarEstadoCitasPaciente(idUsuario, onNuevaNotificacion),
+        _verificarAlertasPaciente(perfil["idPaciente"], onNuevaNotificacion),
+      ]);
     } catch (e) {
       debugPrint("❌ Error verificando eventos paciente: $e");
     }
@@ -108,22 +113,12 @@ class NotificacionService {
           
           if (fecha != null && fecha.isAfter(DateTime.now().subtract(const Duration(days: 7)))) {
             _notificacionesIds.add(id);
-            _agregarNotificacion({
-              "id": id,
-              "tipo": "recomendacion",
-              "mensaje": "📋 Nueva recomendación médica: ${rec["descripcion"]}",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
-            onNuevaNotificacion({
-              "id": id,
-              "tipo": "recomendacion",
-              "mensaje": "📋 Nueva recomendación médica para ti",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
+            _crearNotificacion(
+              id: id,
+              tipo: "recomendacion",
+              mensaje: "📋 Nueva recomendación médica: ${rec["descripcion"]}",
+              onNuevaNotificacion: onNuevaNotificacion,
+            );
           }
         }
       }
@@ -146,42 +141,21 @@ class NotificacionService {
         final String estado = cita["estado"]?.toString().toLowerCase() ?? "";
         
         if (!_notificacionesIds.contains(id)) {
+          String mensaje = "";
           if (estado == "aprobada") {
-            _notificacionesIds.add(id);
-            _agregarNotificacion({
-              "id": id,
-              "tipo": "cita",
-              "mensaje": "✅ ¡Tu cita ha sido aprobada! Motivo: ${cita["motivo"]}",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
-            onNuevaNotificacion({
-              "id": id,
-              "tipo": "cita",
-              "mensaje": "✅ Tu cita médica ha sido aprobada",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
+            mensaje = "✅ ¡Tu cita ha sido aprobada! Motivo: ${cita["motivo"]}";
           } else if (estado == "rechazada") {
+            mensaje = "❌ Tu cita ha sido rechazada. Motivo: ${cita["motivo"]}";
+          }
+          
+          if (mensaje.isNotEmpty) {
             _notificacionesIds.add(id);
-            _agregarNotificacion({
-              "id": id,
-              "tipo": "cita",
-              "mensaje": "❌ Tu cita ha sido rechazada. Motivo: ${cita["motivo"]}",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
-            onNuevaNotificacion({
-              "id": id,
-              "tipo": "cita",
-              "mensaje": "❌ Tu cita médica ha sido rechazada",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
+            _crearNotificacion(
+              id: id,
+              tipo: "cita",
+              mensaje: mensaje,
+              onNuevaNotificacion: onNuevaNotificacion,
+            );
           }
         }
       }
@@ -202,25 +176,12 @@ class NotificacionService {
         
         if (!leida && !_notificacionesIds.contains(id)) {
           _notificacionesIds.add(id);
-          
-          String mensaje = "⚠️ Alerta de salud: ${alerta["descripcion"]}";
-          
-          _agregarNotificacion({
-            "id": id,
-            "tipo": "alerta",
-            "mensaje": mensaje,
-            "fecha": DateTime.now().toIso8601String(),
-            "fechaFormateada": _formatFecha(DateTime.now()),
-            "leida": false,
-          });
-          onNuevaNotificacion({
-            "id": id,
-            "tipo": "alerta",
-            "mensaje": mensaje,
-            "fecha": DateTime.now().toIso8601String(),
-            "fechaFormateada": _formatFecha(DateTime.now()),
-            "leida": false,
-          });
+          _crearNotificacion(
+            id: id,
+            tipo: "alerta",
+            mensaje: "⚠️ Alerta de salud: ${alerta["descripcion"]}",
+            onNuevaNotificacion: onNuevaNotificacion,
+          );
         }
       }
     } catch (e) {
@@ -240,26 +201,14 @@ class NotificacionService {
         
         if (!leida && !_notificacionesIds.contains(id)) {
           _notificacionesIds.add(id);
-          _agregarNotificacion({
-            "id": id,
-            "tipo": "alerta",
-            "pacienteNombre": nombrePaciente,
-            "idPaciente": idPaciente,
-            "mensaje": alerta["descripcion"] ?? "Nueva alerta de salud",
-            "fecha": DateTime.now().toIso8601String(),
-            "fechaFormateada": _formatFecha(DateTime.now()),
-            "leida": false,
-          });
-          onNuevaNotificacion({
-            "id": id,
-            "tipo": "alerta",
-            "pacienteNombre": nombrePaciente,
-            "idPaciente": idPaciente,
-            "mensaje": alerta["descripcion"] ?? "Nueva alerta de salud",
-            "fecha": DateTime.now().toIso8601String(),
-            "fechaFormateada": _formatFecha(DateTime.now()),
-            "leida": false,
-          });
+          _crearNotificacion(
+            id: id,
+            tipo: "alerta",
+            pacienteNombre: nombrePaciente,
+            idPaciente: idPaciente,
+            mensaje: alerta["descripcion"] ?? "Nueva alerta de salud",
+            onNuevaNotificacion: onNuevaNotificacion,
+          );
         }
       }
     } catch (e) {
@@ -273,59 +222,49 @@ class NotificacionService {
   Future<void> _verificarSignos(int idPaciente, String nombrePaciente, Function(Map<String, dynamic>) onNuevaNotificacion) async {
     try {
       final signos = await _signosService.getSignos(idPaciente);
-      if (signos.isNotEmpty) {
-        final ultimoSigno = signos.first;
-        final String id = "signo_${ultimoSigno["idSigno"]}";
-        
-        if (!_notificacionesIds.contains(id)) {
-          final DateTime? fechaRegistro = DateTime.tryParse(ultimoSigno["fechaRegistro"] ?? "");
-          
-          if (fechaRegistro != null && 
-              fechaRegistro.isAfter(DateTime.now().subtract(const Duration(minutes: 10)))) {
-            
-            _notificacionesIds.add(id);
-            
-            final int sistolica = int.tryParse(ultimoSigno["presionSistolica"]?.toString() ?? "0") ?? 0;
-            final int diastolica = int.tryParse(ultimoSigno["presionDiastolica"]?.toString() ?? "0") ?? 0;
-            final int fc = int.tryParse(ultimoSigno["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
-            
-            String mensaje = "📊 Nuevos signos vitales: $sistolica/$diastolica mmHg, FC: $fc lpm";
-            
-            if (sistolica > 140) {
-              mensaje = "⚠️ Presión arterial elevada: $sistolica/$diastolica mmHg";
-            } else if (sistolica < 90) {
-              mensaje = "⚠️ Presión arterial baja: $sistolica/$diastolica mmHg";
-            } else if (fc > 100) {
-              mensaje = "⚠️ Frecuencia cardíaca elevada: $fc lpm";
-            } else if (fc < 60) {
-              mensaje = "⚠️ Frecuencia cardíaca baja: $fc lpm";
-            }
-            
-            _agregarNotificacion({
-              "id": id,
-              "tipo": "signo",
-              "pacienteNombre": nombrePaciente,
-              "idPaciente": idPaciente,
-              "mensaje": mensaje,
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
-            onNuevaNotificacion({
-              "id": id,
-              "tipo": "signo",
-              "pacienteNombre": nombrePaciente,
-              "idPaciente": idPaciente,
-              "mensaje": mensaje,
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
-          }
-        }
-      }
+      if (signos.isEmpty) return;
+      
+      final ultimoSigno = signos.first;
+      final String id = "signo_${ultimoSigno["idSigno"]}";
+      
+      if (_notificacionesIds.contains(id)) return;
+      
+      final DateTime? fechaRegistro = DateTime.tryParse(ultimoSigno["fechaRegistro"] ?? "");
+      if (fechaRegistro == null || 
+          !fechaRegistro.isAfter(DateTime.now().subtract(const Duration(minutes: 10)))) return;
+      
+      _notificacionesIds.add(id);
+      
+      final int sistolica = int.tryParse(ultimoSigno["presionSistolica"]?.toString() ?? "0") ?? 0;
+      final int diastolica = int.tryParse(ultimoSigno["presionDiastolica"]?.toString() ?? "0") ?? 0;
+      final int fc = int.tryParse(ultimoSigno["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
+      
+      String mensaje = _analizarSignosVitales(sistolica, diastolica, fc);
+      
+      _crearNotificacion(
+        id: id,
+        tipo: "signo",
+        pacienteNombre: nombrePaciente,
+        idPaciente: idPaciente,
+        mensaje: mensaje,
+        onNuevaNotificacion: onNuevaNotificacion,
+      );
     } catch (e) {
       debugPrint("Error verificando signos: $e");
+    }
+  }
+  
+  String _analizarSignosVitales(int sistolica, int diastolica, int fc) {
+    if (sistolica > 140) {
+      return "⚠️ Presión arterial elevada: $sistolica/$diastolica mmHg";
+    } else if (sistolica < 90) {
+      return "⚠️ Presión arterial baja: $sistolica/$diastolica mmHg";
+    } else if (fc > 100) {
+      return "⚠️ Frecuencia cardíaca elevada: $fc lpm";
+    } else if (fc < 60) {
+      return "⚠️ Frecuencia cardíaca baja: $fc lpm";
+    } else {
+      return "📊 Nuevos signos vitales: $sistolica/$diastolica mmHg, FC: $fc lpm";
     }
   }
   
@@ -338,46 +277,40 @@ class NotificacionService {
       if (idUsuario == 0) return;
       
       final sintomas = await _sintomaService.getSintomasByUser(idUsuario);
-      if (sintomas.isNotEmpty) {
-        final ultimoSintoma = sintomas.first;
-        final String id = "sintoma_${ultimoSintoma["idSintoma"]}";
-        
-        if (!_notificacionesIds.contains(id)) {
-          final DateTime? fechaSintoma = DateTime.tryParse(ultimoSintoma["fecha"] ?? "");
-          
-          if (fechaSintoma != null && 
-              fechaSintoma.isAfter(DateTime.now().subtract(const Duration(minutes: 10)))) {
-            
-            _notificacionesIds.add(id);
-            
-            final String prioridad = ultimoSintoma["prioridad"] ?? "MEDIA";
-            final String emoji = prioridad == "ALTA" ? "🚨" : prioridad == "BAJA" ? "ℹ️" : "⚠️";
-            
-            _agregarNotificacion({
-              "id": id,
-              "tipo": "sintoma",
-              "pacienteNombre": nombrePaciente,
-              "idPaciente": paciente["idPaciente"],
-              "mensaje": "$emoji Nuevo síntoma: ${ultimoSintoma["titulo"]} - ${ultimoSintoma["descripcion"]}",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
-            onNuevaNotificacion({
-              "id": id,
-              "tipo": "sintoma",
-              "pacienteNombre": nombrePaciente,
-              "idPaciente": paciente["idPaciente"],
-              "mensaje": "$emoji Nuevo síntoma: ${ultimoSintoma["titulo"]}",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
-          }
-        }
-      }
+      if (sintomas.isEmpty) return;
+      
+      final ultimoSintoma = sintomas.first;
+      final String id = "sintoma_${ultimoSintoma["idSintoma"]}";
+      
+      if (_notificacionesIds.contains(id)) return;
+      
+      final DateTime? fechaSintoma = DateTime.tryParse(ultimoSintoma["fecha"] ?? "");
+      if (fechaSintoma == null ||
+          !fechaSintoma.isAfter(DateTime.now().subtract(const Duration(minutes: 10)))) return;
+      
+      _notificacionesIds.add(id);
+      
+      final String prioridad = ultimoSintoma["prioridad"] ?? "MEDIA";
+      final String emoji = _getPrioridadEmoji(prioridad);
+      
+      _crearNotificacion(
+        id: id,
+        tipo: "sintoma",
+        pacienteNombre: nombrePaciente,
+        idPaciente: paciente["idPaciente"],
+        mensaje: "$emoji Nuevo síntoma: ${ultimoSintoma["titulo"]}",
+        onNuevaNotificacion: onNuevaNotificacion,
+      );
     } catch (e) {
       debugPrint("Error verificando síntomas: $e");
+    }
+  }
+  
+  String _getPrioridadEmoji(String prioridad) {
+    switch (prioridad.toUpperCase()) {
+      case "ALTA": return "🚨";
+      case "BAJA": return "ℹ️";
+      default: return "⚠️";
     }
   }
   
@@ -390,37 +323,52 @@ class NotificacionService {
       for (var cita in citas) {
         final String id = "cita_${cita["idCita"]}";
         
-        if (!_notificacionesIds.contains(id)) {
-          final String estado = cita["estado"]?.toString().toLowerCase() ?? "";
-          
-          if (estado == "pendiente") {
-            _notificacionesIds.add(id);
-            _agregarNotificacion({
-              "id": id,
-              "tipo": "cita",
-              "pacienteNombre": nombrePaciente,
-              "idPaciente": idPaciente,
-              "mensaje": "📅 Nueva cita solicitada: ${cita["motivo"] ?? "Consulta médica"}",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
-            onNuevaNotificacion({
-              "id": id,
-              "tipo": "cita",
-              "pacienteNombre": nombrePaciente,
-              "idPaciente": idPaciente,
-              "mensaje": "📅 Nueva cita solicitada: ${cita["motivo"] ?? "Consulta médica"}",
-              "fecha": DateTime.now().toIso8601String(),
-              "fechaFormateada": _formatFecha(DateTime.now()),
-              "leida": false,
-            });
-          }
+        if (_notificacionesIds.contains(id)) continue;
+        
+        final String estado = cita["estado"]?.toString().toLowerCase() ?? "";
+        
+        if (estado == "pendiente") {
+          _notificacionesIds.add(id);
+          _crearNotificacion(
+            id: id,
+            tipo: "cita",
+            pacienteNombre: nombrePaciente,
+            idPaciente: idPaciente,
+            mensaje: "📅 Nueva cita solicitada: ${cita["motivo"] ?? "Consulta médica"}",
+            onNuevaNotificacion: onNuevaNotificacion,
+          );
         }
       }
     } catch (e) {
       debugPrint("Error verificando citas: $e");
     }
+  }
+  
+  // ==============================================
+  // CREAR NOTIFICACIÓN (MÉTODO UNIFICADO)
+  // ==============================================
+  void _crearNotificacion({
+    required String id,
+    required String tipo,
+    String? pacienteNombre,
+    int? idPaciente,
+    required String mensaje,
+    required Function(Map<String, dynamic>) onNuevaNotificacion,
+  }) {
+    final now = DateTime.now();
+    final notificacion = {
+      "id": id,
+      "tipo": tipo,
+      "mensaje": mensaje,
+      "fecha": now.toIso8601String(),
+      "fechaFormateada": _formatFecha(now),
+      "leida": false,
+      if (pacienteNombre != null) "pacienteNombre": pacienteNombre,
+      if (idPaciente != null) "idPaciente": idPaciente,
+    };
+    
+    _agregarNotificacion(notificacion);
+    onNuevaNotificacion(notificacion);
   }
   
   // ==============================================
@@ -436,34 +384,48 @@ class NotificacionService {
   // ==============================================
   void detenerEscucha() {
     _pollingTimer?.cancel();
+    _pollingTimer = null;
   }
   
   // ==============================================
   // OBTENER NOTIFICACIONES
   // ==============================================
   Future<List<Map<String, dynamic>>> getNotificacionesMedico(int idMedico) async {
-    return _notificaciones;
+    return List.unmodifiable(_notificaciones);
+  }
+  
+  // ==============================================
+  // OBTENER NOTIFICACIONES PARA PACIENTE
+  // ==============================================
+  Future<List<Map<String, dynamic>>> getNotificacionesPaciente(int idUsuario) async {
+    return List.unmodifiable(_notificaciones);
   }
   
   // ==============================================
   // MARCAR COMO LEÍDA
   // ==============================================
   Future<void> marcarComoLeida(String idNotificacion) async {
-    for (var i = 0; i < _notificaciones.length; i++) {
-      if (_notificaciones[i]["id"] == idNotificacion) {
-        _notificaciones[i]["leida"] = true;
-        break;
-      }
+    final index = _notificaciones.indexWhere((n) => n["id"] == idNotificacion);
+    if (index != -1) {
+      _notificaciones[index]["leida"] = true;
     }
   }
   
   // ==============================================
   // MARCAR TODAS COMO LEÍDAS
   // ==============================================
-  Future<void> marcarTodasComoLeidas(int idMedico) async {
+  Future<void> marcarTodasComoLeidas(int userId) async {
     for (var i = 0; i < _notificaciones.length; i++) {
       _notificaciones[i]["leida"] = true;
     }
+  }
+  
+  // ==============================================
+  // LIMPIAR NOTIFICACIONES
+  // ==============================================
+  void limpiarNotificaciones() {
+    _notificaciones.clear();
+    _notificacionesIds.clear();
   }
   
   // ==============================================
@@ -471,7 +433,7 @@ class NotificacionService {
   // ==============================================
   void _agregarNotificacion(Map<String, dynamic> notificacion) {
     _notificaciones.insert(0, notificacion);
-    if (_notificaciones.length > 100) {
+    if (_notificaciones.length > _maxNotificaciones) {
       _notificaciones.removeLast();
     }
   }

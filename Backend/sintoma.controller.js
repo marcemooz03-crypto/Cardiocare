@@ -1,108 +1,159 @@
+// controllers/sintoma.controller.js
 const db = require('./db');
 
 // ============================
-// 🚨 GENERAR ALERTA POR SÍNTOMA
-// Recibe idPaciente (ya resuelto desde la tabla paciente)
+// 🚨 GENERAR ALERTA POR SÍNTOMA CON NOMBRE
 // ============================
-function crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad) {
+function crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad, nombrePaciente) {
   const nivel = prioridad === "ALTA" ? "ALTO"
               : prioridad === "MEDIA" ? "MEDIO"
               : "BAJO";
 
-  const sql = `
-    INSERT INTO alerta (idPaciente, tipo, nivel, descripcion, origen, estado, fecha)
-    VALUES (?, 'SINTOMA', ?, ?, 'SINTOMA', 'PENDIENTE', NOW())
-  `;
+  if (!nombrePaciente || nombrePaciente === '') {
+    const sqlPaciente = `
+      SELECT u.nombre 
+      FROM paciente p
+      JOIN usuario u ON p.idUsuario = u.idUsuario
+      WHERE p.idPaciente = ?
+    `;
+    
+    db.query(sqlPaciente, [idPaciente], (err, paciente) => {
+      if (err) {
+        console.log('❌ ERROR al obtener paciente:', err);
+        insertarAlerta('Paciente');
+        return;
+      }
 
-  db.query(sql, [idPaciente, nivel, `${titulo}: ${descripcion}`], (err) => {
-    if (err) console.log("❌ ERROR ALERTA SÍNTOMA:", err);
-    else     console.log(`✅ Alerta creada para paciente ${idPaciente}`);
-  });
+      const nombre = paciente && paciente.length > 0 
+        ? paciente[0].nombre 
+        : 'Paciente';
+      
+      console.log(`✅ Nombre obtenido de BD: ${nombre}`);
+      insertarAlerta(nombre);
+    });
+  } else {
+    insertarAlerta(nombrePaciente);
+  }
+
+  function insertarAlerta(nombre) {
+    const sql = `
+      INSERT INTO alerta 
+      (idPaciente, tipo, nivel, descripcion, origen, nombre_origen, estado, fecha)
+      VALUES (?, 'SINTOMA', ?, ?, 'SINTOMA', ?, 'PENDIENTE', NOW())
+    `;
+
+    const descripcionCompleta = `${titulo}: ${descripcion}`;
+
+    db.query(sql, [idPaciente, nivel, descripcionCompleta, nombre], (err) => {
+      if (err) {
+        console.log("❌ ERROR ALERTA SÍNTOMA:", err);
+      } else {
+        console.log(`✅ Alerta creada para ${nombre} (ID Paciente: ${idPaciente})`);
+      }
+    });
+  }
 }
 
 // ============================
 // ➤ CREAR SÍNTOMA
-// Recibe idUsuario → busca idPaciente → inserta síntoma → crea alerta
 // ============================
 exports.crearSintoma = (req, res) => {
-  const { idUsuario, titulo, descripcion, prioridad } = req.body;
+  const { 
+    idUsuario, 
+    titulo, 
+    descripcion, 
+    prioridad,
+    nombrePaciente
+  } = req.body;
+
+  console.log('📝 CREAR SÍNTOMA - Datos recibidos:');
+  console.log('  idUsuario:', idUsuario);
+  console.log('  titulo:', titulo);
+  console.log('  descripcion:', descripcion);
+  console.log('  prioridad:', prioridad);
+  console.log('  nombrePaciente:', nombrePaciente);
 
   if (!idUsuario || !titulo || !descripcion) {
-    return res.status(400).json({ ok: false, message: "Faltan datos" });
+    return res.status(400).json({ 
+      ok: false, 
+      message: "Faltan datos" 
+    });
   }
 
-  // 1️⃣ Insertar el síntoma (se guarda con idUsuario, como siempre)
   const sqlSintoma = `
-    INSERT INTO sintoma (idUsuario, titulo, descripcion, prioridad)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO sintoma (idUsuario, titulo, descripcion, prioridad, fecha)
+    VALUES (?, ?, ?, ?, NOW())
   `;
 
   db.query(sqlSintoma, [idUsuario, titulo, descripcion, prioridad || 'MEDIA'], (err, result) => {
     if (err) {
-      console.log('❌ Error creando síntoma:', err);
-      return res.status(500).json({ ok: false, error: err });
+      console.error('❌ Error creando síntoma:', err);
+      return res.status(500).json({ 
+        ok: false, 
+        error: err.sqlMessage || err.message 
+      });
     }
 
     const idSintoma = result.insertId;
 
-    // 2️⃣ Buscar el idPaciente que corresponde a este idUsuario
     const sqlPaciente = `
-      SELECT idPaciente FROM paciente WHERE idUsuario = ? LIMIT 1
+      SELECT p.idPaciente, u.nombre as nombre_usuario
+      FROM paciente p
+      JOIN usuario u ON p.idUsuario = u.idUsuario
+      WHERE p.idUsuario = ?
     `;
 
     db.query(sqlPaciente, [idUsuario], (err2, rows) => {
       if (err2 || rows.length === 0) {
-        // Si no se encuentra el paciente, igual responder OK
-        // El síntoma ya quedó guardado, solo no se pudo crear la alerta
-        console.log(`⚠️ No se encontró paciente para idUsuario=${idUsuario}, alerta no creada`);
-        return res.json({
+        console.log(`⚠️ No se encontró paciente para idUsuario=${idUsuario}`);
+        return res.status(200).json({
           ok: true,
-          message: 'Síntoma registrado (sin alerta: paciente no encontrado)',
+          message: 'Síntoma registrado (sin alerta)',
           idSintoma,
         });
       }
 
       const idPaciente = rows[0].idPaciente;
+      const nombreUsuario = rows[0].nombre_usuario || 'Paciente';
+      const nombreFinal = nombrePaciente && nombrePaciente.trim() !== '' 
+        ? nombrePaciente 
+        : nombreUsuario;
 
-      // 3️⃣ Crear la alerta con el idPaciente correcto
-      crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad || 'MEDIA');
+      crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad || 'MEDIA', nombreFinal);
 
-      res.json({
+      res.status(201).json({
         ok: true,
         message: 'Síntoma registrado + alerta generada',
         idSintoma,
+        idPaciente,
+        nombrePaciente: nombreFinal
       });
     });
   });
 };
 
 // ============================
-// ➤ OBTENER TODOS LOS SÍNTOMAS
-// ============================
-exports.obtenerSintomas = (req, res) => {
-  db.query(
-    'SELECT * FROM sintoma ORDER BY fecha DESC',
-    (err, result) => {
-      if (err) return res.status(500).json({ ok: false, error: err });
-      res.json(result);
-    }
-  );
-};
-
-// ============================
-// ➤ OBTENER POR USUARIO
+// ➤ OBTENER SÍNTOMAS POR USUARIO
 // ============================
 exports.obtenerPorUsuario = (req, res) => {
   const { idUsuario } = req.params;
 
-  db.query(
-    'SELECT * FROM sintoma WHERE idUsuario = ? ORDER BY fecha DESC',
-    [idUsuario],
-    (err, result) => {
-      if (err) return res.status(500).json({ ok: false, error: err });
-      res.json(result);
+  const sql = `
+    SELECT * FROM sintoma 
+    WHERE idUsuario = ? 
+    ORDER BY fecha DESC
+  `;
+
+  db.query(sql, [idUsuario], (err, result) => {
+    if (err) {
+      console.error('❌ ERROR obtenerPorUsuario:', err);
+      return res.status(500).json({ 
+        ok: false, 
+        error: err.sqlMessage || err.message 
+      });
     }
-  );
+    res.json(result);
+  });
 };
 
 // ============================
@@ -111,12 +162,19 @@ exports.obtenerPorUsuario = (req, res) => {
 exports.eliminarSintoma = (req, res) => {
   const { idSintoma } = req.params;
 
-  db.query(
-    'DELETE FROM sintoma WHERE idSintoma = ?',
-    [idSintoma],
-    (err) => {
-      if (err) return res.status(500).json({ ok: false, error: err });
-      res.json({ ok: true, message: 'Síntoma eliminado' });
+  const sql = `DELETE FROM sintoma WHERE idSintoma = ?`;
+
+  db.query(sql, [idSintoma], (err) => {
+    if (err) {
+      console.error('❌ ERROR eliminarSintoma:', err);
+      return res.status(500).json({ 
+        ok: false, 
+        error: err.sqlMessage || err.message 
+      });
     }
-  );
+    res.json({ 
+      ok: true, 
+      message: 'Síntoma eliminado' 
+    });
+  });
 };

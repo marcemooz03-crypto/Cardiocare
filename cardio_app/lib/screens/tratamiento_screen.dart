@@ -18,84 +18,201 @@ class CrearTratamientoScreen extends StatefulWidget {
 class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   final TratamientoService service = TratamientoService();
 
-  final descripcionCtrl = TextEditingController();
-  final fechaInicioCtrl = TextEditingController();
-  final fechaFinCtrl = TextEditingController();
-  final observacionesCtrl = TextEditingController();
-  final dosisCtrl = TextEditingController();
-  final frecuenciaCtrl = TextEditingController();
+  // Controladores
+  final _descripcionController = TextEditingController();
+  final _fechaInicioController = TextEditingController();
+  final _fechaFinController = TextEditingController();
+  final _observacionesController = TextEditingController();
+  final _dosisController = TextEditingController();
+  final _frecuenciaController = TextEditingController();
 
-  List<Map<String, dynamic>> medicamentos = [];
-  int? idMedicamentoSeleccionado;
+  // Focus nodes
+  final _descripcionFocus = FocusNode();
+  final _observacionesFocus = FocusNode();
+  final _dosisFocus = FocusNode();
+  final _frecuenciaFocus = FocusNode();
 
-  List<Map<String, dynamic>> sintomas = [];
-  int? idSintomaSeleccionado;
+  // Datos
+  List<Map<String, dynamic>> _medicamentos = [];
+  List<Map<String, dynamic>> _sintomas = [];
+  int? _medicamentoSeleccionadoId;
+  int? _sintomaSeleccionadoId;
+  String _estado = "Activo";
+  bool _isLoading = false;
+  bool _isLoadingData = true;
+  final _formKey = GlobalKey<FormState>();
 
-  String estado = "Activo";
-  bool loading = false;
+  // Fechas seleccionadas
+  DateTime? _fechaInicio;
+  DateTime? _fechaFin;
 
   // Colores profesionales
-  static const _primary = Color(0xFF2563EB);
-  static const _success = Color(0xFF10B981);
-  static const _warning = Color(0xFFF59E0B);
-  static const _info = Color(0xFF06B6D4);
-  static const _textMain = Color(0xFF1F2937);
-  static const _textSub = Color(0xFF6B7280);
-  static const _border = Color(0xFFE5E7EB);
+  static const _primaryColor = Color(0xFF2563EB);
+  static const _successColor = Color(0xFF10B981);
+  static const _warningColor = Color(0xFFF59E0B);
+  static const _infoColor = Color(0xFF06B6D4);
+  static const _errorColor = Color(0xFFEF4444);
+  static const _textPrimary = Color(0xFF1F2937);
+  static const _textSecondary = Color(0xFF6B7280);
+  static const _textTertiary = Color(0xFF9CA3AF);
+  static const _borderColor = Color(0xFFE5E7EB);
+  static const _backgroundColor = Color(0xFFF9FAFB);
   
   static const _gradientPrimary = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [_primary, Color(0xFF60A5FA)],
+    colors: [_primaryColor, Color(0xFF60A5FA)],
   );
 
   @override
   void initState() {
     super.initState();
-    cargarMedicamentos();
-    cargarSintomas();
+    _cargarDatosIniciales();
   }
 
   @override
   void dispose() {
-    descripcionCtrl.dispose();
-    fechaInicioCtrl.dispose();
-    fechaFinCtrl.dispose();
-    observacionesCtrl.dispose();
-    dosisCtrl.dispose();
-    frecuenciaCtrl.dispose();
+    _disposeControllers();
+    _disposeFocusNodes();
     super.dispose();
   }
 
-  void cargarMedicamentos() async {
-    final data = await service.getMedicamentosDisponibles();
-    if (mounted) setState(() => medicamentos = data);
+  void _disposeControllers() {
+    _descripcionController.dispose();
+    _fechaInicioController.dispose();
+    _fechaFinController.dispose();
+    _observacionesController.dispose();
+    _dosisController.dispose();
+    _frecuenciaController.dispose();
   }
 
-  void cargarSintomas() async {
-    final data = await service.getSintomas();
-    if (mounted) setState(() => sintomas = data);
+  void _disposeFocusNodes() {
+    _descripcionFocus.dispose();
+    _observacionesFocus.dispose();
+    _dosisFocus.dispose();
+    _frecuenciaFocus.dispose();
   }
 
-  Future<void> seleccionarFecha(TextEditingController controller) async {
-    final picked = await showDatePicker(
+  Future<void> _cargarDatosIniciales() async {
+    setState(() => _isLoadingData = true);
+    
+    try {
+      final resultados = await Future.wait([
+        service.getMedicamentosDisponibles(),
+        service.getSintomas(),
+      ]);
+      
+      if (mounted) {
+        setState(() {
+          _medicamentos = resultados[0];
+          _sintomas = resultados[1];
+          _isLoadingData = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingData = false);
+        _mostrarMensaje(
+          "Error al cargar datos: ${e.toString()}",
+          esError: true,
+        );
+      }
+    }
+  }
+
+  // Validadores
+  String? _validateDescripcion(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return 'La descripción es requerida';
+    }
+    if (value.length < 5) {
+      return 'Mínimo 5 caracteres';
+    }
+    if (value.length > 200) {
+      return 'Máximo 200 caracteres';
+    }
+    return null;
+  }
+
+  String? _validateDosis(String? value) {
+    if (_medicamentoSeleccionadoId != null) {
+      if (value == null || value.trim().isEmpty) {
+        return 'La dosis es requerida cuando seleccionas un medicamento';
+      }
+      if (value.length > 50) {
+        return 'Dosis demasiado larga';
+      }
+    }
+    return null;
+  }
+
+  String? _validateFrecuencia(String? value) {
+    if (_medicamentoSeleccionadoId != null) {
+      if (value == null || value.trim().isEmpty) {
+        return 'La frecuencia es requerida cuando seleccionas un medicamento';
+      }
+      if (value.length > 50) {
+        return 'Frecuencia demasiado larga';
+      }
+    }
+    return null;
+  }
+
+  String? _validateFechas() {
+    if (_fechaInicio == null) {
+      return 'Selecciona la fecha de inicio';
+    }
+    if (_fechaFin == null) {
+      return 'Selecciona la fecha de finalización';
+    }
+    if (_fechaFin!.isBefore(_fechaInicio!)) {
+      return 'La fecha final debe ser posterior a la fecha de inicio';
+    }
+    return null;
+  }
+
+  Future<void> _seleccionarFecha(TextEditingController controller, bool isInicio) async {
+    final DateTime now = DateTime.now();
+    final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2100),
+      initialDate: isInicio ? now : (_fechaInicio ?? now),
+      firstDate: isInicio ? now : (_fechaInicio ?? now),
+      lastDate: DateTime(now.year + 5),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: _primary),
+            colorScheme: const ColorScheme.light(primary: _primaryColor),
           ),
           child: child!,
         );
       },
     );
-    if (picked != null) {
-      final meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-      controller.text = "${picked.day} ${meses[picked.month - 1]}, ${picked.year}";
+    
+    if (picked != null && mounted) {
+      setState(() {
+        if (isInicio) {
+          _fechaInicio = picked;
+          controller.text = _formatFecha(picked);
+          // Si la fecha fin es anterior a la nueva fecha inicio, limpiarla
+          if (_fechaFin != null && _fechaFin!.isBefore(picked)) {
+            _fechaFin = null;
+            _fechaFinController.clear();
+          }
+        } else {
+          _fechaFin = picked;
+          controller.text = _formatFecha(picked);
+        }
+      });
     }
+  }
+
+  String _formatFecha(DateTime date) {
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    return "${date.day} ${meses[date.month - 1]}, ${date.year}";
+  }
+
+  String _convertirFechaParaAPI(DateTime date) {
+    return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
   }
 
   void _mostrarMensaje(String mensaje, {bool esError = false}) {
@@ -103,75 +220,84 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
       SnackBar(
         content: Row(
           children: [
-            Icon(esError ? Icons.error_outline : Icons.check_circle, color: Colors.white, size: 20),
+            Icon(
+              esError ? Icons.error_outline : Icons.check_circle,
+              color: Colors.white,
+              size: 20,
+            ),
             const SizedBox(width: 12),
             Expanded(child: Text(mensaje)),
           ],
         ),
-        backgroundColor: esError ? Colors.red : _success,
+        backgroundColor: esError ? _errorColor : _successColor,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        duration: const Duration(seconds: 3),
         margin: const EdgeInsets.all(16),
       ),
     );
   }
 
-  void guardar() async {
-    if (descripcionCtrl.text.isEmpty ||
-        fechaInicioCtrl.text.isEmpty ||
-        fechaFinCtrl.text.isEmpty ||
-        idSintomaSeleccionado == null) {
-      _mostrarMensaje("Por favor completa todos los campos obligatorios", esError: true);
+  Future<void> _guardar() async {
+    // Validar formulario
+    if (!_formKey.currentState!.validate()) return;
+    
+    // Validar fechas
+    final fechaError = _validateFechas();
+    if (fechaError != null) {
+      _mostrarMensaje(fechaError, esError: true);
+      return;
+    }
+    
+    if (_sintomaSeleccionadoId == null) {
+      _mostrarMensaje("Debes seleccionar un síntoma asociado", esError: true);
       return;
     }
 
-    setState(() => loading = true);
+    setState(() => _isLoading = true);
 
-    final data = {
-      "idPaciente": widget.idPaciente,
-      "idMedico": widget.idMedico,
-      "idSintoma": idSintomaSeleccionado,
-      "descripcion": descripcionCtrl.text.trim(),
-      "fechaInicio": _convertirFechaParaAPI(fechaInicioCtrl.text.trim()),
-      "fechaFin": _convertirFechaParaAPI(fechaFinCtrl.text.trim()),
-      "estado": estado,
-      "observaciones": observacionesCtrl.text.trim(),
-    };
-
-    final response = await service.crearTratamiento(data);
-    final ok = response["ok"] == true;
-
-    if (ok && idMedicamentoSeleccionado != null) {
-      await service.agregarMedicamento(
-        idTratamiento: response["idTratamiento"],
-        idMedicamento: idMedicamentoSeleccionado!,
-        dosis: dosisCtrl.text.trim(),
-        frecuencia: frecuenciaCtrl.text.trim(),
-      );
-    }
-
-    if (mounted) setState(() => loading = false);
-
-    if (ok) {
-      _mostrarMensaje("✓ Tratamiento registrado correctamente");
-      Navigator.pop(context, true);
-    } else {
-      _mostrarMensaje("✗ Error al registrar el tratamiento", esError: true);
-    }
-  }
-
-  String _convertirFechaParaAPI(String fecha) {
-    // Convertir formato "15 Ene, 2024" a "2024-01-15"
     try {
-      final meses = {'Ene': '01', 'Feb': '02', 'Mar': '03', 'Abr': '04', 'May': '05', 'Jun': '06', 'Jul': '07', 'Ago': '08', 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dic': '12'};
-      final partes = fecha.split(' ');
-      final dia = partes[0].padLeft(2, '0');
-      final mes = meses[partes[1]] ?? '01';
-      final ano = partes[3];
-      return "$ano-$mes-$dia";
-    } catch (_) {
-      return fecha;
+      final tratamientoData = {
+        "idPaciente": widget.idPaciente,
+        "idMedico": widget.idMedico,
+        "idSintoma": _sintomaSeleccionadoId,
+        "descripcion": _descripcionController.text.trim(),
+        "fechaInicio": _convertirFechaParaAPI(_fechaInicio!),
+        "fechaFin": _convertirFechaParaAPI(_fechaFin!),
+        "estado": _estado,
+        "observaciones": _observacionesController.text.trim(),
+      };
+
+      final response = await service.crearTratamiento(tratamientoData);
+      
+      if (!mounted) return;
+      
+      final isSuccess = response["ok"] == true;
+
+      if (isSuccess && _medicamentoSeleccionadoId != null) {
+        await service.agregarMedicamento(
+          idTratamiento: response["idTratamiento"],
+          idMedicamento: _medicamentoSeleccionadoId!,
+          dosis: _dosisController.text.trim(),
+          frecuencia: _frecuenciaController.text.trim(),
+        );
+      }
+
+      if (isSuccess) {
+        _mostrarMensaje("✓ Tratamiento registrado correctamente");
+        Navigator.pop(context, true);
+      } else {
+        _mostrarMensaje(
+          response["message"] ?? "✗ Error al registrar el tratamiento",
+          esError: true,
+        );
+      }
+    } catch (e) {
+      _mostrarMensaje("Error inesperado: ${e.toString()}", esError: true);
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -181,224 +307,98 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     final isTablet = size.width > 600;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(100),
-        child: Container(
-          decoration: const BoxDecoration(
-            gradient: _gradientPrimary,
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(24),
-              bottomRight: Radius.circular(24),
+      backgroundColor: _backgroundColor,
+      appBar: _buildAppBar(),
+      body: _isLoadingData
+          ? const Center(child: CircularProgressIndicator())
+          : SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 800),
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isTablet ? 32 : 16,
+                      vertical: 20,
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        children: [
+                          _buildInfoCard(),
+                          const SizedBox(height: 20),
+                          _buildInformacionTratamientoCard(),
+                          const SizedBox(height: 16),
+                          _buildPeriodoCard(),
+                          const SizedBox(height: 16),
+                          _buildObservacionesCard(),
+                          const SizedBox(height: 16),
+                          _buildMedicamentoCard(),
+                          const SizedBox(height: 32),
+                          _buildSubmitButton(),
+                          const SizedBox(height: 20),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(120),
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: _gradientPrimary,
+          borderRadius: BorderRadius.only(
+            bottomLeft: Radius.circular(24),
+            bottomRight: Radius.circular(24),
           ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                children: [
-                  Container(
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 0,
+                  child: Container(
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
+                      icon: const Icon(Icons.arrow_back, color: Colors.white),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
-                  const Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          "💊 Nuevo Tratamiento",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                ),
+                const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        "💊 Nuevo Tratamiento",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          "Registra un plan terapéutico",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 48),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 700),
-            child: SingleChildScrollView(
-              padding: EdgeInsets.symmetric(
-                horizontal: isTablet ? 40 : 20,
-                vertical: 20,
-              ),
-              child: Column(
-                children: [
-                  // Información del tratamiento
-                  _buildSectionCard(
-                    icon: Icons.medical_information,
-                    title: "Información del Tratamiento",
-                    color: _primary,
-                    children: [
-                      _buildTextField(
-                        controller: descripcionCtrl,
-                        label: "Descripción",
-                        hint: "Ej: Tratamiento para hipertensión",
-                        icon: Icons.description,
                       ),
-                      const SizedBox(height: 16),
-                      _buildDropdownField(
-                        value: idSintomaSeleccionado,
-                        items: sintomas,
-                        label: "Síntoma asociado",
-                        hint: "Selecciona un síntoma",
-                        icon: Icons.healing,
-                        onChanged: (v) => setState(() => idSintomaSeleccionado = v),
-                      ),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Fechas
-                  _buildSectionCard(
-                    icon: Icons.calendar_today,
-                    title: "Período del Tratamiento",
-                    color: _info,
-                    children: [
-                      _buildDateField(
-                        controller: fechaInicioCtrl,
-                        label: "Fecha de inicio",
-                        onTap: () => seleccionarFecha(fechaInicioCtrl),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildDateField(
-                        controller: fechaFinCtrl,
-                        label: "Fecha de finalización",
-                        onTap: () => seleccionarFecha(fechaFinCtrl),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildEstadoField(),
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Observaciones
-                  _buildSectionCard(
-                    icon: Icons.notes,
-                    title: "Observaciones",
-                    color: _warning,
-                    children: [
-                      TextField(
-                        controller: observacionesCtrl,
-                        maxLines: 4,
-                        decoration: InputDecoration(
-                          hintText: "Notas adicionales sobre el tratamiento...",
-                          border: InputBorder.none,
-                          filled: true,
-                          fillColor: Colors.grey.shade50,
-                          contentPadding: const EdgeInsets.all(16),
+                      SizedBox(height: 4),
+                      Text(
+                        "Registra un plan terapéutico",
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
                         ),
                       ),
                     ],
                   ),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Medicamento
-                  _buildSectionCard(
-                    icon: Icons.medication,
-                    title: "Medicamento (Opcional)",
-                    color: _success,
-                    children: [
-                      _buildDropdownField(
-                        value: idMedicamentoSeleccionado,
-                        items: medicamentos,
-                        label: "Medicamento",
-                        hint: "Selecciona un medicamento",
-                        icon: Icons.medication,
-                        onChanged: (v) => setState(() => idMedicamentoSeleccionado = v),
-                      ),
-                      if (idMedicamentoSeleccionado != null) ...[
-                        const SizedBox(height: 16),
-                        _buildTextField(
-                          controller: dosisCtrl,
-                          label: "Dosis",
-                          hint: "Ej: 50mg",
-                          icon: Icons.science,
-                        ),
-                        const SizedBox(height: 16),
-                        _buildTextField(
-                          controller: frecuenciaCtrl,
-                          label: "Frecuencia",
-                          hint: "Ej: Cada 12 horas",
-                          icon: Icons.repeat,
-                        ),
-                      ],
-                    ],
-                  ),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Botón guardar
-                  SizedBox(
-                    width: double.infinity,
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: loading ? null : guardar,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _primary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: loading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.save, size: 20),
-                                SizedBox(width: 8),
-                                Text(
-                                  "Guardar Tratamiento",
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 20),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
@@ -406,7 +406,197 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
-  // Widget para tarjeta de sección
+  Widget _buildInfoCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _primaryColor.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _primaryColor.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.info_outline, color: _primaryColor),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              "Los campos marcados con * son obligatorios",
+              style: TextStyle(
+                fontSize: 13,
+                color: _primaryColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInformacionTratamientoCard() {
+    return _buildSectionCard(
+      icon: Icons.medical_information,
+      title: "Información del Tratamiento",
+      color: _primaryColor,
+      children: [
+        TextFormField(
+          controller: _descripcionController,
+          focusNode: _descripcionFocus,
+          textInputAction: TextInputAction.next,
+          validator: _validateDescripcion,
+          maxLines: 2,
+          decoration: _buildInputDecoration(
+            label: "Descripción *",
+            hint: "Describe el tratamiento o diagnóstico",
+            icon: Icons.description,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _buildDropdownField(
+          value: _sintomaSeleccionadoId,
+          items: _sintomas,
+          label: "Síntoma asociado *",
+          hint: "Selecciona un síntoma",
+          icon: Icons.healing,
+          displayField: "titulo",
+          valueField: "idSintoma",
+          onChanged: (v) => setState(() => _sintomaSeleccionadoId = v),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPeriodoCard() {
+    return _buildSectionCard(
+      icon: Icons.calendar_today,
+      title: "Período del Tratamiento",
+      color: _infoColor,
+      children: [
+        _buildDateField(
+          controller: _fechaInicioController,
+          label: "Fecha de inicio *",
+          onTap: () => _seleccionarFecha(_fechaInicioController, true),
+        ),
+        const SizedBox(height: 16),
+        _buildDateField(
+          controller: _fechaFinController,
+          label: "Fecha de finalización *",
+          onTap: () => _seleccionarFecha(_fechaFinController, false),
+        ),
+        const SizedBox(height: 16),
+        _buildEstadoField(),
+      ],
+    );
+  }
+
+  Widget _buildObservacionesCard() {
+    return _buildSectionCard(
+      icon: Icons.notes,
+      title: "Observaciones",
+      color: _warningColor,
+      children: [
+        TextFormField(
+          controller: _observacionesController,
+          focusNode: _observacionesFocus,
+          maxLines: 4,
+          decoration: _buildInputDecoration(
+            label: "Notas adicionales",
+            hint: "Instrucciones especiales, contraindicaciones, etc...",
+            icon: Icons.note_add,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMedicamentoCard() {
+    return _buildSectionCard(
+      icon: Icons.medication,
+      title: "Medicamento (Opcional)",
+      color: _successColor,
+      children: [
+        _buildDropdownField(
+          value: _medicamentoSeleccionadoId,
+          items: _medicamentos,
+          label: "Medicamento",
+          hint: "Selecciona un medicamento (opcional)",
+          icon: Icons.medication,
+          displayField: "nombre",
+          valueField: "idMedicamento",
+          onChanged: (v) => setState(() => _medicamentoSeleccionadoId = v),
+        ),
+        if (_medicamentoSeleccionadoId != null) ...[
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _dosisController,
+            focusNode: _dosisFocus,
+            textInputAction: TextInputAction.next,
+            validator: _validateDosis,
+            decoration: _buildInputDecoration(
+              label: "Dosis",
+              hint: "Ej: 500mg, 1 tableta, 10ml",
+              icon: Icons.science,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _frecuenciaController,
+            focusNode: _frecuenciaFocus,
+            textInputAction: TextInputAction.done,
+            validator: _validateFrecuencia,
+            onFieldSubmitted: (_) => _guardar(),
+            decoration: _buildInputDecoration(
+              label: "Frecuencia",
+              hint: "Ej: Cada 8 horas, 2 veces al día",
+              icon: Icons.repeat,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 56,
+      child: ElevatedButton(
+        onPressed: _isLoading ? null : _guardar,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _primaryColor,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.save, size: 20),
+                  SizedBox(width: 8),
+                  Text(
+                    "Guardar Tratamiento",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
   Widget _buildSectionCard({
     required IconData icon,
     required String title,
@@ -419,7 +609,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -431,7 +621,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.05),
+              color: color.withOpacity(0.08),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(20),
                 topRight: Radius.circular(20),
@@ -448,12 +638,14 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
                   child: Icon(icon, color: color, size: 20),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: _textMain,
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: _textPrimary,
+                    ),
                   ),
                 ),
               ],
@@ -470,134 +662,150 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
-  // Widget para campo de texto
-  Widget _buildTextField({
-    required TextEditingController controller,
+  InputDecoration _buildInputDecoration({
     required String label,
     required String hint,
     required IconData icon,
-    int maxLines = 1,
   }) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        prefixIcon: Icon(icon, size: 20, color: _textSub),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _primary, width: 1.5),
-        ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    return InputDecoration(
+      labelText: label,
+      hintText: hint,
+      prefixIcon: Icon(icon, size: 20, color: _textSecondary),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _borderColor),
       ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: _borderColor),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _primaryColor, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _errorColor),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: _errorColor, width: 1.5),
+      ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
   }
 
-  // Widget para campo de fecha
   Widget _buildDateField({
     required TextEditingController controller,
     required String label,
     required VoidCallback onTap,
   }) {
-    return TextField(
+    return TextFormField(
       controller: controller,
       readOnly: true,
       onTap: onTap,
+      validator: (_) => _validateFechas(),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: const Icon(Icons.calendar_today, size: 20, color: _textSub),
-        suffixIcon: const Icon(Icons.arrow_drop_down, size: 20, color: _textSub),
+        prefixIcon: const Icon(Icons.calendar_today, size: 20, color: _textSecondary),
+        suffixIcon: const Icon(Icons.arrow_drop_down, size: 20, color: _textSecondary),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _border),
+          borderSide: const BorderSide(color: _borderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _border),
+          borderSide: BorderSide(color: _borderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _primary, width: 1.5),
+          borderSide: const BorderSide(color: _primaryColor, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }
 
-  // Widget para campo de estado
   Widget _buildEstadoField() {
+    final estados = {
+      "Activo": {"icon": Icons.play_circle, "color": _successColor},
+      "Finalizado": {"icon": Icons.check_circle, "color": _infoColor},
+      "Suspendido": {"icon": Icons.pause_circle, "color": _warningColor},
+    };
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: _border),
+        border: Border.all(color: _borderColor),
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButtonFormField<String>(
-          value: estado,
+          value: _estado,
           decoration: const InputDecoration(
             border: InputBorder.none,
-            prefixIcon: Icon(Icons.flag, size: 20, color: _textSub),
+            labelText: "Estado",
+            prefixIcon: Icon(Icons.flag, size: 20, color: _textSecondary),
           ),
-          items: const [
-            DropdownMenuItem(value: "Activo", child: Row(
-              children: [Icon(Icons.play_circle, size: 16, color: _success), SizedBox(width: 8), Text("Activo")],
-            )),
-            DropdownMenuItem(value: "Finalizado", child: Row(
-              children: [Icon(Icons.check_circle, size: 16, color: _info), SizedBox(width: 8), Text("Finalizado")],
-            )),
-            DropdownMenuItem(value: "Suspendido", child: Row(
-              children: [Icon(Icons.pause_circle, size: 16, color: _warning), SizedBox(width: 8), Text("Suspendido")],
-            )),
-          ],
-          onChanged: (v) => setState(() => estado = v!),
+          items: estados.entries.map((entry) {
+            return DropdownMenuItem(
+              value: entry.key,
+              child: Row(
+                children: [
+                  Icon(entry.value["icon"] as IconData?, size: 18, color: entry.value["color"]as Color?),
+                  const SizedBox(width: 8),
+                  Text(entry.key),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (v) => setState(() => _estado = v!),
         ),
       ),
     );
   }
 
-  // Widget para dropdown
   Widget _buildDropdownField({
     required int? value,
     required List<Map<String, dynamic>> items,
     required String label,
     required String hint,
     required IconData icon,
+    required String displayField,
+    required String valueField,
     required void Function(int?) onChanged,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: _border),
+        border: Border.all(color: _borderColor),
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButtonFormField<int>(
           value: value,
           hint: Text(hint),
+          isExpanded: true,
           decoration: InputDecoration(
             labelText: label,
             border: InputBorder.none,
-            prefixIcon: Icon(icon, size: 20, color: _textSub),
+            prefixIcon: Icon(icon, size: 20, color: _textSecondary),
           ),
           items: items.map((item) {
-            final id = item["idSintoma"] ?? item["idMedicamento"];
-            final nombre = item["titulo"] ?? item["nombre"];
+            final id = item[valueField];
+            final nombre = item[displayField]?.toString() ?? "";
             return DropdownMenuItem<int>(
               value: id,
-              child: Text(nombre ?? ""),
+              child: Text(
+                nombre,
+                overflow: TextOverflow.ellipsis,
+              ),
             );
           }).toList(),
           onChanged: onChanged,
+          validator: label.contains("*") && value == null
+              ? (_) => "Este campo es requerido"
+              : null,
         ),
       ),
     );

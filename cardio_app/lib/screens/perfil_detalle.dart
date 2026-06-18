@@ -15,6 +15,7 @@ import '../services/cita_service.dart';
 import '../services/signo_service.dart';
 import '../services/recordatorio_service.dart';
 import '../services/recomendacion_service.dart';
+import '../services/auth_service.dart';
 
 import 'chat_screen.dart';
 import 'agendar_cita.dart';
@@ -48,6 +49,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   final signosService = SignosService();
   final recordatorioService = RecordatorioService();
   final recomendacionService = RecomendacionService();
+  final authService = AuthService();
 
   late TabController _tabController;
 
@@ -66,6 +68,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   bool loading = true;
   int mensajesNoLeidos = 0;
   int? idConversacion;
+  
+  Map<int, int> _mensajesNoLeidosPorMedico = {};
+  Map<int, int> _conversacionesPorMedico = {};
   
   bool _mostrarGuia = true;
   int _guiaPaso = 0;
@@ -110,7 +115,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     ]);
     await loadTratamientos();
     await loadRecordatorios();
-    await iniciarChat();
+    
+    await _cargarTodosLosMensajesNoLeidos();
+    
     if (!mounted) return;
     setState(() => loading = false);
   }
@@ -246,35 +253,48 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     } catch (_) {}
   }
 
-  Future<void> iniciarChat() async {
-    try {
-      if (medicos.isEmpty) return;
-      final idMedico = int.tryParse(medicos.first["idProfesional"].toString()) ?? 0;
-      if (idMedico == 0) return;
-      idConversacion = await chatService.getOrCreateConversacion(widget.idPaciente, idMedico);
-      if (idConversacion != null) loadNotificaciones();
-    } catch (e) {
-      debugPrint("❌ ERROR INIT CHAT => $e");
+  Future<void> _cargarTodosLosMensajesNoLeidos() async {
+    int totalNoLeidos = 0;
+    _mensajesNoLeidosPorMedico.clear();
+    _conversacionesPorMedico.clear();
+    
+    for (var medico in medicos) {
+      final idMedico = int.tryParse(medico["idProfesional"].toString()) ?? 0;
+      if (idMedico != 0) {
+        try {
+          final convId = await chatService.getOrCreateConversacion(widget.idPaciente, idMedico);
+          if (convId != null) {
+            _conversacionesPorMedico[idMedico] = convId;
+            final noLeidos = await chatService.getMensajesNoLeidos(convId, widget.idPaciente);
+            if (noLeidos > 0) {
+              _mensajesNoLeidosPorMedico[idMedico] = noLeidos;
+              totalNoLeidos += noLeidos;
+            }
+          }
+        } catch (e) {
+          debugPrint("Error cargando mensajes no leídos para médico $idMedico: $e");
+        }
+      }
+    }
+    if (mounted) {
+      setState(() => mensajesNoLeidos = totalNoLeidos);
     }
   }
 
-  void abrirChat() async {
+  Future<void> _abrirChatConMedico(int idMedico, String nombreMedico) async {
     try {
-      if (medicos.isEmpty) {
-        _snack("No tienes médicos asignados");
-        return;
-      }
-      final idMedico = int.tryParse(medicos.first["idProfesional"].toString()) ?? 0;
-      if (idMedico == 0) return;
-      final nombreMedico = medicos.first["nombre"]?.toString() ?? "Médico";
-      final convId = idConversacion ??
+      int? convId = _conversacionesPorMedico[idMedico] ?? 
           await chatService.getOrCreateConversacion(widget.idPaciente, idMedico);
-      if (convId == null) {
+      
+      if (convId == 0) {
         _snack("No se pudo abrir el chat");
         return;
       }
-      idConversacion = convId;
+      
+      _conversacionesPorMedico[idMedico] = convId!;
+      
       if (!mounted) return;
+      
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -282,28 +302,129 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
             idConversacion: convId,
             idUsuario: widget.idPaciente,
             nombre: nombreMedico,
+            especialista: 'medico',
           ),
         ),
-      ).then((_) => loadNotificaciones());
+      ).then((_) {
+        _cargarTodosLosMensajesNoLeidos();
+      });
     } catch (e) {
-      debugPrint("❌ ERROR CHAT => $e");
+      debugPrint("❌ Error abriendo chat con médico: $e");
+      _snack("No se pudo abrir el chat con $nombreMedico");
     }
   }
 
-  void loadNotificaciones() async {
-    if (idConversacion == null) return;
-    try {
-      final data = await chatService.getMensajesNoLeidos(idConversacion!, widget.idUsuario);
-      if (!mounted) return;
-      setState(() => mensajesNoLeidos = data);
-    } catch (_) {}
+  void _mostrarSelectorMedicos() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.05),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(20),
+                    topRight: Radius.circular(20),
+                  ),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.chat_bubble, color: AppTheme.primary, size: 24),
+                    SizedBox(width: 12),
+                    Text(
+                      "Selecciona un médico",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.gray700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              ...medicos.map((med) {
+                final idMedico = int.tryParse(med["idProfesional"].toString()) ?? 0;
+                final nombreMedico = med["nombre"]?.toString() ?? "Médico";
+                final especialidad = med["especialidad"]?.toString() ?? "";
+                final noLeidos = _mensajesNoLeidosPorMedico[idMedico] ?? 0;
+                
+                return ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: AppTheme.primary.withOpacity(0.1),
+                    child: Text(
+                      nombreMedico.isNotEmpty ? nombreMedico[0].toUpperCase() : "M",
+                      style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  title: Text(nombreMedico, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(especialidad.isNotEmpty ? especialidad : "Médico tratante"),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (noLeidos > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppTheme.danger,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            noLeidos > 9 ? "9+" : "$noLeidos",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.chevron_right, color: AppTheme.gray400),
+                    ],
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _abrirChatConMedico(idMedico, nombreMedico);
+                  },
+                );
+              }).toList(),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void abrirChatGeneral() async {
+    if (medicos.isEmpty) {
+      _snack("No tienes médicos asignados");
+      return;
+    }
+    
+    if (medicos.length > 1) {
+      _mostrarSelectorMedicos();
+      return;
+    }
+    
+    final med = medicos.first;
+    final idMedico = int.tryParse(med["idProfesional"].toString()) ?? 0;
+    final nombreMedico = med["nombre"]?.toString() ?? "Médico";
+    await _abrirChatConMedico(idMedico, nombreMedico);
   }
 
   int _toInt(dynamic v) => int.tryParse(v?.toString() ?? "") ?? 0;
 
   Future<void> _toggleRecordatorio(String key, bool nuevoValor, Map<String, dynamic> med) async {
     if (nuevoValor) {
-      // Mostrar selector de hora
       final TimeOfDay? horaSeleccionada = await showTimePicker(
         context: context,
         initialTime: TimeOfDay.now(),
@@ -400,9 +521,14 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         ),
       ).then((_) => loadProfile());
 
+  // ✅ CREAR SÍNTOMA CON NOMBRE DEL PACIENTE
   void crearSintoma() {
     final titulo = TextEditingController();
     final desc = TextEditingController();
+    
+    // ✅ Obtener el nombre del paciente del widget
+    final nombrePaciente = widget.nombre;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -460,17 +586,28 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () async {
-                  if (titulo.text.trim().isEmpty || desc.text.trim().isEmpty) return;
-                  await sintomaService.crearSintoma(
+                  if (titulo.text.trim().isEmpty || desc.text.trim().isEmpty) {
+                    _snack("❌ Completa todos los campos");
+                    return;
+                  }
+                  
+                  // ✅ Enviar el nombre del paciente
+                  final exito = await sintomaService.crearSintoma(
                     idUsuario: widget.idUsuario,
                     titulo: titulo.text.trim(),
                     descripcion: desc.text.trim(),
                     prioridad: "MEDIA",
+                    nombrePaciente: nombrePaciente, // ✅ ENVIAR EL NOMBRE
                   );
+                  
                   if (!mounted) return;
                   Navigator.pop(context);
-                  loadSintomas();
-                  _snack("✅ Síntoma registrado");
+                  if (exito) {
+                    loadSintomas();
+                    _snack("✅ Síntoma registrado con alerta");
+                  } else {
+                    _snack("❌ Error al registrar síntoma");
+                  }
                 },
                 child: const Text("Guardar", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
               ),
@@ -611,7 +748,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           ),
                           child: IconButton(
                             icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 26),
-                            onPressed: abrirChat,
+                            onPressed: abrirChatGeneral,
                           ),
                         ),
                         if (mensajesNoLeidos > 0)
@@ -622,7 +759,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                               padding: const EdgeInsets.all(4),
                               decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
                               child: Text(
-                                mensajesNoLeidos.toString(),
+                                mensajesNoLeidos > 9 ? "9+" : "$mensajesNoLeidos",
                                 style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                               ),
                             ),
@@ -1473,27 +1610,189 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     if (medicos.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: AppTheme.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: AppTheme.warning.withOpacity(0.2))),
-        child: const Row(children: [Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 24), SizedBox(width: 12), Expanded(child: Text("⚠️ No tienes médico asignado aún", style: TextStyle(fontSize: 15)))]),
+        decoration: BoxDecoration(
+          color: AppTheme.warning.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppTheme.warning.withOpacity(0.2)),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: 24),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                "⚠️ No tienes médicos asignados aún",
+                style: TextStyle(fontSize: 15),
+              ),
+            ),
+          ],
+        ),
       );
     }
-    final med = medicos.first;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Row(
+          children: [
+            Icon(Icons.medical_information, size: 20, color: AppTheme.primary),
+            SizedBox(width: 8),
+            Text(
+              "👨‍⚕️👩‍⚕️ Tu equipo médico",
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.gray700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ...medicos.map((med) => _buildMedicoCardItem(med)),
+      ],
+    );
+  }
+
+  Widget _buildMedicoCardItem(Map<String, dynamic> med) {
+    final nombreMedico = med["nombre"] ?? "Médico";
+    final especialidad = med["especialidad"] ?? "";
+    final telefono = med["telefono"] ?? "";
+    final correo = med["correo"] ?? "";
+    final idMedico = int.tryParse(med["idProfesional"].toString()) ?? 0;
+    final noLeidos = _mensajesNoLeidosPorMedico[idMedico] ?? 0;
+
     return Container(
+      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(gradient: AppTheme.primaryGradient.withOpacity(0.9), borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))]),
+      decoration: BoxDecoration(
+        gradient: AppTheme.primaryGradient.withOpacity(0.9),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Row(
         children: [
-          Container(width: 55, height: 55, decoration: const BoxDecoration(color: Colors.white24, shape: BoxShape.circle), child: Center(child: Text(med["nombre"] != null ? med["nombre"][0].toUpperCase() : "M", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22)))),
+          Container(
+            width: 55,
+            height: 55,
+            decoration: const BoxDecoration(
+              color: Colors.white24,
+              shape: BoxShape.circle,
+            ),
+            child: Center(
+              child: Text(
+                nombreMedico.isNotEmpty ? nombreMedico[0].toUpperCase() : "M",
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                ),
+              ),
+            ),
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("👨‍⚕️ Médico tratante", style: TextStyle(color: Colors.white70, fontSize: 13)),
+                const Text(
+                  "👨‍⚕️ Médico tratante",
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
                 const SizedBox(height: 2),
-                Text(med["nombre"] ?? "Médico", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17)),
-                Text(med["especialidad"] ?? "", style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                Text(
+                  nombreMedico,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                if (especialidad.isNotEmpty)
+                  Text(
+                    especialidad,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                if (telefono.isNotEmpty || correo.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      if (telefono.isNotEmpty) ...[
+                        Icon(Icons.phone, size: 14, color: Colors.white.withOpacity(0.7)),
+                        const SizedBox(width: 4),
+                        Text(
+                          telefono,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                        ),
+                      ],
+                      if (telefono.isNotEmpty && correo.isNotEmpty)
+                        const SizedBox(width: 12),
+                      if (correo.isNotEmpty) ...[
+                        Icon(Icons.email, size: 14, color: Colors.white.withOpacity(0.7)),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            correo,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white.withOpacity(0.8),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ],
+            ),
+          ),
+          GestureDetector(
+            onTap: () => _abrirChatConMedico(idMedico, nombreMedico),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Stack(
+                children: [
+                  const Icon(
+                    Icons.chat_bubble_outline,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                  if (noLeidos > 0)
+                    Positioned(
+                      right: -4,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: AppTheme.danger,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Text(
+                          noLeidos > 9 ? "9+" : "$noLeidos",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ],
@@ -1623,7 +1922,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       {"label": "📅 Calendario", "icon": Icons.calendar_month, "color": AppTheme.warning, "fn": abrirCalendario},
       {"label": "📝 Síntoma", "icon": Icons.add_circle, "color": const Color(0xFF8B5CF6), "fn": crearSintoma},
       {"label": "📆 Agendar", "icon": Icons.event_note, "color": AppTheme.primary, "fn": abrirAgendar},
-      {"label": "💬 Chat", "icon": Icons.chat_bubble, "color": AppTheme.info, "fn": abrirChat},
+      {"label": "💬 Chat", "icon": Icons.chat_bubble, "color": AppTheme.info, "fn": abrirChatGeneral},
       {"label": "📋 Mis citas", "icon": Icons.event_available, "color": AppTheme.success, "fn": abrirCitas},
       {"label": "💊 Mis tomas", "icon": Icons.medication_liquid, "color": const Color(0xFF059669), "fn": () => Navigator.push(context, MaterialPageRoute(builder: (_) => TomasScreen(idPaciente: widget.idPaciente)))},
       {"label": "👥 Cuidadores", "icon": Icons.people, "color": const Color(0xFF8B5CF6), "fn": () => Navigator.push(context, MaterialPageRoute(builder: (_) => CuidadoresScreen(idPaciente: widget.idPaciente)))},
@@ -1671,7 +1970,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   }
 }
 
-// Modal de detalle de recomendación
 class _RecomendacionDetalleModal extends StatelessWidget {
   final Map<String, dynamic> recomendacion;
 

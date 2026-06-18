@@ -12,7 +12,7 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.idConversacion,
     required this.idUsuario,
-    required this.nombre,
+    required this.nombre, required String especialista,
   });
 
   @override

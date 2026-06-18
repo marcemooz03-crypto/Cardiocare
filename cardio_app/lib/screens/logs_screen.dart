@@ -3,7 +3,6 @@ import 'package:cardio_app/services/logs_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cardio_app/app.theme.dart';
 
-
 class LogsScreen extends StatefulWidget {
   const LogsScreen({super.key});
 
@@ -18,10 +17,12 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
   bool _cargando = true;
   String _filtroModulo = "Todos";
   String _filtroNivel = "Todos";
+  String _filtroOrigen = "Todos"; // NUEVO: filtro por origen
   late TabController _tabController;
   
   final List<String> _modulos = ["Todos", "auth", "config", "usuario", "asignacion", "alertas", "seguridad", "general"];
   final List<String> _niveles = ["Todos", "info", "warning", "error"];
+  final List<String> _origenes = ["Todos", "Sistema", "Admin"]; // NUEVO: opciones de origen
 
   @override
   void initState() {
@@ -51,7 +52,8 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
       _logsFiltrados = _logs.where((log) {
         final moduloOk = _filtroModulo == "Todos" || log["modulo"] == _filtroModulo;
         final nivelOk = _filtroNivel == "Todos" || log["nivel"] == _filtroNivel;
-        return moduloOk && nivelOk;
+        final origenOk = _filtroOrigen == "Todos" || log["origen_label"] == _filtroOrigen;
+        return moduloOk && nivelOk && origenOk;
       }).toList();
     });
   }
@@ -59,9 +61,12 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
   String _formatearFecha(String? fecha) {
     if (fecha == null) return "";
     try {
-      final f = DateTime.parse(fecha);
+      final f = DateTime.parse(fecha).toLocal();
       final meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-      return "${f.day} ${meses[f.month - 1]}, ${f.year} • ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}";
+      final dia = f.day.toString().padLeft(2, '0');
+      final hora = f.hour.toString().padLeft(2, '0');
+      final minuto = f.minute.toString().padLeft(2, '0');
+      return "$dia ${meses[f.month - 1]}, ${f.year} • $hora:$minuto";
     } catch (e) {
       return fecha;
     }
@@ -94,6 +99,30 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
         return Icons.security;
       default:
         return Icons.history;
+    }
+  }
+
+  // NUEVO: Obtener color según origen
+  Color _getColorPorOrigen(String origen) {
+    switch (origen) {
+      case "sistema":
+        return Colors.grey.shade600;
+      case "admin":
+        return Colors.indigo;
+      default:
+        return AppTheme.primary;
+    }
+  }
+
+  // NUEVO: Obtener icono según origen
+  IconData _getIconPorOrigen(String origen) {
+    switch (origen) {
+      case "sistema":
+        return Icons.computer;
+      case "admin":
+        return Icons.admin_panel_settings;
+      default:
+        return Icons.help;
     }
   }
 
@@ -208,7 +237,7 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
 
     return Column(
       children: [
-        // Filtros
+        // Filtros (ahora con 3 filtros)
         Container(
           margin: const EdgeInsets.all(16),
           padding: const EdgeInsets.all(12),
@@ -230,7 +259,7 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
                   },
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
                 child: _buildFiltroDropdown(
                   valor: _filtroNivel,
@@ -238,6 +267,18 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
                   label: "Nivel",
                   onChanged: (v) {
                     setState(() => _filtroNivel = v!);
+                    _aplicarFiltros();
+                  },
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _buildFiltroDropdown(
+                  valor: _filtroOrigen,
+                  items: _origenes,
+                  label: "Origen",
+                  onChanged: (v) {
+                    setState(() => _filtroOrigen = v!);
                     _aplicarFiltros();
                   },
                 ),
@@ -273,6 +314,7 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
                     setState(() {
                       _filtroModulo = "Todos";
                       _filtroNivel = "Todos";
+                      _filtroOrigen = "Todos";
                       _aplicarFiltros();
                     });
                   },
@@ -306,6 +348,12 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
                     final accion = log["accion"]?.toString() ?? "Acción";
                     final descripcion = log["descripcion"]?.toString() ?? "";
                     
+                    // NUEVO: Datos de origen
+                    final origen = log["origen"] ?? "sistema";
+                    final origenLabel = log["origen_label"] ?? "Sistema";
+                    final origenIcon = _getIconPorOrigen(origen);
+                    final origenColor = _getColorPorOrigen(origen);
+                    
                     return GestureDetector(
                       onTap: () => _mostrarDetalleLog(log),
                       child: Container(
@@ -315,7 +363,12 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           boxShadow: AppTheme.subtleShadow,
-                          border: Border.all(color: color.withOpacity(0.3)),
+                          border: Border.all(
+                            color: origen == "sistema" 
+                                ? Colors.grey.shade300 
+                                : Colors.indigo.shade200,
+                            width: 1.5,
+                          ),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -333,12 +386,48 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    accion,
-                                    style: const TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          accion,
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      // NUEVO: Badge de origen
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: origenColor.withOpacity(0.15),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                            color: origenColor.withOpacity(0.3),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              origenIcon,
+                                              size: 12,
+                                              color: origenColor,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              origenLabel,
+                                              style: TextStyle(
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.w600,
+                                                color: origenColor,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   if (descripcion.isNotEmpty) ...[
                                     const SizedBox(height: 4),
@@ -379,11 +468,29 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
   }
 
   Widget _buildEstadisticas() {
-    // Calcular estadísticas manualmente desde los logs
+    if (_cargando) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_logs.isEmpty) {
+      return _buildEmpty();
+    }
+
     final total = _logs.length;
     final info = _logs.where((l) => l["nivel"] == "info").length;
     final warning = _logs.where((l) => l["nivel"] == "warning").length;
     final error = _logs.where((l) => l["nivel"] == "error").length;
+    
+    // NUEVO: Estadísticas por origen
+    final sistema = _logs.where((l) => l["origen"] == "sistema").length;
+    final admin = _logs.where((l) => l["origen"] == "admin").length;
+    
+    // Estadísticas por módulo
+    final Map<String, int> logsPorModulo = {};
+    for (var log in _logs) {
+      final modulo = log["modulo"]?.toString() ?? "general";
+      logsPorModulo[modulo] = (logsPorModulo[modulo] ?? 0) + 1;
+    }
     
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -415,20 +522,30 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
                 Row(
                   children: [
                     _buildStatCard("Total", total.toString(), Icons.history, Colors.white),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     _buildStatCard("Info", info.toString(), Icons.info, AppTheme.info),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     _buildStatCard("Warning", warning.toString(), Icons.warning, AppTheme.warning),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     _buildStatCard("Error", error.toString(), Icons.error, AppTheme.danger),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                // NUEVO: Estadísticas de origen
+                Row(
+                  children: [
+                    _buildStatCard("🖥️ Sistema", sistema.toString(), Icons.computer, Colors.grey.shade400),
+                    const SizedBox(width: 8),
+                    _buildStatCard("👑 Admin", admin.toString(), Icons.admin_panel_settings, Colors.indigo),
                   ],
                 ),
               ],
             ),
           ),
+          
           const SizedBox(height: 20),
           
-          // Últimos 10 logs
+          // Actividad por módulo
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -440,55 +557,177 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  "Últimas actividades",
+                  "Actividad por módulo",
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 16),
-                ..._logs.take(10).map((log) {
-                  final nivel = log["nivel"]?.toString() ?? "info";
-                  final color = _getColorPorNivel(nivel);
-                  final accion = log["accion"]?.toString() ?? "Acción";
-                  final fecha = _formatearFecha(log["fecha"]);
+                ...logsPorModulo.entries.map((entry) {
+                  final porcentaje = (entry.value / total * 100).toStringAsFixed(1);
+                  final moduloNombre = entry.key.toUpperCase();
+                  final icono = _getIconPorModulo(entry.key);
+                  final colorModulo = _getColorPorModulo(entry.key);
                   
                   return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Row(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
                       children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                          ),
+                        Row(
+                          children: [
+                            Icon(icono, size: 18, color: colorModulo),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                moduloNombre,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              "${entry.value} logs",
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppTheme.gray600,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                accion,
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: LinearProgressIndicator(
+                                value: entry.value / total,
+                                backgroundColor: AppTheme.gray200,
+                                valueColor: AlwaysStoppedAnimation<Color>(colorModulo),
+                                borderRadius: BorderRadius.circular(4),
+                                minHeight: 8,
                               ),
-                              Text(
-                                fecha,
-                                style: TextStyle(fontSize: 11, color: AppTheme.gray500),
+                            ),
+                            const SizedBox(width: 8),
+                            SizedBox(
+                              width: 45,
+                              child: Text(
+                                "$porcentaje%",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: AppTheme.gray600,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                textAlign: TextAlign.right,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   );
-                }),
+                }).toList(),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 20),
+          
+          // Resumen de niveles
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: AppTheme.subtleShadow,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  "Distribución por nivel",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    _buildNivelResumen("Info", info, total, AppTheme.info),
+                    const SizedBox(width: 12),
+                    _buildNivelResumen("Warning", warning, total, AppTheme.warning),
+                    const SizedBox(width: 12),
+                    _buildNivelResumen("Error", error, total, AppTheme.danger),
+                  ],
+                ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Color _getColorPorModulo(String modulo) {
+    switch (modulo) {
+      case "auth":
+        return Colors.purple;
+      case "config":
+        return Colors.blue;
+      case "usuario":
+        return Colors.green;
+      case "asignacion":
+        return Colors.orange;
+      case "alertas":
+        return Colors.red;
+      case "seguridad":
+        return Colors.indigo;
+      default:
+        return AppTheme.primary;
+    }
+  }
+
+  Widget _buildNivelResumen(String titulo, int cantidad, int total, Color color) {
+    final porcentaje = total > 0 ? (cantidad / total * 100).toStringAsFixed(1) : "0";
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              titulo,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              cantidad.toString(),
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              "$porcentaje%",
+              style: TextStyle(
+                fontSize: 11,
+                color: AppTheme.gray500,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -500,7 +739,7 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
     required Function(String?) onChanged,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         color: AppTheme.gray50,
         borderRadius: BorderRadius.circular(12),
@@ -510,11 +749,17 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
         child: DropdownButton<String>(
           value: valor,
           isExpanded: true,
-          hint: Text(label),
+          hint: Text(
+            label,
+            style: const TextStyle(fontSize: 11),
+          ),
           items: items.map((item) {
             return DropdownMenuItem(
               value: item,
-              child: Text(item),
+              child: Text(
+                item,
+                style: const TextStyle(fontSize: 12),
+              ),
             );
           }).toList(),
           onChanged: onChanged,
@@ -537,7 +782,7 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
           const SizedBox(width: 4),
           Text(
             texto,
-            style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w500),
+            style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -547,20 +792,20 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
   Widget _buildStatCard(String title, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: Colors.white.withOpacity(0.15),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
           children: [
-            Icon(icon, color: Colors.white, size: 20),
-            const SizedBox(height: 6),
+            Icon(icon, color: Colors.white, size: 18),
+            const SizedBox(height: 4),
             Text(
               value,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -569,8 +814,9 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
               title,
               style: const TextStyle(
                 color: Colors.white70,
-                fontSize: 10,
+                fontSize: 9,
               ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -588,6 +834,12 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
     final usuario = log["usuario"]?.toString() ?? "sistema";
     final fecha = _formatearFecha(log["fecha"]);
     final ip = log["ip"]?.toString() ?? "127.0.0.1";
+    
+    // NUEVO: Datos de origen
+    final origen = log["origen"] ?? "sistema";
+    final origenLabel = log["origen_label"] ?? "Sistema";
+    final origenIcon = _getIconPorOrigen(origen);
+    final origenColor = _getColorPorOrigen(origen);
     
     showModalBottomSheet(
       context: context,
@@ -636,20 +888,47 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          nivel.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: color,
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: color.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              nivel.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: color,
+                              ),
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: origenColor.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(origenIcon, size: 12, color: origenColor),
+                                const SizedBox(width: 4),
+                                Text(
+                                  origenLabel,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w600,
+                                    color: origenColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -668,6 +947,8 @@ class _LogsScreenState extends State<LogsScreen> with SingleTickerProviderStateM
             _buildDetalleRow("🕐 Fecha", fecha),
             const SizedBox(height: 12),
             _buildDetalleRow("🌐 IP", ip),
+            const SizedBox(height: 12),
+            _buildDetalleRow("🏷️ Origen", origenLabel),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,

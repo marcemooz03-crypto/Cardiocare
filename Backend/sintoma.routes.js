@@ -1,18 +1,13 @@
+// routes/sintoma.routes.js
 const express = require('express');
 const router = express.Router();
-
 const sintomaController = require('./sintoma.controller');
 
-// ➤ crear
-router.post('/crear', sintomaController.crearSintoma);
+console.log('✅ sintomaController cargado:', Object.keys(sintomaController));
 
-// ➤ obtener todos
-router.get('/', sintomaController.obtenerSintomas);
-
-// ➤ por usuario
+// ✅ VERIFICAR QUE TODAS LAS FUNCIONES EXISTAN
+router.post('/', sintomaController.crearSintoma);
 router.get('/usuario/:idUsuario', sintomaController.obtenerPorUsuario);
-
-// ➤ eliminar
 router.delete('/:idSintoma', sintomaController.eliminarSintoma);
 
 module.exports = router;

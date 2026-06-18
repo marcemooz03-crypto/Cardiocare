@@ -1,26 +1,31 @@
 const express = require('express');
-
 const router = express.Router();
+const alertaController = require('./alerta.controller');
 
-const alertaController =
-require('./alerta.controller');
-
-// 🔴 crear alerta
+// ==========================
+// 🔴 CREAR ALERTA
+// ==========================
 router.post(
   '/',
   alertaController.crearAlerta
 );
 
-// 🟡 obtener alertas paciente
+// ==========================
+// 🟡 OBTENER ALERTAS POR PACIENTE
+// ==========================
 router.get(
   '/paciente/:idPaciente',
   alertaController.obtenerPorPaciente
 );
 
-// 🟢 marcar atendida
+// ==========================
+// 🟢 MARCAR COMO ATENDIDA
+// ==========================
 router.put(
   '/:idAlerta/atendida',
   alertaController.marcarAtendida
 );
+
+
 
 module.exports = router;
