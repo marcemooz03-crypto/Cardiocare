@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const db = require('./db');
+const bcrypt = require('bcrypt');
 
 // ==============================================
 // 📋 LOGS DEL SISTEMA
@@ -61,23 +62,91 @@ router.post('/logs', (req, res) => {
 });
 
 // ==============================================
-// 🔔 ALERTAS DEL SISTEMA (CORREGIDO - tabla 'alerta')
+// 📋 OBTENER LOGS POR MÓDULO
+// ==============================================
+router.get('/logs/modulo/:modulo', (req, res) => {
+  const { modulo } = req.params;
+  const sql = `
+    SELECT * FROM log_sistema 
+    WHERE modulo = ? 
+    ORDER BY fecha DESC 
+    LIMIT 200
+  `;
+  db.query(sql, [modulo], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results);
+  });
+});
+
+// ==============================================
+// 📋 OBTENER LOGS POR NIVEL
+// ==============================================
+router.get('/logs/nivel/:nivel', (req, res) => {
+  const { nivel } = req.params;
+  const sql = `
+    SELECT * FROM log_sistema 
+    WHERE nivel = ? 
+    ORDER BY fecha DESC 
+    LIMIT 200
+  `;
+  db.query(sql, [nivel], (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results);
+  });
+});
+
+// ==============================================
+// 📊 OBTENER ESTADÍSTICAS DE LOGS
+// ==============================================
+router.get('/logs/estadisticas', (req, res) => {
+  const sql = `
+    SELECT 
+      COUNT(*) as total,
+      SUM(CASE WHEN nivel = 'info' THEN 1 ELSE 0 END) as info,
+      SUM(CASE WHEN nivel = 'warning' THEN 1 ELSE 0 END) as warning,
+      SUM(CASE WHEN nivel = 'error' THEN 1 ELSE 0 END) as error
+    FROM log_sistema
+  `;
+  db.query(sql, (err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results[0]);
+  });
+});
+
+// ==============================================
+// 🗑️ LIMPIAR LOGS ANTIGUOS
+// ==============================================
+router.delete('/logs/limpiar', (req, res) => {
+  const { dias } = req.body;
+  const sql = `DELETE FROM log_sistema WHERE fecha < DATE_SUB(NOW(), INTERVAL ? DAY)`;
+  db.query(sql, [dias || 30], (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, eliminados: result.affectedRows });
+  });
+});
+
+// ==============================================
+// 🔔 ALERTAS DEL SISTEMA
 // ==============================================
 router.get('/alertas', (req, res) => {
   const sql = `
     SELECT 
-      idAlerta, 
-      idPaciente, 
-      tipo, 
-      nivel, 
-      descripcion, 
-      origen, 
-      estado, 
-      fecha
-    FROM alerta
+      a.idAlerta, 
+      a.idPaciente, 
+      a.tipo, 
+      a.nivel, 
+      a.descripcion, 
+      a.origen, 
+      a.nombre_origen,
+      a.estado, 
+      a.fecha,
+      u.nombre as nombre_paciente
+    FROM alerta a
+    LEFT JOIN paciente p ON a.idPaciente = p.idPaciente
+    LEFT JOIN usuario u ON p.idUsuario = u.idUsuario
     ORDER BY 
-      CASE WHEN estado = 'PENDIENTE' THEN 0 ELSE 1 END,
-      fecha DESC
+      CASE WHEN a.estado = 'PENDIENTE' THEN 0 ELSE 1 END,
+      a.fecha DESC
     LIMIT 100
   `;
   
@@ -91,7 +160,7 @@ router.get('/alertas', (req, res) => {
 });
 
 // ==============================================
-// ✅ MARCAR ALERTA COMO ATENDIDA (CORREGIDO)
+// ✅ MARCAR ALERTA COMO ATENDIDA
 // ==============================================
 router.put('/alertas/:id/atender', (req, res) => {
   const { id } = req.params;
@@ -108,7 +177,6 @@ router.put('/alertas/:id/atender', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     
-    // Registrar en logs
     const logSql = `
       INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
       VALUES (?, ?, ?, ?, NOW())
@@ -125,7 +193,7 @@ router.put('/alertas/:id/atender', (req, res) => {
 });
 
 // ==============================================
-// 🗑️ ELIMINAR ALERTA (CORREGIDO)
+// 🗑️ ELIMINAR ALERTA
 // ==============================================
 router.delete('/alertas/:id', (req, res) => {
   const { id } = req.params;
@@ -180,7 +248,6 @@ router.post('/config', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     
-    // Registrar en logs
     const logSql = `
       INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
       VALUES (?, ?, ?, ?, NOW())
@@ -263,7 +330,7 @@ router.post('/usuarios', (req, res) => {
   
   const sqlUser = `
     INSERT INTO usuario (nombre, correo, contrasena, idRol)
-    VALUES (?, ?, ?, (SELECT idRol FROM rol WHERE nombre = ?))
+    VALUES (?, ?, ?, (SELECT idRol FROM rol WHERE nombreRol = ?))
   `;
   
   db.query(sqlUser, [nombre, correo, contrasena, rol], (err, result) => {
@@ -345,7 +412,7 @@ router.get('/perfil/:idUsuario', (req, res) => {
   const { idUsuario } = req.params;
   
   const sql = `
-    SELECT u.idUsuario, u.nombre, u.correo, r.nombrerol as rol
+    SELECT u.idUsuario, u.nombre, u.correo, r.nombreRol as rol
     FROM usuario u
     JOIN rol r ON u.idRol = r.idRol
     WHERE u.idUsuario = ?
@@ -363,61 +430,201 @@ router.get('/perfil/:idUsuario', (req, res) => {
   });
 });
 
-// Agrega estos endpoints al archivo routes/admin.js
+// ==============================================
+// 👤 GESTIÓN DE CUIDADORES (DESDE TABLA PACIENTE)
+// ==============================================
 
-// 📋 OBTENER LOGS POR MÓDULO
-router.get('/logs/modulo/:modulo', (req, res) => {
-  const { modulo } = req.params;
-  const sql = `
-    SELECT * FROM log_sistema 
-    WHERE modulo = ? 
-    ORDER BY fecha DESC 
-    LIMIT 200
-  `;
-  db.query(sql, [modulo], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(results);
-  });
-});
+// 👤 OBTENER CUIDADOR POR PACIENTE
+router.get('/cuidadores/paciente/:idPaciente', (req, res) => {
+  const { idPaciente } = req.params;
+  console.log("📦 Buscando cuidador para paciente:", idPaciente);
 
-// 📋 OBTENER LOGS POR NIVEL
-router.get('/logs/nivel/:nivel', (req, res) => {
-  const { nivel } = req.params;
-  const sql = `
-    SELECT * FROM log_sistema 
-    WHERE nivel = ? 
-    ORDER BY fecha DESC 
-    LIMIT 200
-  `;
-  db.query(sql, [nivel], (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(results);
-  });
-});
-
-// 📊 OBTENER ESTADÍSTICAS DE LOGS
-router.get('/logs/estadisticas', (req, res) => {
   const sql = `
     SELECT 
-      COUNT(*) as total,
-      SUM(CASE WHEN nivel = 'info' THEN 1 ELSE 0 END) as info,
-      SUM(CASE WHEN nivel = 'warning' THEN 1 ELSE 0 END) as warning,
-      SUM(CASE WHEN nivel = 'error' THEN 1 ELSE 0 END) as error
-    FROM log_sistema
+      idPaciente,
+      nombreCuidador,
+      relacionCuidador,
+      idCuidador
+    FROM paciente
+    WHERE idPaciente = ?
+    LIMIT 1
   `;
-  db.query(sql, (err, results) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(results[0]);
+
+  db.query(sql, [idPaciente], (err, result) => {
+    if (err) {
+      console.error('❌ ERROR obtenerCuidador:', err);
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+
+    console.log("📦 Resultado query:", result);
+
+    if (result.length === 0 || !result[0].nombreCuidador) {
+      return res.status(200).json(null);
+    }
+
+    // ✅ Devolver los datos del cuidador
+    res.json({
+      idCuidador: result[0].idCuidador,
+      nombreCuidador: result[0].nombreCuidador,
+      relacionCuidador: result[0].relacionCuidador,
+      idPaciente: result[0].idPaciente
+    });
   });
 });
 
-// 🗑️ LIMPIAR LOGS ANTIGUOS
-router.delete('/logs/limpiar', (req, res) => {
-  const { dias } = req.body;
-  const sql = `DELETE FROM log_sistema WHERE fecha < DATE_SUB(NOW(), INTERVAL ? DAY)`;
-  db.query(sql, [dias || 30], (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, eliminados: result.affectedRows });
+// ==============================================
+// ➕ CREAR CUIDADOR (ACTUALIZAR PACIENTE)
+// ==============================================
+router.post('/cuidadores', (req, res) => {
+  const { nombre, correo, contrasena, relacion, idPaciente } = req.body;
+  
+  console.log("📝 Creando cuidador para paciente:", idPaciente);
+
+  // ✅ Verificar si el correo ya existe
+  const checkSql = "SELECT idUsuario FROM usuario WHERE correo = ?";
+  db.query(checkSql, [correo], (err, checkResult) => {
+    if (err) {
+      console.error('❌ ERROR verificar correo:', err);
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+
+    if (checkResult.length > 0) {
+      return res.status(409).json({ ok: false, msg: "El correo ya está registrado" });
+    }
+
+    // ✅ Crear usuario tipo cuidador (idRol = 4)
+    const hash = bcrypt.hashSync(contrasena, 10);
+    
+    const sqlUser = `
+      INSERT INTO usuario (nombre, correo, contrasena, idRol)
+      VALUES (?, ?, ?, 4)
+    `;
+
+    db.query(sqlUser, [nombre, correo, hash], (err2, userResult) => {
+      if (err2) {
+        console.error('❌ ERROR crear usuario cuidador:', err2);
+        return res.status(500).json({ ok: false, error: err2.message });
+      }
+
+      const idUsuario = userResult.insertId;
+
+      // ✅ ACTUALIZAR el paciente con el cuidador
+      const sqlUpdatePaciente = `
+        UPDATE paciente 
+        SET nombreCuidador = ?, relacionCuidador = ?, idCuidador = ?
+        WHERE idPaciente = ?
+      `;
+
+      db.query(sqlUpdatePaciente, [nombre, relacion, idUsuario, idPaciente], (err3) => {
+        if (err3) {
+          console.error('❌ ERROR actualizar paciente:', err3);
+          return res.status(500).json({ ok: false, error: err3.message });
+        }
+
+        // Registrar en logs
+        const logSql = `
+          INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
+          VALUES (?, ?, ?, ?, NOW())
+        `;
+        db.query(logSql, [
+          'Cuidador creado',
+          `Nombre: ${nombre}, Paciente ID: ${idPaciente}`,
+          'usuario',
+          'info'
+        ]);
+
+        res.status(201).json({ 
+          ok: true, 
+          msg: "Cuidador creado correctamente",
+          idUsuario: idUsuario
+        });
+      });
+    });
+  });
+});
+
+// ==============================================
+// 🗑️ ELIMINAR CUIDADOR (LIMPIAR PACIENTE)
+// ==============================================
+router.delete('/cuidadores/paciente/:idPaciente', (req, res) => {
+  const { idPaciente } = req.params;
+  
+  console.log("🗑️ Eliminando cuidador para paciente:", idPaciente);
+
+  // ✅ Verificar si el paciente tiene cuidador
+  const sqlCheck = "SELECT nombreCuidador, idCuidador FROM paciente WHERE idPaciente = ?";
+  db.query(sqlCheck, [idPaciente], (err, result) => {
+    if (err) {
+      console.error('❌ ERROR verificar paciente:', err);
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+
+    if (result.length === 0 || !result[0].nombreCuidador) {
+      return res.status(404).json({ ok: false, msg: "No hay cuidador asignado" });
+    }
+
+    const idCuidador = result[0].idCuidador;
+
+    // ✅ Limpiar los campos del cuidador en paciente
+    const sqlUpdate = `
+      UPDATE paciente 
+      SET nombreCuidador = NULL, relacionCuidador = NULL, idCuidador = NULL
+      WHERE idPaciente = ?
+    `;
+
+    db.query(sqlUpdate, [idPaciente], (err2) => {
+      if (err2) {
+        console.error('❌ ERROR eliminar cuidador:', err2);
+        return res.status(500).json({ ok: false, error: err2.message });
+      }
+
+      // ✅ Eliminar el usuario cuidador (opcional)
+      if (idCuidador) {
+        const sqlDeleteUser = "DELETE FROM usuario WHERE idUsuario = ?";
+        db.query(sqlDeleteUser, [idCuidador], () => {
+          // No importa si falla, ya limpiamos el paciente
+        });
+      }
+
+      // Registrar en logs
+      const logSql = `
+        INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
+        VALUES (?, ?, ?, ?, NOW())
+      `;
+      db.query(logSql, [
+        'Cuidador eliminado',
+        `Paciente ID: ${idPaciente}`,
+        'usuario',
+        'warning'
+      ]);
+
+      res.json({ ok: true, msg: "Cuidador eliminado correctamente" });
+    });
+  });
+});
+
+// ==============================================
+// 👤 OBTENER TODOS LOS CUIDADORES (OPCIONAL)
+// ==============================================
+router.get('/cuidadores', (req, res) => {
+  const sql = `
+    SELECT 
+      p.idPaciente,
+      u.nombre as paciente_nombre,
+      p.nombreCuidador,
+      p.relacionCuidador,
+      p.idCuidador
+    FROM paciente p
+    JOIN usuario u ON p.idUsuario = u.idUsuario
+    WHERE p.nombreCuidador IS NOT NULL
+  `;
+
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error('❌ Error al obtener cuidadores:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results);
   });
 });
 
@@ -461,9 +668,8 @@ router.post('/ips-bloqueadas', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     
-    // Registrar en logs
     const logSql = `
-      INSERT INTO logs_sistema (accion, descripcion, modulo, nivel, fecha)
+      INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
       VALUES (?, ?, ?, ?, NOW())
     `;
     db.query(logSql, [
@@ -489,9 +695,8 @@ router.delete('/ips-bloqueadas/:id', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     
-    // Registrar en logs
     const logSql = `
-      INSERT INTO logs_sistema (accion, descripcion, modulo, nivel, fecha)
+      INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
       VALUES (?, ?, ?, ?, NOW())
     `;
     db.query(logSql, [
@@ -547,4 +752,30 @@ router.delete('/ips-bloqueadas/limpiar', (req, res) => {
     res.json({ success: true, eliminadas: result.affectedRows });
   });
 });
+
+// ==============================================
+// 👤 OBTENER PACIENTE POR USUARIO
+// ==============================================
+router.get('/paciente/usuario/:idUsuario', (req, res) => {
+  const { idUsuario } = req.params;
+  
+  const sql = `
+    SELECT p.idPaciente, u.nombre, u.correo, p.genero, p.tipoHipertension
+    FROM paciente p
+    JOIN usuario u ON p.idUsuario = u.idUsuario
+    WHERE u.idUsuario = ?
+  `;
+  
+  db.query(sql, [idUsuario], (err, results) => {
+    if (err) {
+      console.error('❌ Error al obtener paciente por usuario:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    if (results.length === 0) {
+      return res.status(404).json({ error: 'Paciente no encontrado' });
+    }
+    res.json(results[0]);
+  });
+});
+
 module.exports = router;

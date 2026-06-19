@@ -44,7 +44,7 @@ class AlertaService {
       
       // Obtener nombre_origen (directamente del campo de la BD)
       final nombreOrigen = alerta['nombre_origen']?.toString() ?? 
-                           alerta['nombre_paciente']?.toString() ?? 
+                           alerta['nombrePaciente']?.toString() ?? 
                            'Desconocido';
       
       // Definir datos visuales según el origen

@@ -134,8 +134,21 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     try {
       final data = await pacienteService.getMedicos(widget.idUsuario);
       if (!mounted) return;
-      setState(() => medicos = List<Map<String, dynamic>>.from(data));
-    } catch (_) {}
+      
+      if (data is List) {
+        setState(() => medicos = List<Map<String, dynamic>>.from(data));
+      } else {
+        setState(() => medicos = []);
+      }
+      
+      print("📦 Médicos cargados: ${medicos.length}");
+      for (var med in medicos) {
+        print("  - ${med["nombre"]} (ID: ${med["idProfesional"]})");
+      }
+    } catch (e) {
+      print("❌ Error loadMedicos: $e");
+      setState(() => medicos = []);
+    }
   }
 
   Future<void> loadCitas() async {
@@ -521,12 +534,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         ),
       ).then((_) => loadProfile());
 
-  // ✅ CREAR SÍNTOMA CON NOMBRE DEL PACIENTE
   void crearSintoma() {
     final titulo = TextEditingController();
     final desc = TextEditingController();
     
-    // ✅ Obtener el nombre del paciente del widget
     final nombrePaciente = widget.nombre;
 
     showModalBottomSheet(
@@ -591,13 +602,12 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     return;
                   }
                   
-                  // ✅ Enviar el nombre del paciente
                   final exito = await sintomaService.crearSintoma(
                     idUsuario: widget.idUsuario,
                     titulo: titulo.text.trim(),
                     descripcion: desc.text.trim(),
                     prioridad: "MEDIA",
-                    nombrePaciente: nombrePaciente, // ✅ ENVIAR EL NOMBRE
+                    nombrePaciente: nombrePaciente,
                   );
                   
                   if (!mounted) return;
@@ -1606,6 +1616,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
+  // ✅ CORREGIDO: _buildMedicoCard mejorado
   Widget _buildMedicoCard() {
     if (medicos.isEmpty) {
       return Container(
@@ -1653,12 +1664,20 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
+  // ✅ CORREGIDO: _buildMedicoCardItem mejorado
   Widget _buildMedicoCardItem(Map<String, dynamic> med) {
-    final nombreMedico = med["nombre"] ?? "Médico";
-    final especialidad = med["especialidad"] ?? "";
-    final telefono = med["telefono"] ?? "";
-    final correo = med["correo"] ?? "";
-    final idMedico = int.tryParse(med["idProfesional"].toString()) ?? 0;
+    final nombreMedico = med["nombre"]?.toString() ?? "Médico";
+    final especialidad = med["especialidad"]?.toString() ?? "";
+    final telefono = med["telefono"]?.toString() ?? "";
+    final correo = med["correo"]?.toString() ?? "";
+    
+    int idMedico = 0;
+    try {
+      idMedico = int.tryParse(med["idProfesional"]?.toString() ?? "0") ?? 0;
+    } catch (_) {
+      idMedico = 0;
+    }
+    
     final noLeidos = _mensajesNoLeidosPorMedico[idMedico] ?? 0;
 
     return Container(
@@ -1718,8 +1737,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     especialidad,
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
-                if (telefono.isNotEmpty || correo.isNotEmpty) ...[
-                  const SizedBox(height: 8),
+                if (telefono.isNotEmpty || correo.isNotEmpty) ...[                  const SizedBox(height: 8),
                   Row(
                     children: [
                       if (telefono.isNotEmpty) ...[
@@ -1756,45 +1774,46 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               ],
             ),
           ),
-          GestureDetector(
-            onTap: () => _abrirChatConMedico(idMedico, nombreMedico),
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Stack(
-                children: [
-                  const Icon(
-                    Icons.chat_bubble_outline,
-                    color: Colors.white,
-                    size: 22,
-                  ),
-                  if (noLeidos > 0)
-                    Positioned(
-                      right: -4,
-                      top: -4,
-                      child: Container(
-                        padding: const EdgeInsets.all(3),
-                        decoration: const BoxDecoration(
-                          color: AppTheme.danger,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Text(
-                          noLeidos > 9 ? "9+" : "$noLeidos",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
+          if (idMedico > 0)
+            GestureDetector(
+              onTap: () => _abrirChatConMedico(idMedico, nombreMedico),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Stack(
+                  children: [
+                    const Icon(
+                      Icons.chat_bubble_outline,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                    if (noLeidos > 0)
+                      Positioned(
+                        right: -4,
+                        top: -4,
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: const BoxDecoration(
+                            color: AppTheme.danger,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            noLeidos > 9 ? "9+" : "$noLeidos",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
