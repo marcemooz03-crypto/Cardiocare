@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class TomaService {
 
   // ✅ ANDROID EMULATOR
-  static const _base = "http://localhost:3000/api/tomas";
+  static const baseUrl = "${ApiConfig.baseUrl}/tomas";
 
   // ==========================
   // ✅ OBTENER TOMAS
@@ -17,7 +18,7 @@ class TomaService {
     try {
 
       final url = Uri.parse(
-        "$_base/paciente/$idPaciente",
+        "$baseUrl/paciente/$idPaciente",
       );
 
       final res = await http.get(url);
@@ -58,7 +59,7 @@ class TomaService {
     try {
 
       final url = Uri.parse(
-        "$_base/generar/$idPaciente",
+        "$baseUrl/generar/$idPaciente",
       );
 
       final res = await http.post(url);
@@ -94,7 +95,7 @@ class TomaService {
     try {
 
       final url = Uri.parse(
-        "$_base/$idToma",
+        "$baseUrl/$idToma",
       );
 
       final res = await http.patch(

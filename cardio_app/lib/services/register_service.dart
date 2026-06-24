@@ -1,16 +1,17 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class RegisterService {
 
-  final String url = "http://localhost:3000/api/auth/register";
+  final String baseUrl = "${ApiConfig.baseUrl}/api/auth/register";
 
   Future<bool> register(Map<String, dynamic> data) async {
 
     try {
 
       final res = await http.post(
-        Uri.parse(url),
+        Uri.parse(baseUrl),
         headers: {
           "Content-Type": "application/json",
         },

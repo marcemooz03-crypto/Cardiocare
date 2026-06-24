@@ -5,12 +5,13 @@
 // 📁 services/eps_service.dart
 
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class EpsService {
 
   final String baseUrl =
-      "http://localhost:3000/api/eps";
+      "${ApiConfig.baseUrl}/eps";
 
   Future<List<Map<String, dynamic>>> getEps() async {
 

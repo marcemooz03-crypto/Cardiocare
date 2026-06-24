@@ -1,8 +1,9 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class PacienteService {
-  final String baseUrl = "http://localhost:3000/api/paciente";
+  final String baseUrl = "${ApiConfig.baseUrl}/paciente";
 
   // 👨‍⚕️ médicos asignados al paciente
   Future<List> getMedicos(int idUsuario) async {
@@ -126,7 +127,7 @@ Future<bool> enviarSintoma({
   Future<List> getSignos(int idUsuario) async {
     try {
       final res = await http.get(
-        Uri.parse("http://localhost:3000/api/signos/$idUsuario"),
+        Uri.parse("$baseUrl/signos/$idUsuario"),
       );
 
       print("📦 SIGNOS RAW: ${res.body}");

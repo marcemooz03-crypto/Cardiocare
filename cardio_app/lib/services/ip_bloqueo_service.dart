@@ -1,9 +1,10 @@
 // lib/services/ip_bloqueo_service.dart
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class IpBloqueoService {
-  final String baseUrl = "http://localhost:3000/api/admin";
+  final String baseUrl = "${ApiConfig.baseUrl}/api"; // Cambiado a la ruta correcta
 
   // =========================
   // 📋 OBTENER TODAS LAS IPS BLOQUEADAS

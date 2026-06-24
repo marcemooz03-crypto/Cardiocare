@@ -35,8 +35,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   void initState() {
     super.initState();
     notificacionService = NotificacionService();
-    loadProfile();
-    _iniciarEscuchaNotificaciones();
+    _inicializarDashboard();
   }
 
   @override
@@ -45,14 +44,37 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     super.dispose();
   }
 
+  Future<void> _inicializarDashboard() async {
+    await loadProfile();
+    await _cargarNotificaciones();
+    _iniciarEscuchaNotificaciones();
+  }
+
+  Future<void> _cargarNotificaciones() async {
+    try {
+      final notifs = await notificacionService.getNotificacionesPaciente(widget.idUsuario);
+      if (!mounted) return;
+      setState(() {
+        listaNotificaciones = notifs;
+        notificacionesNoLeidas = notifs.where((n) => n["leida"] == false).length;
+      });
+    } catch (e) {
+      debugPrint("❌ Error cargando notificaciones: $e");
+    }
+  }
+
   void _iniciarEscuchaNotificaciones() {
     notificacionService.escucharNotificacionesPaciente(
       widget.idUsuario,
       onNuevaNotificacion: (notificacion) {
         if (!mounted) return;
         setState(() {
-          notificacionesNoLeidas++;
+          // Insertar al inicio
           listaNotificaciones.insert(0, notificacion);
+          // Solo incrementar si no está leída
+          if (!(notificacion["leida"] ?? false)) {
+            notificacionesNoLeidas++;
+          }
         });
       },
     );
@@ -129,8 +151,20 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     ).then((_) => loadProfile());
   }
 
-  void _marcarComoLeidas() {
+  void _marcarTodasComoLeidas() async {
+    await notificacionService.marcarTodasComoLeidas(widget.idUsuario);
     setState(() {
+      notificacionesNoLeidas = 0;
+      for (var notif in listaNotificaciones) {
+        notif["leida"] = true;
+      }
+    });
+  }
+
+  void _limpiarTodasLasNotificaciones() {
+    notificacionService.limpiarNotificaciones();
+    setState(() {
+      listaNotificaciones.clear();
       notificacionesNoLeidas = 0;
     });
   }
@@ -236,7 +270,10 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: loadProfile,
+              onRefresh: () async {
+                await loadProfile();
+                await _cargarNotificaciones();
+              },
               color: AppTheme.primary,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
@@ -271,7 +308,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   void _mostrarPanelNotificaciones() {
-    _marcarComoLeidas();
+    // Marcar todas como leídas al abrir el panel
+    _marcarTodasComoLeidas();
     
     showModalBottomSheet(
       context: context,
@@ -297,6 +335,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                     const Icon(Icons.notifications, color: AppTheme.primary, size: 28),
                     const SizedBox(width: 12),
                     const Expanded(child: Text("Notificaciones", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
+                    if (listaNotificaciones.isNotEmpty)
+                      TextButton(
+                        onPressed: () {
+                          _limpiarTodasLasNotificaciones();
+                          Navigator.pop(context);
+                        },
+                        child: const Text("Limpiar todo", style: TextStyle(color: AppTheme.danger)),
+                      ),
                     IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
                   ],
                 ),
@@ -321,7 +367,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                           final notificacion = listaNotificaciones[index];
                           final tipo = notificacion["tipo"] ?? "info";
                           final mensaje = notificacion["mensaje"] ?? "Nueva actualización";
-                          final fecha = notificacion["fecha"] ?? DateTime.now();
+                          final fechaFormateada = notificacion["fechaFormateada"] ?? "Fecha no disponible";
+                          final bool esNueva = !(notificacion["leida"] ?? true);
                           
                           Color colorNotificacion;
                           IconData iconoNotificacion;
@@ -352,11 +399,11 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: index == 0 && notificacionesNoLeidas == 0 && listaNotificaciones.isNotEmpty
-                                  ? AppTheme.primary.withOpacity(0.05)
-                                  : AppTheme.white,
+                              color: esNueva ? AppTheme.primary.withOpacity(0.05) : AppTheme.white,
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppTheme.gray200),
+                              border: Border.all(
+                                color: esNueva ? AppTheme.primary.withOpacity(0.3) : AppTheme.gray200,
+                              ),
                             ),
                             child: Row(
                               children: [
@@ -375,14 +422,15 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                     children: [
                                       Text(
                                         mensaje,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           fontSize: 14,
+                                          color: esNueva ? AppTheme.primary : null,
                                         ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        _formatFecha(fecha),
+                                        fechaFormateada,
                                         style: TextStyle(
                                           fontSize: 11,
                                           color: AppTheme.gray500,
@@ -391,12 +439,12 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                     ],
                                   ),
                                 ),
-                                if (index == 0 && notificacionesNoLeidas == 0 && listaNotificaciones.isNotEmpty)
+                                if (esNueva)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: AppTheme.primary,
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: const Text(
                                       "NUEVA",
@@ -418,30 +466,6 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         },
       ),
     );
-  }
-
-  String _formatFecha(dynamic fecha) {
-    try {
-      if (fecha is DateTime) {
-        final ahora = DateTime.now();
-        final diferencia = ahora.difference(fecha);
-        
-        if (diferencia.inMinutes < 1) {
-          return "Ahora";
-        } else if (diferencia.inHours < 1) {
-          return "Hace ${diferencia.inMinutes} min";
-        } else if (diferencia.inDays < 1) {
-          return "Hace ${diferencia.inHours} horas";
-        } else if (diferencia.inDays < 7) {
-          return "Hace ${diferencia.inDays} días";
-        } else {
-          return "${fecha.day}/${fecha.month}/${fecha.year}";
-        }
-      }
-      return "Fecha no disponible";
-    } catch (_) {
-      return "Fecha no disponible";
-    }
   }
 
   Widget _buildHeader() {

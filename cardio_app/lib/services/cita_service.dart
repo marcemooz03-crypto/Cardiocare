@@ -1,8 +1,9 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class CitaService {
-  final String baseUrl = "http://localhost:3000/api/cita";
+  final String baseUrl = "${ApiConfig.baseUrl}/cita";
 
   Future<bool> agendarCita(Map<String, dynamic> data) async {
     final res = await http.post(

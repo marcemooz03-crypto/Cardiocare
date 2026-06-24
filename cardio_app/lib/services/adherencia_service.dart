@@ -1,10 +1,10 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class AdherenciaService {
 
-  final String baseUrl =
-      "http://localhost:3000/api/adherencia";
+  final String baseUrl = "${ApiConfig.baseUrl}/adherencia";
 
   Future<Map<String, dynamic>?> getAdherencia(
     int idPaciente,

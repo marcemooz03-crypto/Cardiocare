@@ -1,10 +1,11 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class RecomendacionService {
   // ⚠️ CAMBIA ESTA IP POR LA DE TU PC
-  final String baseUrl = "http://localhost:3000/api/recomendaciones";
+  final String baseUrl = "${ApiConfig.baseUrl}/recomendaciones";
 
   // Codifica titulo+categoria dentro del campo descripcion
   // Formato guardado: "##TITULO##Reducir sal||##CATEGORIA##Alimentación||##DESC##texto..."

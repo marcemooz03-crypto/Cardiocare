@@ -1,9 +1,10 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class MedicoService {
 
-  final String baseUrl = "http://localhost:3000/api/medico";
+  final String baseUrl = "${ApiConfig.baseUrl}/medico";
 
   // =========================
   // 👨‍⚕️ MÉDICOS ASIGNADOS AL PACIENTE

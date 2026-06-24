@@ -1,9 +1,10 @@
 // lib/services/admin_service.dart
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class AdminService {
-  final String baseUrl = "http://localhost:3000/api/admin";
+  final String baseUrl = "${ApiConfig.baseUrl}/admin";
 
   // =========================
   // 📋 OBTENER LOGS

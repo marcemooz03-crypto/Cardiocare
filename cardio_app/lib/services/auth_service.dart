@@ -1,11 +1,12 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart'; // ✅ AGREGAR
 
 import '../models/user_session.dart';
 
 class AuthService {
-  static const String baseUrl = "http://localhost:3000/api/auth";
+  static const String baseUrl = "${ApiConfig.baseUrl}/auth";
 
   // =========================
   // 🔐 LOGIN

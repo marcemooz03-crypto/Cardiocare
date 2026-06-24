@@ -1,13 +1,16 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class SignosService {
+  // 🔧 Base URL
+  static const String baseUrl = "${ApiConfig.baseUrl}";
 
   // 🫀 REGISTRAR SIGNOS
   Future<bool> registrar(Map<String, dynamic> data) async {
     try {
       final res = await http.post(
-        Uri.parse("http://localhost:3000/api/signos/registrar"),
+        Uri.parse("$baseUrl/signos/registrar"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode(data),
       );
@@ -28,7 +31,7 @@ class SignosService {
   Future<List<Map<String, dynamic>>> getSignos(int idPaciente) async {
     try {
       final res = await http.get(
-        Uri.parse("http://localhost:3000/api/signos/$idPaciente"),
+        Uri.parse("$baseUrl/signos/$idPaciente"),
         headers: {"Content-Type": "application/json"},
       );
 

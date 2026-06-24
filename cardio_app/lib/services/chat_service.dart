@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 /// Servicio de chat — sincronizado con las rutas del backend:
@@ -14,7 +15,7 @@ import 'package:http/http.dart' as http;
 /// leído/no-leído devuelve { total: N } y los mensajes son arrays planos.
 class ChatService {
   // ⚠️ Cambia por la IP/puerto real de tu backend
-  static const _base = "http://localhost:3000/api";
+  static const baseUrl = "${ApiConfig.baseUrl}/chat";
 
   // ────────────────────────────────────────────────────────────────────────────
   // CONVERSACIÓN
@@ -26,7 +27,7 @@ class ChatService {
   Future<int?> getOrCreateConversacion(int idPaciente, int idMedico) async {
     try {
       // ── 1. Intentar GET primero ──────────────────────────────────────────
-      final getUri = Uri.parse("$_base/chat/conversacion/$idPaciente/$idMedico");
+      final getUri = Uri.parse("$baseUrl/conversacion/$idPaciente/$idMedico");
       final getRes = await http.get(getUri);
 
       if (getRes.statusCode == 200) {
@@ -36,7 +37,7 @@ class ChatService {
       }
 
       // ── 2. Si no existe (404) → crear ────────────────────────────────────
-      final postUri = Uri.parse("$_base/chat/conversacion");
+      final postUri = Uri.parse("$baseUrl/conversacion");
       final postRes = await http.post(
         postUri,
         headers: {"Content-Type": "application/json"},
@@ -66,7 +67,7 @@ class ChatService {
   ///                      fecha, leido
   Future<List<Map<String, dynamic>>> getMensajes(int idConversacion) async {
     try {
-      final uri = Uri.parse("$_base/chat/mensajes/$idConversacion");
+      final uri = Uri.parse("$baseUrl/mensajes/$idConversacion");
       final res = await http.get(uri);
 
       if (res.statusCode == 200) {
@@ -88,7 +89,7 @@ class ChatService {
     required String contenido,
   }) async {
     try {
-      final uri = Uri.parse("$_base/chat/mensaje");
+      final uri = Uri.parse("$baseUrl/mensaje");
       final res = await http.post(
         uri,
         headers: {"Content-Type": "application/json"},
@@ -113,7 +114,7 @@ class ChatService {
   /// Backend devuelve { total: N }
   Future<int> getMensajesNoLeidos(int idConversacion, int idUsuario) async {
     try {
-      final uri = Uri.parse("$_base/chat/no-leidos/$idConversacion/$idUsuario");
+      final uri = Uri.parse("$baseUrl/no-leidos/$idConversacion/$idUsuario");
       final res = await http.get(uri);
 
       if (res.statusCode == 200) {
@@ -130,7 +131,7 @@ class ChatService {
   /// PUT /chat/marcar-leidos/:idConversacion   body: { idUsuario }
   Future<void> marcarLeidos(int idConversacion, int idUsuario) async {
     try {
-      final uri = Uri.parse("$_base/chat/marcar-leidos/$idConversacion");
+      final uri = Uri.parse("$baseUrl/marcar-leidos/$idConversacion");
       await http.put(
         uri,
         headers: {"Content-Type": "application/json"},
@@ -143,7 +144,7 @@ class ChatService {
   Future<bool> eliminarMensajes(int idConversacion) async {
   try {
     final uri = Uri.parse(
-      "$_base/chat/mensajes/$idConversacion",
+      "$baseUrl/chat/mensajes/$idConversacion",
     );
 
     final res = await http.delete(uri);

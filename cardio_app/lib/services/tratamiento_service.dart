@@ -1,9 +1,10 @@
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class TratamientoService {
 
-  final String baseUrl = "http://localhost:3000/api";
+  final String baseUrl = "${ApiConfig.baseUrl}";
 
   // OBTENER TRATAMIENTOS POR PACIENTE
   Future<List<Map<String, dynamic>>> getByPaciente(int idPaciente) async {

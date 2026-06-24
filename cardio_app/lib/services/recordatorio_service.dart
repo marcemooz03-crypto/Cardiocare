@@ -1,6 +1,7 @@
 // lib/services/recordatorio_service.dart
 
 import 'dart:convert';
+import 'package:cardio_app/config/api_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -9,18 +10,18 @@ class RecordatorioService {
   // Emulador Android  → "http://10.0.2.2:3000"
   // Dispositivo físico → "http://192.168.X.X:3000"  (IP local de tu PC)
   // iOS Simulator     → "http://127.0.0.1:3000"
-  static const _base = "http://localhost:3000/api/recordatorios";
+  static const baseUrl = "${ApiConfig.baseUrl}/recordatorios";
 
   /// Recordatorios de un tratamiento específico.
   Future<List<Map<String, dynamic>>> getByTratamiento(int idTratamiento) async {
-    final res = await http.get(Uri.parse("$_base/tratamiento/$idTratamiento"));
+    final res = await http.get(Uri.parse("$baseUrl/tratamiento/$idTratamiento"));
     _check(res);
     return List<Map<String, dynamic>>.from(jsonDecode(res.body));
   }
 
   /// Todos los recordatorios activos del paciente (JOIN con tratamiento).
   Future<List<Map<String, dynamic>>> getActivosByPaciente(int idPaciente) async {
-    final res = await http.get(Uri.parse("$_base/paciente/$idPaciente/activos"));
+    final res = await http.get(Uri.parse("$baseUrl/paciente/$idPaciente/activos"));
     _check(res);
     return List<Map<String, dynamic>>.from(jsonDecode(res.body));
   }
@@ -32,7 +33,7 @@ class RecordatorioService {
     bool            activo = true,
   }) async {
     final res = await http.post(
-      Uri.parse(_base),
+      Uri.parse("$baseUrl"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "idTratamiento": idTratamiento,
@@ -47,7 +48,7 @@ class RecordatorioService {
   /// Activa o desactiva un recordatorio (Switch del app).
   Future<void> toggleActivo(int idRecordatorio, {required bool activo}) async {
     final res = await http.patch(
-      Uri.parse("$_base/$idRecordatorio/toggle"),
+      Uri.parse("$baseUrl/$idRecordatorio/toggle"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({"activo": activo}),
     );
@@ -56,7 +57,7 @@ class RecordatorioService {
 
   /// Elimina un recordatorio.
   Future<void> eliminar(int idRecordatorio) async {
-    final res = await http.delete(Uri.parse("$_base/$idRecordatorio"));
+    final res = await http.delete(Uri.parse("$baseUrl/$idRecordatorio"));
     _check(res);
   }
 
@@ -71,7 +72,7 @@ class RecordatorioService {
 Future<bool> actualizarHora(int idRecordatorio, String nuevaHora) async {
   try {
     final res = await http.put(
-      Uri.parse("$_base/$idRecordatorio/hora"),
+      Uri.parse("$baseUrl/$idRecordatorio/hora"),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({"hora": nuevaHora}),
     );
