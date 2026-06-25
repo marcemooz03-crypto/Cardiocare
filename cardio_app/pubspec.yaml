@@ -69,6 +69,7 @@ flutter:
     - assets/images/profile.jpg
     - assets/images/medico.jpg
     - assets/images/admin.jpg
+    - assets/images/Cardiocare.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

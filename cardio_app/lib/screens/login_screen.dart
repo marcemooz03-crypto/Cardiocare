@@ -24,7 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   // Usar colores del tema global
   static const _primary = AppTheme.primary;
-  static const _bgColor = AppTheme.gray100;
+  static const _bgColor = AppTheme.white;
   static const _cardBg = AppTheme.white;
   static const _textMain = AppTheme.gray700;
   static const _textSub = AppTheme.gray500;
@@ -129,10 +129,8 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 _buildLogo(),
-                const SizedBox(height: 36),
+                const SizedBox(height: 40),
                 _buildCard(),
-                const SizedBox(height: 20),
-                _buildRegisterLink(),
               ],
             ),
           ),
@@ -144,33 +142,40 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLogo() {
     return Column(
       children: [
+        // Logo con imagen
         Container(
-          width: 80,
-          height: 80,
+          width: 120,
+          height: 120,
           decoration: BoxDecoration(
-            gradient: _gradientPrimary,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: _primary.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
+            color: _primary.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(30),
           ),
-          child: const Icon(Icons.favorite, color: Colors.white, size: 40),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(30),
+            child: Image.asset(
+              'assets/images/Cardiocare.png',
+              fit: BoxFit.contain,
+              width: 120,
+              height: 120,
+            ),
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
+        // Título
         Text(
           "CardioCare",
-          style: AppTheme.headline2.copyWith(
-            letterSpacing: -0.5,
+          style: AppTheme.headline1.copyWith(
+            fontWeight: FontWeight.bold,
+            color: _primary,
           ),
         ),
         const SizedBox(height: 8),
+        // Subtítulo
         Text(
-          "Monitoreo cardíaco inteligente",
-          style: AppTheme.body2.copyWith(color: _textSub),
+          "Inicia sesión en tu cuenta",
+          style: AppTheme.body1.copyWith(
+            color: _textSub,
+          ),
         ),
       ],
     );
@@ -187,17 +192,7 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(
-            "Iniciar sesión",
-            style: AppTheme.title1,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Ingresa tus credenciales para continuar",
-            style: AppTheme.body2.copyWith(color: _textSub),
-          ),
-          const SizedBox(height: 28),
-
+          // Campo de correo
           _fieldLabel("Correo electrónico"),
           const SizedBox(height: 8),
           TextField(
@@ -209,6 +204,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           const SizedBox(height: 20),
 
+          // Campo de contraseña
           _fieldLabel("Contraseña"),
           const SizedBox(height: 8),
           TextField(
@@ -228,13 +224,45 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 12),
 
+          // ¿Olvidaste tu contraseña?
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {
+                // TODO: Implementar recuperación de contraseña
+                _mostrarMensaje("Función en desarrollo", esError: false);
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: _primary,
+                padding: EdgeInsets.zero,
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                "¿Olvidaste tu contraseña?",
+                style: AppTheme.body2.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: _primary,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Botón de inicio de sesión
           SizedBox(
             height: 52,
             child: ElevatedButton(
               onPressed: loading ? null : login,
-              style: AppTheme.primaryButtonStyle,
+              style: AppTheme.primaryButtonStyle.copyWith(
+                shape: MaterialStateProperty.all(
+                  RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
               child: loading
                   ? const SizedBox(
                       width: 22,
@@ -244,42 +272,59 @@ class _LoginScreenState extends State<LoginScreen> {
                         strokeWidth: 2.5,
                       ),
                     )
-                  : const Text("Iniciar sesión"),
+                  : const Text(
+                      "Iniciar sesión",
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Línea divisoria
+          Row(
+            children: [
+              Expanded(child: Divider(color: _border, thickness: 1)),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  "¿No tienes una cuenta?",
+                  style: AppTheme.body2.copyWith(color: _textSub),
+                ),
+              ),
+              Expanded(child: Divider(color: _border, thickness: 1)),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Botón de registro
+          SizedBox(
+            height: 48,
+            child: OutlinedButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const RegisterScreen()),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _primary,
+                side: BorderSide(color: _primary, width: 1.5),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                "Regístrate",
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRegisterLink() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          "¿No tienes cuenta?",
-          style: AppTheme.body2.copyWith(color: _textSub),
-        ),
-        TextButton(
-          onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const RegisterScreen()),
-          ),
-          style: TextButton.styleFrom(
-            foregroundColor: _primary,
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          child: Text(
-            "Regístrate",
-            style: AppTheme.body2.copyWith(
-              fontWeight: FontWeight.w600,
-              color: _primary,
-            ),
-          ),
-        ),
-      ],
     );
   }
 
@@ -288,6 +333,7 @@ class _LoginScreenState extends State<LoginScreen> {
       text,
       style: AppTheme.body2.copyWith(
         fontWeight: FontWeight.w600,
+        color: _textMain,
       ),
     );
   }
