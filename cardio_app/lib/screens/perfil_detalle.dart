@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:cardio_app/app.theme.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/profile_service.dart';
 import '../services/paciente_service.dart';
@@ -64,6 +65,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
 
   final Map<String, Map<String, dynamic>> _recordatoriosBD = {};
   final Map<String, bool> _activoLocal = {};
+  final Map<String, String> _horaOriginal = {};
+
+  // ✅ Cache para evitar recargas innecesarias
+  bool _recordatoriosCargados = false;
+  bool _tratamientosCargados = false;
+  bool _signosCargados = false;
+  bool _sintomasCargados = false;
+  bool _citasCargados = false;
+  bool _recomendacionesCargadas = false;
+  bool _medicosCargados = false;
 
   bool loading = true;
   int mensajesNoLeidos = 0;
@@ -93,7 +104,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 6, vsync: this);
-    loadAll();
+    _cargarDatosConCache();
     _mostrarGuia = true;
   }
 
@@ -103,18 +114,86 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     super.dispose();
   }
 
-  Future<void> loadAll() async {
+  int _cmpFecha(dynamic a, dynamic b) {
+    final fa = DateTime.tryParse(a?.toString() ?? "") ?? DateTime(2000);
+    final fb = DateTime.tryParse(b?.toString() ?? "") ?? DateTime(2000);
+    return fa.compareTo(fb);
+  }
+
+  // ✅ Guardar estado en SharedPreferences
+  Future<void> _guardarEstadoRecordatorios() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keyPrefix = 'recordatorios_${widget.idPaciente}_';
+      
+      for (var entry in _activoLocal.entries) {
+        await prefs.setBool('${keyPrefix}activo_${entry.key}', entry.value);
+      }
+      
+      for (var entry in _horaOriginal.entries) {
+        await prefs.setString('${keyPrefix}hora_${entry.key}', entry.value);
+      }
+      
+      debugPrint("✅ Estado de recordatorios guardado en SharedPreferences");
+    } catch (e) {
+      debugPrint("❌ Error guardando estado: $e");
+    }
+  }
+
+  // ✅ Cargar estado desde SharedPreferences
+  Future<void> _cargarEstadoRecordatorios() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keyPrefix = 'recordatorios_${widget.idPaciente}_';
+      
+      // No sobrescribir si ya hay datos en memoria
+      if (_activoLocal.isNotEmpty && _horaOriginal.isNotEmpty) {
+        debugPrint("📋 Datos en memoria ya cargados, omitiendo SharedPreferences");
+        return;
+      }
+      
+      for (var m in _medicamentosFlat) {
+        final key = m["key"] as String;
+        final activoKey = '${keyPrefix}activo_$key';
+        final horaKey = '${keyPrefix}hora_$key';
+        
+        final activo = prefs.getBool(activoKey);
+        final hora = prefs.getString(horaKey);
+        
+        if (activo != null) {
+          _activoLocal[key] = activo;
+          debugPrint("📋 Cargado activo para $key: $activo");
+        }
+        
+        if (hora != null && hora.isNotEmpty) {
+          _horaOriginal[key] = hora;
+          debugPrint("📋 Cargado hora para $key: $hora");
+        }
+      }
+      
+      setState(() {});
+      debugPrint("✅ Estado de recordatorios cargado desde SharedPreferences");
+    } catch (e) {
+      debugPrint("❌ Error cargando estado: $e");
+    }
+  }
+
+  Future<void> _cargarDatosConCache() async {
     setState(() => loading = true);
-    await loadMedicos();
-    await loadProfile();
+    
     await Future.wait([
-      loadCitas(),
-      loadSintomas(),
-      loadSignos(),
-      loadRecomendaciones(),
+      _cargarMedicos(),
+      _cargarProfile(),
+      _cargarCitas(),
+      _cargarSintomas(),
+      _cargarSignos(),
+      _cargarRecomendaciones(),
+      _cargarTratamientos(),
+      _cargarRecordatorios(),
     ]);
-    await loadTratamientos();
-    await loadRecordatorios();
+    
+    // ✅ Cargar estado guardado (después de cargar los recordatorios)
+    await _cargarEstadoRecordatorios();
     
     await _cargarTodosLosMensajesNoLeidos();
     
@@ -122,7 +201,35 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     setState(() => loading = false);
   }
 
-  Future<void> loadProfile() async {
+  Future<void> _cargarMedicos() async {
+    if (_medicosCargados && medicos.isNotEmpty) return;
+    
+    try {
+      final data = await pacienteService.getMedicos(widget.idUsuario);
+      if (!mounted) return;
+      
+      if (data is List) {
+        setState(() {
+          medicos = List<Map<String, dynamic>>.from(data);
+          _medicosCargados = true;
+        });
+      } else {
+        setState(() {
+          medicos = [];
+          _medicosCargados = true;
+        });
+      }
+      
+      print("📦 Médicos cargados: ${medicos.length}");
+    } catch (e) {
+      print("❌ Error loadMedicos: $e");
+      setState(() => medicos = []);
+    }
+  }
+
+  Future<void> _cargarProfile() async {
+    if (paciente != null) return;
+    
     try {
       final data = await profileService.getPaciente(widget.idUsuario);
       if (!mounted) return;
@@ -130,56 +237,52 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     } catch (_) {}
   }
 
-  Future<void> loadMedicos() async {
-    try {
-      final data = await pacienteService.getMedicos(widget.idUsuario);
-      if (!mounted) return;
-      
-      if (data is List) {
-        setState(() => medicos = List<Map<String, dynamic>>.from(data));
-      } else {
-        setState(() => medicos = []);
-      }
-      
-      print("📦 Médicos cargados: ${medicos.length}");
-      for (var med in medicos) {
-        print("  - ${med["nombre"]} (ID: ${med["idProfesional"]})");
-      }
-    } catch (e) {
-      print("❌ Error loadMedicos: $e");
-      setState(() => medicos = []);
-    }
-  }
-
-  Future<void> loadCitas() async {
+  Future<void> _cargarCitas() async {
+    if (_citasCargados && citas.isNotEmpty) return;
+    
     try {
       final data = await citaService.getByPaciente(widget.idPaciente);
       if (!mounted) return;
-      setState(() => citas = List<Map<String, dynamic>>.from(data as Iterable<dynamic>));
+      setState(() {
+        citas = List<Map<String, dynamic>>.from(data as Iterable<dynamic>);
+        _citasCargados = true;
+      });
     } catch (_) {}
   }
 
-  Future<void> loadSintomas() async {
+  Future<void> _cargarSintomas() async {
+    if (_sintomasCargados && sintomas.isNotEmpty) return;
+    
     try {
       final data = await sintomaService.getSintomasByUser(widget.idUsuario);
       final lista = List<Map<String, dynamic>>.from(data);
       lista.sort((a, b) => _cmpFecha(b["fecha"], a["fecha"]));
       if (!mounted) return;
-      setState(() => sintomas = lista);
+      setState(() {
+        sintomas = lista;
+        _sintomasCargados = true;
+      });
     } catch (_) {}
   }
 
-  Future<void> loadRecomendaciones() async {
+  Future<void> _cargarRecomendaciones() async {
+    if (_recomendacionesCargadas && recomendaciones.isNotEmpty) return;
+    
     try {
       final data = await recomendacionService.getByPaciente(widget.idPaciente);
       if (!mounted) return;
-      setState(() => recomendaciones = List<Map<String, dynamic>>.from(data));
+      setState(() {
+        recomendaciones = List<Map<String, dynamic>>.from(data);
+        _recomendacionesCargadas = true;
+      });
     } catch (e) {
       debugPrint("ERROR RECOMENDACIONES => $e");
     }
   }
 
-  Future<void> loadTratamientos() async {
+  Future<void> _cargarTratamientos() async {
+    if (_tratamientosCargados && tratamientos.isNotEmpty) return;
+    
     try {
       final data = await tratamientoService.getByPaciente(widget.idPaciente);
       final lista = List<Map<String, dynamic>>.from(data);
@@ -214,56 +317,139 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       setState(() {
         tratamientos = lista;
         _medicamentosFlat = flat;
+        _tratamientosCargados = true;
       });
     } catch (_) {}
   }
 
-  Future<void> loadRecordatorios() async {
+  Future<void> _cargarRecordatorios() async {
+    // ✅ Si ya están cargados y hay datos, NO recargar
+    if (_recordatoriosCargados && _recordatoriosBD.isNotEmpty) {
+      debugPrint("📋 Recordatorios ya cargados en cache, omitiendo recarga");
+      return;
+    }
+    
     try {
       final lista = await recordatorioService.getActivosByPaciente(widget.idPaciente);
       if (!mounted) return;
 
+      _recordatoriosBD.clear();
+      
+      // ✅ NO limpiar _activoLocal ni _horaOriginal si ya tienen datos guardados
+      // Solo establecer valores que no existan
+
       final Map<int, Map<String, dynamic>> porTratamiento = {};
       for (final r in lista) {
         final idT = int.tryParse(r["idTratamiento"]?.toString() ?? "");
-        if (idT != null && idT != 0) porTratamiento[idT] = r;
+        if (idT != null && idT != 0) {
+          porTratamiento[idT] = r;
+        }
       }
-
-      final Map<String, Map<String, dynamic>> nuevosBD = {};
-      final Map<String, bool> nuevosLocal = {};
 
       for (final m in _medicamentosFlat) {
         final key = m["key"] as String;
         final idT = int.tryParse(m["idTratamiento"]?.toString() ?? "") ?? 0;
         final rec = porTratamiento[idT];
+        
         if (rec != null) {
-          nuevosBD[key] = rec;
-          nuevosLocal[key] = rec["activo"] == 1 || rec["activo"] == true;
+          _recordatoriosBD[key] = rec;
+          
+          // ✅ Solo establecer si no existe en _horaOriginal
+          if (!_horaOriginal.containsKey(key) || _horaOriginal[key] == "--:--") {
+            String horaOriginal = rec["hora"]?.toString() ?? "";
+            if (horaOriginal.length > 5) {
+              horaOriginal = horaOriginal.substring(0, 5);
+            }
+            _horaOriginal[key] = horaOriginal;
+          }
+          
+          // ✅ Solo establecer si no existe en _activoLocal
+          if (!_activoLocal.containsKey(key)) {
+            final activo = rec["activo"] == 1 || rec["activo"] == true;
+            _activoLocal[key] = activo;
+          }
         } else {
-          nuevosLocal[key] = false;
+          _recordatoriosBD[key] = {};
+          if (!_horaOriginal.containsKey(key)) {
+            _horaOriginal[key] = "--:--";
+          }
+          if (!_activoLocal.containsKey(key)) {
+            _activoLocal[key] = false;
+          }
         }
       }
 
-      setState(() {
-        _recordatoriosBD.clear();
-        _recordatoriosBD.addAll(nuevosBD);
-        for (final e in nuevosLocal.entries) {
-          _activoLocal.putIfAbsent(e.key, () => e.value);
-        }
-      });
+      _recordatoriosCargados = true;
+      setState(() {});
+      debugPrint("📋 Recordatorios cargados: ${_recordatoriosBD.length}");
     } catch (e) {
       debugPrint("❌ loadRecordatorios: $e");
     }
   }
 
-  Future<void> loadSignos() async {
+  Future<void> _cargarSignos() async {
+    if (_signosCargados && signos.isNotEmpty) return;
+    
     try {
       final data = await signosService.getSignos(widget.idPaciente);
       final lista = List<Map<String, dynamic>>.from(data);
       lista.sort((a, b) => _cmpFecha(b["fechaRegistro"], a["fechaRegistro"]));
       if (!mounted) return;
-      setState(() => signos = lista);
+      setState(() {
+        signos = lista;
+        _signosCargados = true;
+      });
     } catch (_) {}
+  }
+
+  Future<void> loadAll() async {
+    _recordatoriosCargados = false;
+    _tratamientosCargados = false;
+    _signosCargados = false;
+    _sintomasCargados = false;
+    _citasCargados = false;
+    _recomendacionesCargadas = false;
+    _medicosCargados = false;
+    
+    await _cargarDatosConCache();
+  }
+
+  Future<void> _recargarRecordatorios() async {
+    _recordatoriosCargados = false;
+    await _cargarRecordatorios();
+    await _guardarEstadoRecordatorios();
+  }
+
+  Future<void> _recargarTratamientos() async {
+    _tratamientosCargados = false;
+    await _cargarTratamientos();
+    _recordatoriosCargados = false;
+    await _cargarRecordatorios();
+  }
+
+  Future<void> loadProfile() async {}
+  Future<void> loadMedicos() async {}
+  Future<void> loadCitas() async {
+    _citasCargados = false;
+    await _cargarCitas();
+  }
+  Future<void> loadSintomas() async {
+    _sintomasCargados = false;
+    await _cargarSintomas();
+  }
+  Future<void> loadRecomendaciones() async {
+    _recomendacionesCargadas = false;
+    await _cargarRecomendaciones();
+  }
+  Future<void> loadTratamientos() async {
+    await _recargarTratamientos();
+  }
+  Future<void> loadRecordatorios() async {
+    await _recargarRecordatorios();
+  }
+  Future<void> loadSignos() async {
+    _signosCargados = false;
+    await _cargarSignos();
   }
 
   Future<void> _cargarTodosLosMensajesNoLeidos() async {
@@ -299,12 +485,12 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       int? convId = _conversacionesPorMedico[idMedico] ?? 
           await chatService.getOrCreateConversacion(widget.idPaciente, idMedico);
       
-      if (convId == 0) {
+      if (convId == null) {
         _snack("No se pudo abrir el chat");
         return;
       }
       
-      _conversacionesPorMedico[idMedico] = convId!;
+      _conversacionesPorMedico[idMedico] = convId;
       
       if (!mounted) return;
       
@@ -437,70 +623,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   int _toInt(dynamic v) => int.tryParse(v?.toString() ?? "") ?? 0;
 
   Future<void> _toggleRecordatorio(String key, bool nuevoValor, Map<String, dynamic> med) async {
-    if (nuevoValor) {
-      final TimeOfDay? horaSeleccionada = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.now(),
-        helpText: "Selecciona la hora del recordatorio",
-        cancelText: "Cancelar",
-        confirmText: "Activar",
-      );
-      
-      if (horaSeleccionada == null) {
-        setState(() => _activoLocal[key] = false);
-        return;
-      }
-      
-      final horaFormateada = "${horaSeleccionada.hour.toString().padLeft(2, '0')}:${horaSeleccionada.minute.toString().padLeft(2, '0')}";
-      
-      setState(() => _activoLocal[key] = true);
-      
+    if (!nuevoValor) {
       try {
         final recExistente = _recordatoriosBD[key];
-        if (recExistente != null) {
-          final idRec = _toInt(recExistente["idRecordatorio"]);
-          if (idRec == 0) throw Exception("idRecordatorio inválido");
-          await recordatorioService.actualizarHora(idRec, horaFormateada);
-          await recordatorioService.toggleActivo(idRec, activo: true);
-          setState(() {
-            _recordatoriosBD[key] = {
-              ...recExistente,
-              "hora": horaFormateada,
-              "activo": 1,
-            };
-          });
-        } else {
-          final idTratamiento = int.tryParse(key.split("_").first) ?? 0;
-          if (idTratamiento == 0) {
-            setState(() => _activoLocal[key] = false);
-            _snack("Error interno: tratamiento no identificado");
-            return;
-          }
-          final idRec = await recordatorioService.crear(
-            idTratamiento: idTratamiento,
-            hora: horaFormateada,
-            activo: true,
-          );
-          setState(() {
-            _recordatoriosBD[key] = {
-              "idRecordatorio": idRec,
-              "idTratamiento": idTratamiento,
-              "hora": horaFormateada,
-              "activo": 1,
-            };
-          });
-        }
-        _snack("✓ Recordatorio activado para ${med["nombre"]} a las $horaFormateada");
-      } catch (e) {
-        setState(() => _activoLocal[key] = false);
-        _snack("Error al activar recordatorio");
-        debugPrint("❌ _toggleRecordatorio: $e");
-      }
-    } else {
-      setState(() => _activoLocal[key] = false);
-      try {
-        final recExistente = _recordatoriosBD[key];
-        if (recExistente != null) {
+        if (recExistente != null && recExistente.isNotEmpty) {
           final idRec = _toInt(recExistente["idRecordatorio"]);
           if (idRec != 0) {
             await recordatorioService.toggleActivo(idRec, activo: false);
@@ -509,15 +635,120 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 ...recExistente,
                 "activo": 0,
               };
+              _activoLocal[key] = false;
             });
+            await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+            _snack("✗ Recordatorio desactivado para ${med["nombre"]}");
+          } else {
+            setState(() {
+              _activoLocal[key] = false;
+            });
+            await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+            _snack("✗ Recordatorio desactivado");
           }
+        } else {
+          setState(() {
+            _activoLocal[key] = false;
+          });
+          await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+          _snack("✗ Recordatorio desactivado");
         }
-        _snack("✗ Recordatorio desactivado para ${med["nombre"]}");
+        return;
       } catch (e) {
+        debugPrint("❌ Error desactivando recordatorio: $e");
         setState(() => _activoLocal[key] = true);
-        _snack("Error al desactivar recordatorio");
-        debugPrint("❌ _toggleRecordatorio: $e");
+        _snack("Error al desactivar el recordatorio");
+        return;
       }
+    }
+
+    final TimeOfDay? horaSeleccionada = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      helpText: "Selecciona la hora del recordatorio",
+      cancelText: "Cancelar",
+      confirmText: "Activar",
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppTheme.primary,
+              onPrimary: Colors.white,
+              onSurface: AppTheme.gray700,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.primary,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    
+    if (horaSeleccionada == null) {
+      setState(() => _activoLocal[key] = false);
+      return;
+    }
+    
+    final horaFormateada = "${horaSeleccionada.hour.toString().padLeft(2, '0')}:${horaSeleccionada.minute.toString().padLeft(2, '0')}";
+    
+    try {
+      final recExistente = _recordatoriosBD[key];
+      
+      if (recExistente != null && recExistente.isNotEmpty) {
+        final idRec = _toInt(recExistente["idRecordatorio"]);
+        if (idRec == 0) {
+          throw Exception("idRecordatorio inválido");
+        }
+        
+        await recordatorioService.actualizarHora(idRec, horaFormateada);
+        await recordatorioService.toggleActivo(idRec, activo: true);
+        
+        setState(() {
+          _recordatoriosBD[key] = {
+            ...recExistente,
+            "hora": horaFormateada,
+            "activo": 1,
+          };
+          _activoLocal[key] = true;
+          _horaOriginal[key] = horaFormateada;
+        });
+        await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+      } else {
+        final idTratamiento = int.tryParse(key.split("_").first) ?? 0;
+        if (idTratamiento == 0) {
+          setState(() => _activoLocal[key] = false);
+          _snack("Error: tratamiento no identificado");
+          return;
+        }
+        
+        final idRec = await recordatorioService.crear(
+          idTratamiento: idTratamiento,
+          hora: horaFormateada,
+          activo: true,
+        );
+        
+        setState(() {
+          _recordatoriosBD[key] = {
+            "idRecordatorio": idRec,
+            "idTratamiento": idTratamiento,
+            "hora": horaFormateada,
+            "activo": 1,
+          };
+          _activoLocal[key] = true;
+          _horaOriginal[key] = horaFormateada;
+        });
+        await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+      }
+      
+      _snack("✓ Recordatorio activado para ${med["nombre"]} a las $horaFormateada");
+      
+    } catch (e) {
+      debugPrint("❌ Error activando recordatorio: $e");
+      setState(() => _activoLocal[key] = false);
+      _snack("❌ Error al activar el recordatorio");
     }
   }
 
@@ -525,14 +756,14 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   void abrirAgendar() => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => AgendarCitaScreen(idPaciente: widget.idPaciente, medicos: medicos)),
-      ).then((_) => loadCitas());
+      ).then((_) => _cargarCitas());
   void abrirCalendario() => Navigator.push(context, MaterialPageRoute(builder: (_) => CalendarioScreen(idPaciente: widget.idPaciente)));
   void abrirConfiguracion() => Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => ConfiguracionScreen(idUsuario: widget.idUsuario, tipoUsuario: "paciente"),
         ),
-      ).then((_) => loadProfile());
+      ).then((_) => _cargarProfile());
 
   void crearSintoma() {
     final titulo = TextEditingController();
@@ -649,12 +880,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     } catch (_) {
       return fecha.toString();
     }
-  }
-
-  int _cmpFecha(dynamic a, dynamic b) {
-    final fa = DateTime.tryParse(a?.toString() ?? "") ?? DateTime(2000);
-    final fb = DateTime.tryParse(b?.toString() ?? "") ?? DateTime(2000);
-    return fa.compareTo(fb);
   }
 
   Color _getColorCategoria(String categoria) {
@@ -1457,6 +1682,56 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
+  Widget _statCard(String label, String value, String unit, IconData icon, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 26),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              unit,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.gray500,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppTheme.gray500,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _tabTratamientos() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -1580,7 +1855,201 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   }
 
   Widget _tabRecordatorios() {
-    return SingleChildScrollView(padding: const EdgeInsets.all(16), child: _buildRecordatorios());
+    if (_medicamentosFlat.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.medication_outlined, size: 64, color: AppTheme.gray300),
+            const SizedBox(height: 16),
+            Text(
+              tratamientos.isEmpty ? "💊 No hay tratamientos registrados" : "📭 Los tratamientos no tienen medicamentos",
+              style: const TextStyle(fontSize: 16, color: AppTheme.gray500),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Row(
+              children: [
+                Icon(Icons.info_outline, color: AppTheme.info, size: 20),
+                SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "💡 Activa los recordatorios para recibir notificaciones cuando debas tomar tu medicamento",
+                    style: TextStyle(fontSize: 13, color: AppTheme.info),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          ..._medicamentosFlat.map((m) {
+            final key = m["key"] as String;
+            final activo = _activoLocal[key] ?? false;
+            String horaMostrar = _horaOriginal[key] ?? "--:--";
+            
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: activo ? AppTheme.success.withOpacity(0.05) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: activo ? AppTheme.success.withOpacity(0.4) : AppTheme.gray200,
+                  width: activo ? 2 : 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: activo ? AppTheme.success.withOpacity(0.15) : AppTheme.gray200.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.medication,
+                      color: activo ? AppTheme.success : AppTheme.gray500,
+                      size: 26,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          m["nombre"] ?? "Medicamento",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                            color: activo ? AppTheme.gray700 : AppTheme.gray500,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          "${m["dosis"] ?? ""}  ·  Cada ${m["frecuencia"] ?? ""}",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppTheme.gray500,
+                          ),
+                        ),
+                        if (activo && horaMostrar != "--:--") ...[
+                          const SizedBox(height: 6),
+                          Row(
+                            children: [
+                              const Icon(Icons.access_time, size: 14, color: AppTheme.success),
+                              const SizedBox(width: 6),
+                              Text(
+                                "⏰ Recordatorio activo · $horaMostrar hrs",
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.success,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        if (!activo) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            "💡 Activa el recordatorio para elegir la hora",
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppTheme.gray500,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Switch(
+                    value: activo,
+                    activeColor: AppTheme.success,
+                    onChanged: (v) => _toggleRecordatorio(key, v, m),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccionesGrid() {
+    final items = [
+      {"label": "📅 Calendario", "icon": Icons.calendar_month, "color": AppTheme.warning, "fn": abrirCalendario},
+      {"label": "📝 Síntoma", "icon": Icons.add_circle, "color": const Color(0xFF8B5CF6), "fn": crearSintoma},
+      {"label": "📆 Agendar", "icon": Icons.event_note, "color": AppTheme.primary, "fn": abrirAgendar},
+      {"label": "💬 Chat", "icon": Icons.chat_bubble, "color": AppTheme.info, "fn": abrirChatGeneral},
+      {"label": "📋 Mis citas", "icon": Icons.event_available, "color": AppTheme.success, "fn": abrirCitas},
+      {"label": "💊 Mis tomas", "icon": Icons.medication_liquid, "color": const Color(0xFF059669), "fn": () => Navigator.push(context, MaterialPageRoute(builder: (_) => TomasScreen(idPaciente: widget.idPaciente)))},
+      {"label": "👥 Cuidadores", "icon": Icons.people, "color": const Color(0xFF8B5CF6), "fn": () => Navigator.push(context, MaterialPageRoute(builder: (_) => CuidadoresScreen(idPaciente: widget.idPaciente)))},
+    ];
+    final crossAxisCount = kIsWeb ? 6 : (MediaQuery.of(context).size.width > 500 ? 4 : 3);
+    return GridView.count(
+      crossAxisCount: crossAxisCount,
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 1.0,
+      children: items.map((item) {
+        final color = item["color"] as Color;
+        return GestureDetector(
+          onTap: item["fn"] as VoidCallback,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))]),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)), child: Icon(item["icon"] as IconData, color: color, size: 28)),
+                const SizedBox(height: 10),
+                Text(item["label"] as String, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.gray700)),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildEmpty(String msg, IconData icon) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 70, color: AppTheme.gray300),
+          const SizedBox(height: 20),
+          Text(msg, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: AppTheme.gray500)),
+        ],
+      ),
+    );
   }
 
   Widget _buildHeader() {
@@ -1597,26 +2066,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  Widget _statCard(String label, String value, String unit, IconData icon, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))]),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 26),
-            const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
-            Text(unit, style: const TextStyle(fontSize: 12, color: AppTheme.gray500)),
-            const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 12, color: AppTheme.gray500, fontWeight: FontWeight.w500)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ✅ CORREGIDO: _buildMedicoCard mejorado
   Widget _buildMedicoCard() {
     if (medicos.isEmpty) {
       return Container(
@@ -1664,7 +2113,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  // ✅ CORREGIDO: _buildMedicoCardItem mejorado
   Widget _buildMedicoCardItem(Map<String, dynamic> med) {
     final nombreMedico = med["nombre"]?.toString() ?? "Médico";
     final especialidad = med["especialidad"]?.toString() ?? "";
@@ -1737,7 +2185,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     especialidad,
                     style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
-                if (telefono.isNotEmpty || correo.isNotEmpty) ...[                  const SizedBox(height: 8),
+                if (telefono.isNotEmpty || correo.isNotEmpty) ...[
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       if (telefono.isNotEmpty) ...[
@@ -1865,124 +2314,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRecordatorios() {
-    if (_medicamentosFlat.isEmpty) {
-      return _buildEmpty(tratamientos.isEmpty ? "💊 No hay tratamientos registrados" : "📭 Los tratamientos no tienen medicamentos", Icons.notifications_off_outlined);
-    }
-    return Column(
-      children: _medicamentosFlat.map((m) {
-        final key = m["key"] as String;
-        final activo = _activoLocal[key] ?? false;
-        final rec = _recordatoriosBD[key];
-        final hora = rec?["hora"]?.toString() ?? "--:--";
-        final horaMostrar = hora.length >= 5 ? hora.substring(0, 5) : hora;
-        
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: activo ? AppTheme.success.withOpacity(0.05) : Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: activo ? AppTheme.success.withOpacity(0.4) : AppTheme.gray200, width: 1.5),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(color: AppTheme.success.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.medication, color: AppTheme.success, size: 26),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(m["nombre"], style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16, color: AppTheme.gray700)),
-                    const SizedBox(height: 4),
-                    Text("${m["dosis"]}  ·  Cada ${m["frecuencia"]}", style: const TextStyle(fontSize: 13, color: AppTheme.gray500)),
-                    if (activo) ...[
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          const Icon(Icons.access_time, size: 14, color: AppTheme.success),
-                          const SizedBox(width: 6),
-                          Text("⏰ Recordatorio activo · $horaMostrar hrs", 
-                            style: const TextStyle(fontSize: 13, color: AppTheme.success, fontWeight: FontWeight.w500)),
-                        ],
-                      ),
-                    ] else ...[
-                      const SizedBox(height: 6),
-                      Text("💡 Activa el recordatorio para elegir la hora", 
-                        style: TextStyle(fontSize: 12, color: AppTheme.gray500)),
-                    ],
-                  ],
-                ),
-              ),
-              Switch(
-                value: activo,
-                activeColor: AppTheme.success,
-                onChanged: (v) => _toggleRecordatorio(key, v, m),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildAccionesGrid() {
-    final items = [
-      {"label": "📅 Calendario", "icon": Icons.calendar_month, "color": AppTheme.warning, "fn": abrirCalendario},
-      {"label": "📝 Síntoma", "icon": Icons.add_circle, "color": const Color(0xFF8B5CF6), "fn": crearSintoma},
-      {"label": "📆 Agendar", "icon": Icons.event_note, "color": AppTheme.primary, "fn": abrirAgendar},
-      {"label": "💬 Chat", "icon": Icons.chat_bubble, "color": AppTheme.info, "fn": abrirChatGeneral},
-      {"label": "📋 Mis citas", "icon": Icons.event_available, "color": AppTheme.success, "fn": abrirCitas},
-      {"label": "💊 Mis tomas", "icon": Icons.medication_liquid, "color": const Color(0xFF059669), "fn": () => Navigator.push(context, MaterialPageRoute(builder: (_) => TomasScreen(idPaciente: widget.idPaciente)))},
-      {"label": "👥 Cuidadores", "icon": Icons.people, "color": const Color(0xFF8B5CF6), "fn": () => Navigator.push(context, MaterialPageRoute(builder: (_) => CuidadoresScreen(idPaciente: widget.idPaciente)))},
-    ];
-    final crossAxisCount = kIsWeb ? 6 : (MediaQuery.of(context).size.width > 500 ? 4 : 3);
-    return GridView.count(
-      crossAxisCount: crossAxisCount,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.0,
-      children: items.map((item) {
-        final color = item["color"] as Color;
-        return GestureDetector(
-          onTap: item["fn"] as VoidCallback,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))]),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(padding: const EdgeInsets.all(14), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)), child: Icon(item["icon"] as IconData, color: color, size: 28)),
-                const SizedBox(height: 10),
-                Text(item["label"] as String, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.gray700)),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildEmpty(String msg, IconData icon) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 70, color: AppTheme.gray300),
-          const SizedBox(height: 20),
-          Text(msg, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: AppTheme.gray500)),
         ],
       ),
     );

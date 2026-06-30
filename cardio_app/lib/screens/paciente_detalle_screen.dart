@@ -97,16 +97,29 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       SnackBar(
         content: Row(
           children: [
-            Icon(isError ? Icons.error_outline : Icons.check_circle, color: Colors.white, size: 20),
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle,
+              color: Colors.white,
+              size: 24 + (MediaQuery.of(context).textScaleFactor * 4),
+            ),
             const SizedBox(width: 12),
-            Expanded(child: Text(msg)),
+            Expanded(
+              child: Text(
+                msg,
+                style: TextStyle(
+                  fontSize: 14 * MediaQuery.of(context).textScaleFactor,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
           ],
         ),
         backgroundColor: isError ? AppTheme.danger : AppTheme.success,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        duration: const Duration(seconds: 3),
         margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
   }
@@ -142,7 +155,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
           builder: (_) => ChatScreen(
             idConversacion: convId,
             idUsuario: widget.idUsuario,
-            nombre: widget.nombre, 
+            nombre: widget.nombre,
             especialista: '',
           ),
         ),
@@ -280,9 +293,34 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return int.tryParse(v.toString());
   }
 
+  // === FUNCIONES DE ESCALA RESPONSIVE ===
+  double _responsiveSize(double baseSize) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final scale = screenWidth / 375; // 375 es el ancho de referencia (iPhone SE)
+    return baseSize * scale.clamp(0.8, 1.2);
+  }
+
+  double _responsiveFont(double baseSize) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final scale = screenWidth / 375;
+    final textScale = MediaQuery.of(context).textScaleFactor;
+    return baseSize * scale.clamp(0.8, 1.2) * textScale.clamp(0.8, 1.2);
+  }
+
+  bool _isSmallScreen() {
+    return MediaQuery.of(context).size.width < 360;
+  }
+
+  bool _isLargeScreen() {
+    return MediaQuery.of(context).size.width > 600;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmall = _isSmallScreen();
+    final isLarge = _isLargeScreen();
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
@@ -295,11 +333,21 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 8, 8, 4),
+                    padding: EdgeInsets.fromLTRB(
+                      _responsiveSize(4),
+                      _responsiveSize(10),
+                      _responsiveSize(8),
+                      _responsiveSize(4),
+                    ),
                     child: Row(
                       children: [
                         IconButton(
-                          icon: Icon(Icons.arrow_back, color: isDark ? Colors.white : AppTheme.gray700),
+                          iconSize: _responsiveSize(28),
+                          icon: Icon(
+                            Icons.arrow_back,
+                            color: isDark ? Colors.white : AppTheme.gray700,
+                            size: _responsiveSize(28),
+                          ),
                           onPressed: () => Navigator.pop(context),
                         ),
                         Expanded(
@@ -310,14 +358,17 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                                 widget.nombre,
                                 style: TextStyle(
                                   color: isDark ? Colors.white : AppTheme.gray700,
-                                  fontSize: 16,
+                                  fontSize: _responsiveFont(isSmall ? 18 : 22),
                                   fontWeight: FontWeight.bold,
                                 ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                               Text(
                                 "${signos.length} signos · ${citas.length} citas",
-                                style: const TextStyle(color: AppTheme.gray500, fontSize: 12),
+                                style: TextStyle(
+                                  color: AppTheme.gray500,
+                                  fontSize: _responsiveFont(12),
+                                ),
                               ),
                             ],
                           ),
@@ -325,19 +376,31 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                         Stack(
                           children: [
                             IconButton(
-                              icon: Icon(Icons.chat_bubble_outline, color: isDark ? Colors.white : AppTheme.gray700),
+                              iconSize: _responsiveSize(28),
+                              icon: Icon(
+                                Icons.chat_bubble_outline,
+                                color: isDark ? Colors.white : AppTheme.gray700,
+                                size: _responsiveSize(28),
+                              ),
                               onPressed: abrirChat,
                             ),
                             if (mensajesNoLeidos > 0)
                               Positioned(
-                                right: 8,
-                                top: 8,
+                                right: 4,
+                                top: 4,
                                 child: Container(
                                   padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
+                                  decoration: const BoxDecoration(
+                                    color: AppTheme.danger,
+                                    shape: BoxShape.circle,
+                                  ),
                                   child: Text(
                                     mensajesNoLeidos.toString(),
-                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: _responsiveFont(10),
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
@@ -347,25 +410,63 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     ),
                   ),
                   Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    margin: EdgeInsets.symmetric(
+                      horizontal: _responsiveSize(8),
+                      vertical: _responsiveSize(4),
+                    ),
                     decoration: BoxDecoration(
                       color: isDark ? AppTheme.gray800 : AppTheme.gray50,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(_responsiveSize(12)),
                     ),
                     child: TabBar(
                       controller: _tabController,
                       labelColor: AppTheme.primary,
                       unselectedLabelColor: AppTheme.gray500,
                       indicator: const BoxDecoration(),
-                      labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                      tabs: const [
-                        Tab(icon: Icon(Icons.monitor_heart, size: 20), text: "Signos"),
-                        Tab(icon: Icon(Icons.healing, size: 20), text: "Síntomas"),
-                        Tab(icon: Icon(Icons.medication, size: 20), text: "Trat."),
-                        Tab(icon: Icon(Icons.event, size: 20), text: "Citas"),
-                        Tab(icon: Icon(Icons.warning_amber, size: 20), text: "Alertas"),
-                        Tab(icon: Icon(Icons.lightbulb_outline, size: 20), text: "Recom."),
-                        Tab(icon: Icon(Icons.analytics_outlined, size: 20), text: "Adherencia"),
+                      labelStyle: TextStyle(
+                        fontSize: _responsiveFont(isSmall ? 10 : 14),
+                        fontWeight: FontWeight.w600,
+                      ),
+                      unselectedLabelStyle: TextStyle(
+                        fontSize: _responsiveFont(isSmall ? 9 : 13),
+                      ),
+                      isScrollable: isSmall,
+                      tabs: [
+                        Tab(
+                          icon: Icon(Icons.monitor_heart,
+                              size: _responsiveSize(isSmall ? 18 : 24)),
+                          text: isSmall ? null : "Signos",
+                        ),
+                        Tab(
+                          icon: Icon(Icons.healing,
+                              size: _responsiveSize(isSmall ? 18 : 24)),
+                          text: isSmall ? null : "Síntomas",
+                        ),
+                        Tab(
+                          icon: Icon(Icons.medication,
+                              size: _responsiveSize(isSmall ? 18 : 24)),
+                          text: isSmall ? null : "Trat.",
+                        ),
+                        Tab(
+                          icon: Icon(Icons.event,
+                              size: _responsiveSize(isSmall ? 18 : 24)),
+                          text: isSmall ? null : "Citas",
+                        ),
+                        Tab(
+                          icon: Icon(Icons.warning_amber,
+                              size: _responsiveSize(isSmall ? 18 : 24)),
+                          text: isSmall ? null : "Alertas",
+                        ),
+                        Tab(
+                          icon: Icon(Icons.lightbulb_outline,
+                              size: _responsiveSize(isSmall ? 18 : 24)),
+                          text: isSmall ? null : "Recom.",
+                        ),
+                        Tab(
+                          icon: Icon(Icons.analytics_outlined,
+                              size: _responsiveSize(isSmall ? 18 : 24)),
+                          text: isSmall ? null : "Adherencia",
+                        ),
                       ],
                     ),
                   ),
@@ -374,7 +475,12 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             ),
             Expanded(
               child: loading
-                  ? const Center(child: CircularProgressIndicator())
+                  ? Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: _responsiveSize(4),
+                        color: AppTheme.primary,
+                      ),
+                    )
                   : RefreshIndicator(
                       onRefresh: loadAll,
                       color: AppTheme.primary,
@@ -400,11 +506,14 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
   // ─── ADHERENCIA ───
   Widget _buildAdherenciaView() {
+    final isSmall = _isSmallScreen();
+    final isLarge = _isLargeScreen();
+
     if (adherencia == null) {
       return _buildEmptyPage(
-        "Sin datos",
+        "Sin datos de adherencia",
         Icons.analytics_outlined,
-        "No hay información de adherencia.",
+        "Aún no hay información disponible.\nLos datos se actualizarán automáticamente.",
       );
     }
 
@@ -412,32 +521,53 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     final Color color = porcentaje >= 80 ? AppTheme.success : porcentaje >= 50 ? AppTheme.warning : AppTheme.danger;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(_responsiveSize(16)),
       child: Column(
         children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 500),
-            padding: const EdgeInsets.all(24),
+          Container(
+            padding: EdgeInsets.all(_responsiveSize(isSmall ? 20 : 28)),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [color.withOpacity(0.1), Colors.white],
               ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: AppTheme.subtleShadow,
+              borderRadius: BorderRadius.circular(_responsiveSize(24)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: _responsiveSize(8),
+                  offset: Offset(0, _responsiveSize(4)),
+                ),
+              ],
             ),
             child: Column(
               children: [
+                Text(
+                  "Adherencia al Tratamiento",
+                  style: TextStyle(
+                    fontSize: _responsiveFont(isSmall ? 16 : 20),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: _responsiveSize(8)),
+                Text(
+                  "Seguimiento del paciente",
+                  style: TextStyle(
+                    fontSize: _responsiveFont(isSmall ? 13 : 15),
+                    color: AppTheme.gray500,
+                  ),
+                ),
+                SizedBox(height: _responsiveSize(20)),
                 SizedBox(
-                  height: 180,
-                  width: 180,
+                  height: _responsiveSize(isSmall ? 140 : 200),
+                  width: _responsiveSize(isSmall ? 140 : 200),
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
                       CircularProgressIndicator(
                         value: porcentaje / 100,
-                        strokeWidth: 12,
+                        strokeWidth: _responsiveSize(isSmall ? 12 : 16),
                         backgroundColor: AppTheme.gray200,
                         color: color,
                       ),
@@ -446,24 +576,35 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                         children: [
                           Text(
                             "${porcentaje.toInt()}%",
-                            style: TextStyle(fontSize: 36, fontWeight: FontWeight.bold, color: color),
+                            style: TextStyle(
+                              fontSize: _responsiveFont(isSmall ? 32 : 44),
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
                           ),
-                          const SizedBox(height: 4),
+                          SizedBox(height: _responsiveSize(4)),
                           Text(
                             adherencia!["estado"] ?? "",
-                            style: const TextStyle(color: AppTheme.gray500, fontSize: 12),
+                            style: TextStyle(
+                              color: AppTheme.gray500,
+                              fontSize: _responsiveFont(isSmall ? 13 : 16),
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ],
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 24),
-                _adherenciaItem("Medicamentos", adherencia!["medicamentos"], Icons.medication_outlined, AppTheme.primary),
-                const SizedBox(height: 12),
-                _adherenciaItem("Signos vitales", adherencia!["signos"], Icons.monitor_heart_outlined, AppTheme.danger),
-                const SizedBox(height: 12),
-                _adherenciaItem("Citas", adherencia!["citas"], Icons.event_outlined, AppTheme.success),
+                SizedBox(height: _responsiveSize(24)),
+                _adherenciaItem("Medicamentos", adherencia!["medicamentos"],
+                    Icons.medication_outlined, AppTheme.primary),
+                SizedBox(height: _responsiveSize(12)),
+                _adherenciaItem("Signos vitales", adherencia!["signos"],
+                    Icons.monitor_heart_outlined, AppTheme.danger),
+                SizedBox(height: _responsiveSize(12)),
+                _adherenciaItem("Citas médicas", adherencia!["citas"],
+                    Icons.event_outlined, AppTheme.success),
               ],
             ),
           ),
@@ -473,26 +614,53 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _adherenciaItem(String titulo, dynamic valor, IconData icon, Color color) {
+    final isSmall = _isSmallScreen();
     final porcentaje = double.tryParse(valor.toString()) ?? 0;
+
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(_responsiveSize(isSmall ? 12 : 16)),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(14),
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(_responsiveSize(14)),
+        border: Border.all(color: color.withOpacity(0.15)),
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: color, size: 20),
+            padding: EdgeInsets.all(_responsiveSize(isSmall ? 8 : 10)),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(_responsiveSize(10)),
+            ),
+            child: Icon(icon, color: color, size: _responsiveSize(isSmall ? 20 : 26)),
           ),
-          const SizedBox(width: 14),
-          Expanded(child: Text(titulo, style: const TextStyle(fontWeight: FontWeight.w600))),
+          SizedBox(width: _responsiveSize(12)),
+          Expanded(
+            child: Text(
+              titulo,
+              style: TextStyle(
+                fontSize: _responsiveFont(isSmall ? 14 : 16),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-            child: Text("${porcentaje.toInt()}%", style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+            padding: EdgeInsets.symmetric(
+              horizontal: _responsiveSize(10),
+              vertical: _responsiveSize(4),
+            ),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(_responsiveSize(20)),
+            ),
+            child: Text(
+              "${porcentaje.toInt()}%",
+              style: TextStyle(
+                color: color,
+                fontSize: _responsiveFont(isSmall ? 16 : 18),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -501,20 +669,35 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
   // ─── RECOMENDACIONES ───
   Widget _buildRecomendacionesView() {
+    final isSmall = _isSmallScreen();
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: EdgeInsets.fromLTRB(
+            _responsiveSize(16),
+            _responsiveSize(16),
+            _responsiveSize(16),
+            _responsiveSize(12),
+          ),
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text("Agregar recomendación", style: TextStyle(fontWeight: FontWeight.w600)),
+              icon: Icon(Icons.add, size: _responsiveSize(isSmall ? 20 : 24)),
+              label: Text(
+                isSmall ? "Agregar" : "Agregar recomendación",
+                style: TextStyle(
+                  fontSize: _responsiveFont(isSmall ? 14 : 16),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(vertical: _responsiveSize(isSmall ? 14 : 16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_responsiveSize(12)),
+                ),
               ),
               onPressed: () {
                 Navigator.push(
@@ -532,9 +715,13 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         ),
         Expanded(
           child: recomendaciones.isEmpty
-              ? _buildEmptyPage("No hay recomendaciones", Icons.lightbulb_outline, "Aún no se han registrado recomendaciones médicas.")
+              ? _buildEmptyPage(
+                  "Sin recomendaciones médicas",
+                  Icons.lightbulb_outline,
+                  "Aún no hay recomendaciones registradas.\nToque el botón para agregar una.",
+                )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: _responsiveSize(16)),
                   itemCount: recomendaciones.length,
                   itemBuilder: (_, i) => _buildRecomendacionCard(recomendaciones[i]),
                 ),
@@ -544,37 +731,75 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _buildRecomendacionCard(Map<String, dynamic> r) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
+    final isSmall = _isSmallScreen();
+
+    return Container(
+      margin: EdgeInsets.only(bottom: _responsiveSize(12)),
+      padding: EdgeInsets.all(_responsiveSize(isSmall ? 14 : 18)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.subtleShadow,
+        borderRadius: BorderRadius.circular(_responsiveSize(16)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: _responsiveSize(8),
+            offset: Offset(0, _responsiveSize(3)),
+          ),
+        ],
+        border: Border.all(color: AppTheme.gray200.withOpacity(0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppTheme.info.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.medical_information, color: AppTheme.info, size: 22),
+            padding: EdgeInsets.all(_responsiveSize(isSmall ? 10 : 12)),
+            decoration: BoxDecoration(
+              color: AppTheme.info.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(_responsiveSize(12)),
+            ),
+            child: Icon(
+              Icons.medical_information,
+              color: AppTheme.info,
+              size: _responsiveSize(isSmall ? 22 : 28),
+            ),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: _responsiveSize(12)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Recomendación médica", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                const SizedBox(height: 6),
-                Text(r["descripcion"] ?? "", style: const TextStyle(fontSize: 13, color: AppTheme.gray500, height: 1.4)),
-                const SizedBox(height: 8),
+                Text(
+                  "Recomendación médica",
+                  style: TextStyle(
+                    fontSize: _responsiveFont(isSmall ? 14 : 16),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: _responsiveSize(6)),
+                Text(
+                  r["descripcion"] ?? "",
+                  style: TextStyle(
+                    fontSize: _responsiveFont(isSmall ? 13 : 15),
+                    color: AppTheme.gray500,
+                    height: 1.4,
+                  ),
+                ),
+                SizedBox(height: _responsiveSize(8)),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today, size: 12, color: AppTheme.gray500),
-                    const SizedBox(width: 4),
-                    Text(_formatFecha(r["fecha"]), style: const TextStyle(fontSize: 11, color: AppTheme.gray500)),
+                    Icon(
+                      Icons.calendar_today,
+                      size: _responsiveSize(isSmall ? 14 : 16),
+                      color: AppTheme.gray500,
+                    ),
+                    SizedBox(width: _responsiveSize(6)),
+                    Text(
+                      _formatFecha(r["fecha"]),
+                      style: TextStyle(
+                        fontSize: _responsiveFont(isSmall ? 12 : 14),
+                        color: AppTheme.gray500,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -585,14 +810,20 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── ALERTAS MEJORADAS ───
+  // ─── ALERTAS ───
   Widget _alertasView() {
+    final isSmall = _isSmallScreen();
+
     if (alertas.isEmpty) {
-      return _buildEmptyPage("Sin alertas", Icons.notifications_none, "No hay alertas registradas para este paciente.");
+      return _buildEmptyPage(
+        "Sin alertas activas",
+        Icons.notifications_none,
+        "No hay alertas registradas para este paciente.\nTodo está en orden.",
+      );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(_responsiveSize(16)),
       itemCount: alertas.length,
       itemBuilder: (_, i) {
         final a = alertas[i];
@@ -611,19 +842,19 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             color = AppTheme.danger;
             bgColor = AppTheme.danger.withOpacity(0.1);
             icono = Icons.warning_amber_rounded;
-            titulo = "⚠️ ALERTA CRÍTICA";
+            titulo = "🔴 ALERTA CRÍTICA";
             break;
           case "medio":
             color = AppTheme.warning;
             bgColor = AppTheme.warning.withOpacity(0.1);
             icono = Icons.info_outline;
-            titulo = "⚡ ALERTA IMPORTANTE";
+            titulo = "🟡 ALERTA IMPORTANTE";
             break;
           default:
             color = AppTheme.info;
             bgColor = AppTheme.info.withOpacity(0.1);
             icono = Icons.check_circle_outline;
-            titulo = "ℹ️ INFORMACIÓN";
+            titulo = "🔵 INFORMACIÓN";
         }
 
         String origenTexto = "";
@@ -648,17 +879,21 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
         String infoEspecifica = "";
         String accionRecomendada = "";
-        
-        if (descripcion.toLowerCase().contains("presion") || descripcion.toLowerCase().contains("presión")) {
+
+        if (descripcion.toLowerCase().contains("presion") ||
+            descripcion.toLowerCase().contains("presión")) {
           infoEspecifica = "La presión arterial está fuera de los rangos normales";
           accionRecomendada = "Tomar medicación según indicación médica y monitorear cada 2 horas";
-        } else if (descripcion.toLowerCase().contains("frecuencia") || descripcion.toLowerCase().contains("cardiaca")) {
+        } else if (descripcion.toLowerCase().contains("frecuencia") ||
+            descripcion.toLowerCase().contains("cardiaca")) {
           infoEspecifica = "La frecuencia cardíaca presenta valores anormales";
           accionRecomendada = "Reposar y verificar nuevamente en 15 minutos";
-        } else if (descripcion.toLowerCase().contains("saturacion") || descripcion.toLowerCase().contains("oxígeno")) {
+        } else if (descripcion.toLowerCase().contains("saturacion") ||
+            descripcion.toLowerCase().contains("oxígeno")) {
           infoEspecifica = "La saturación de oxígeno está baja";
           accionRecomendada = "Mantener posición semi-sentada y contactar al médico";
-        } else if (descripcion.toLowerCase().contains("sintoma") || descripcion.toLowerCase().contains("síntoma")) {
+        } else if (descripcion.toLowerCase().contains("sintoma") ||
+            descripcion.toLowerCase().contains("síntoma")) {
           infoEspecifica = "El paciente ha reportado síntomas preocupantes";
           accionRecomendada = "Realizar seguimiento y evaluar necesidad de cita médica";
         } else if (descripcion.toLowerCase().contains("cita")) {
@@ -669,57 +904,83 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
           accionRecomendada = "Monitorear la evolución del paciente";
         }
 
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.only(bottom: 12),
+        return Container(
+          margin: EdgeInsets.only(bottom: _responsiveSize(14)),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: AppTheme.subtleShadow,
-            border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+            borderRadius: BorderRadius.circular(_responsiveSize(20)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: _responsiveSize(8),
+                offset: Offset(0, _responsiveSize(3)),
+              ),
+            ],
+            border: Border.all(color: color.withOpacity(0.25), width: isSmall ? 1 : 1.5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(_responsiveSize(isSmall ? 14 : 18)),
                 decoration: BoxDecoration(
                   color: bgColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(19),
-                    topRight: Radius.circular(19),
+                  borderRadius: BorderRadius.only(
+                    topLeft: Radius.circular(_responsiveSize(19)),
+                    topRight: Radius.circular(_responsiveSize(19)),
                   ),
                 ),
                 child: Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(10),
+                      padding: EdgeInsets.all(_responsiveSize(isSmall ? 8 : 12)),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(14),
+                        color: color.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(_responsiveSize(12)),
                       ),
-                      child: Icon(icono, color: color, size: 28),
+                      child: Icon(icono, color: color,
+                          size: _responsiveSize(isSmall ? 24 : 32)),
                     ),
-                    const SizedBox(width: 14),
+                    SizedBox(width: _responsiveSize(12)),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(titulo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: color)),
-                          const SizedBox(height: 4),
+                          Text(titulo,
+                              style: TextStyle(
+                                fontSize: _responsiveFont(isSmall ? 13 : 16),
+                                fontWeight: FontWeight.bold,
+                                color: color,
+                              )),
+                          SizedBox(height: _responsiveSize(4)),
                           Row(
                             children: [
-                              Text("$origenIcono $origenTexto", style: const TextStyle(fontSize: 12, color: AppTheme.gray500)),
-                              const SizedBox(width: 8),
+                              Text("$origenIcono $origenTexto",
+                                  style: TextStyle(
+                                    fontSize: _responsiveFont(isSmall ? 12 : 14),
+                                    color: AppTheme.gray500,
+                                  )),
+                              SizedBox(width: _responsiveSize(8)),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: _responsiveSize(8),
+                                  vertical: _responsiveSize(3),
+                                ),
                                 decoration: BoxDecoration(
-                                  color: estado == "ATENDIDA" ? AppTheme.success.withOpacity(0.1) : AppTheme.warning.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
+                                  color: estado == "ATENDIDA"
+                                      ? AppTheme.success.withOpacity(0.1)
+                                      : AppTheme.warning.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(_responsiveSize(14)),
                                 ),
                                 child: Text(
                                   estado == "ATENDIDA" ? "✓ Atendida" : "⏳ Pendiente",
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: estado == "ATENDIDA" ? AppTheme.success : AppTheme.warning),
+                                  style: TextStyle(
+                                    fontSize: _responsiveFont(isSmall ? 11 : 13),
+                                    fontWeight: FontWeight.w600,
+                                    color: estado == "ATENDIDA"
+                                        ? AppTheme.success
+                                        : AppTheme.warning,
+                                  ),
                                 ),
                               ),
                             ],
@@ -731,66 +992,99 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(_responsiveSize(isSmall ? 14 : 18)),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: EdgeInsets.all(_responsiveSize(isSmall ? 10 : 14)),
                       decoration: BoxDecoration(
                         color: AppTheme.gray50,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(_responsiveSize(12)),
+                        border: Border.all(color: AppTheme.gray200.withOpacity(0.2)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
                             children: [
-                              Icon(Icons.description, size: 16, color: AppTheme.primary),
-                              SizedBox(width: 8),
-                              Text("¿Qué ocurrió?", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.gray700)),
+                              Icon(Icons.description,
+                                  size: _responsiveSize(isSmall ? 16 : 20),
+                                  color: AppTheme.primary),
+                              SizedBox(width: _responsiveSize(8)),
+                              Text("¿Qué ocurrió?",
+                                  style: TextStyle(
+                                    fontSize: _responsiveFont(isSmall ? 12 : 14),
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.gray700,
+                                  )),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(infoEspecifica, style: const TextStyle(fontSize: 13, height: 1.4, color: AppTheme.gray700)),
+                          SizedBox(height: _responsiveSize(6)),
+                          Text(infoEspecifica,
+                              style: TextStyle(
+                                fontSize: _responsiveFont(isSmall ? 13 : 15),
+                                height: 1.4,
+                                color: AppTheme.gray700,
+                              )),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: _responsiveSize(12)),
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: EdgeInsets.all(_responsiveSize(isSmall ? 10 : 14)),
                       decoration: BoxDecoration(
-                        color: color.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: color.withOpacity(0.2)),
+                        color: color.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(_responsiveSize(12)),
+                        border: Border.all(color: color.withOpacity(0.15)),
                       ),
                       child: Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: color.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
-                            child: Icon(Icons.medical_services, size: 18, color: color),
+                            padding: EdgeInsets.all(_responsiveSize(isSmall ? 6 : 10)),
+                            decoration: BoxDecoration(
+                              color: color.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(_responsiveSize(10)),
+                            ),
+                            child: Icon(Icons.medical_services,
+                                size: _responsiveSize(isSmall ? 18 : 22),
+                                color: color),
                           ),
-                          const SizedBox(width: 12),
+                          SizedBox(width: _responsiveSize(12)),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text("Acción recomendada", style: TextStyle(fontSize: 11, color: AppTheme.gray500)),
-                                const SizedBox(height: 2),
-                                Text(accionRecomendada, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: color)),
+                                Text("Acción recomendada",
+                                    style: TextStyle(
+                                      fontSize: _responsiveFont(isSmall ? 11 : 13),
+                                      color: AppTheme.gray500,
+                                    )),
+                                SizedBox(height: _responsiveSize(2)),
+                                Text(accionRecomendada,
+                                    style: TextStyle(
+                                      fontSize: _responsiveFont(isSmall ? 13 : 15),
+                                      fontWeight: FontWeight.w500,
+                                      color: color,
+                                    )),
                               ],
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: _responsiveSize(12)),
                     Row(
                       children: [
-                        Icon(Icons.access_time, size: 14, color: AppTheme.gray400),
-                        const SizedBox(width: 6),
-                        Text(_formatFechaDetalle(a["fecha"]), style: const TextStyle(fontSize: 11, color: AppTheme.gray400)),
+                        Icon(Icons.access_time,
+                            size: _responsiveSize(isSmall ? 14 : 18),
+                            color: AppTheme.gray400),
+                        SizedBox(width: _responsiveSize(6)),
+                        Text(_formatFechaDetalle(a["fecha"]),
+                            style: TextStyle(
+                              fontSize: _responsiveFont(isSmall ? 12 : 14),
+                              color: AppTheme.gray400,
+                            )),
                         const Spacer(),
                         if (estado.toUpperCase() != "ATENDIDA")
                           ElevatedButton(
@@ -808,12 +1102,23 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppTheme.success,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: _responsiveSize(14),
+                                vertical: _responsiveSize(isSmall ? 8 : 12),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(_responsiveSize(12)),
+                              ),
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            child: const Text("Marcar atendida", style: TextStyle(fontSize: 12)),
+                            child: Text(
+                              isSmall ? "Atender" : "Marcar atendida",
+                              style: TextStyle(
+                                fontSize: _responsiveFont(isSmall ? 12 : 14),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                       ],
                     ),
@@ -829,9 +1134,11 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
   // ─── SIGNOS ───
   Widget _signosView() {
+    final isSmall = _isSmallScreen();
+
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(_responsiveSize(16)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -839,22 +1146,30 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             _buildEmpty("Sin signos registrados", Icons.monitor_heart)
           else ...[
             _buildSignosResumenGrande(),
-            const SizedBox(height: 20),
+            SizedBox(height: _responsiveSize(20)),
             _buildGraficoInteligente(),
-            const SizedBox(height: 16),
+            SizedBox(height: _responsiveSize(16)),
             _buildReferenciaSignos(),
-            const SizedBox(height: 20),
+            SizedBox(height: _responsiveSize(20)),
           ],
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text("Registrar signos vitales", style: TextStyle(fontWeight: FontWeight.w600)),
+              icon: Icon(Icons.add, size: _responsiveSize(isSmall ? 20 : 24)),
+              label: Text(
+                isSmall ? "Registrar signos" : "Registrar signos vitales",
+                style: TextStyle(
+                  fontSize: _responsiveFont(isSmall ? 14 : 16),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.primary,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(vertical: _responsiveSize(isSmall ? 14 : 16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_responsiveSize(12)),
+                ),
               ),
               onPressed: () => Navigator.push(
                 context,
@@ -871,7 +1186,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             ),
           ),
           if (signos.isNotEmpty) ...[
-            const SizedBox(height: 16),
+            SizedBox(height: _responsiveSize(16)),
             ...signos.map(_buildSignoCard),
           ],
         ],
@@ -880,41 +1195,43 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _buildGraficoInteligente() {
-    if (signos.isEmpty) return const SizedBox();
+    final isSmall = _isSmallScreen();
     
+    if (signos.isEmpty) return const SizedBox();
+
     List<double> sistolicas = [];
     List<double> diastolicas = [];
     List<double> frecuencias = [];
-    
+
     for (var s in signos) {
       sistolicas.add(double.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0);
       diastolicas.add(double.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0);
       frecuencias.add(double.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0);
     }
-    
+
     double getPercentile(List<double> values, double percentile) {
       if (values.isEmpty) return 0;
       List<double> sorted = List.from(values)..sort();
       int index = (percentile * (sorted.length - 1)).round();
       return sorted[index];
     }
-    
+
     double minY = 0;
     double maxY = 0;
     bool hasOutliers = false;
     List<String> outlierMessages = [];
-    
+
     if (sistolicas.isNotEmpty) {
       double p5Sist = getPercentile(sistolicas, 0.05);
       double p95Sist = getPercentile(sistolicas, 0.95);
       double p5Fc = getPercentile(frecuencias, 0.05);
       double p95Fc = getPercentile(frecuencias, 0.95);
-      
-      minY = [p5Sist, p5Fc].reduce((a,b) => a < b ? a : b) - 10;
-      maxY = [p95Sist, p95Fc].reduce((a,b) => a > b ? a : b) + 10;
+
+      minY = [p5Sist, p5Fc].reduce((a, b) => a < b ? a : b) - 10;
+      maxY = [p95Sist, p95Fc].reduce((a, b) => a > b ? a : b) + 10;
       minY = minY.clamp(40, 100);
       maxY = maxY.clamp(80, 200);
-      
+
       for (var s in signos) {
         int sist = int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
         int fc = int.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
@@ -939,56 +1256,78 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(_responsiveSize(isSmall ? 14 : 20)),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: AppTheme.subtleShadow,
+            borderRadius: BorderRadius.circular(_responsiveSize(18)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: _responsiveSize(8),
+                offset: Offset(0, _responsiveSize(3)),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
+              Row(
                 children: [
-                  Icon(Icons.show_chart, size: 18, color: AppTheme.primary),
-                  SizedBox(width: 8),
-                  Text("Historial de mediciones", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  Icon(Icons.show_chart,
+                      size: _responsiveSize(isSmall ? 20 : 24),
+                      color: AppTheme.primary),
+                  SizedBox(width: _responsiveSize(8)),
+                  Text("Historial de mediciones",
+                      style: TextStyle(
+                        fontSize: _responsiveFont(isSmall ? 15 : 18),
+                        fontWeight: FontWeight.bold,
+                      )),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: _responsiveSize(14)),
               Wrap(
-                spacing: 16,
-                runSpacing: 6,
+                spacing: _responsiveSize(12),
+                runSpacing: _responsiveSize(6),
                 children: [
-                  _leyenda(const Color(0xFFEF4444), "Sistólica (Presión)"),
-                  _leyenda(const Color(0xFF3B82F6), "Diastólica (Presión)"),
-                  _leyenda(const Color(0xFFEC4899), "FC (Frecuencia Cardiaca)"),
+                  _leyenda(const Color(0xFFEF4444), "Sistólica"),
+                  _leyenda(const Color(0xFF3B82F6), "Diastólica"),
+                  _leyenda(const Color(0xFFEC4899), "FC"),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: _responsiveSize(14)),
               SizedBox(
-                height: 240,
+                height: _responsiveSize(isSmall ? 200 : 260),
                 child: LineChart(
                   LineChartData(
                     gridData: FlGridData(
                       show: true,
                       drawVerticalLine: false,
                       horizontalInterval: (maxY - minY) / 4,
-                      getDrawingHorizontalLine: (value) => FlLine(color: AppTheme.gray200, strokeWidth: 1, dashArray: [5, 5]),
+                      getDrawingHorizontalLine: (value) => FlLine(
+                        color: AppTheme.gray200,
+                        strokeWidth: 1,
+                        dashArray: [5, 5],
+                      ),
                     ),
                     titlesData: FlTitlesData(
                       leftTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
-                          reservedSize: 45,
+                          reservedSize: _responsiveSize(40),
                           interval: (maxY - minY) / 4,
-                          getTitlesWidget: (value, meta) => Text(value.toInt().toString(), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
+                          getTitlesWidget: (value, meta) => Text(
+                            value.toInt().toString(),
+                            style: TextStyle(
+                              fontSize: _responsiveFont(isSmall ? 10 : 13),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ),
                       bottomTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
-                          reservedSize: 40,
+                          reservedSize: _responsiveSize(40),
                           getTitlesWidget: (value, meta) {
                             final int index = value.toInt();
                             if (index < 0 || index >= signos.length) return const SizedBox();
@@ -997,16 +1336,27 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                             try {
                               final f = DateTime.parse(fecha.toString());
                               return Padding(
-                                padding: const EdgeInsets.only(top: 8),
+                                padding: EdgeInsets.only(top: _responsiveSize(8)),
                                 child: Column(
                                   children: [
-                                    Text("${f.day}", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                                    Text(_meses[f.month - 1], style: const TextStyle(fontSize: 9, color: AppTheme.gray500)),
+                                    Text("${f.day}",
+                                        style: TextStyle(
+                                          fontSize: _responsiveFont(isSmall ? 10 : 13),
+                                          fontWeight: FontWeight.w500,
+                                        )),
+                                    Text(_meses[f.month - 1],
+                                        style: TextStyle(
+                                          fontSize: _responsiveFont(isSmall ? 8 : 11),
+                                          color: AppTheme.gray500,
+                                        )),
                                   ],
                                 ),
                               );
                             } catch (_) {
-                              return Text("${index + 1}", style: const TextStyle(fontSize: 11));
+                              return Text("${index + 1}",
+                                  style: TextStyle(
+                                    fontSize: _responsiveFont(isSmall ? 10 : 13),
+                                  ));
                             }
                           },
                         ),
@@ -1014,24 +1364,39 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                       rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                       topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                     ),
-                    borderData: FlBorderData(show: true, border: Border.all(color: AppTheme.gray200, width: 1)),
+                    borderData: FlBorderData(
+                      show: true,
+                      border: Border.all(color: AppTheme.gray200, width: 1),
+                    ),
                     minY: minY,
                     maxY: maxY,
                     lineTouchData: LineTouchData(
                       enabled: true,
                       touchTooltipData: LineTouchTooltipData(
-                        tooltipRoundedRadius: 8,
-                        tooltipPadding: const EdgeInsets.all(8),
+                        tooltipRoundedRadius: _responsiveSize(8),
+                        tooltipPadding: EdgeInsets.all(_responsiveSize(10)),
                         getTooltipItems: (touchedSpots) {
                           return touchedSpots.map((touchedSpot) {
                             final String nombre;
                             switch (touchedSpot.barIndex) {
-                              case 0: nombre = "Presión Sistólica"; break;
-                              case 1: nombre = "Presión Diastólica"; break;
-                              default: nombre = "Frecuencia Cardiaca";
+                              case 0:
+                                nombre = "Presión Sistólica";
+                                break;
+                              case 1:
+                                nombre = "Presión Diastólica";
+                                break;
+                              default:
+                                nombre = "Frecuencia Cardiaca";
                             }
                             String unidad = touchedSpot.barIndex == 2 ? " lpm" : " mmHg";
-                            return LineTooltipItem("$nombre: ${touchedSpot.y.toInt()}$unidad", const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600));
+                            return LineTooltipItem(
+                              "$nombre: ${touchedSpot.y.toInt()}$unidad",
+                              TextStyle(
+                                color: Colors.white,
+                                fontSize: _responsiveFont(isSmall ? 12 : 14),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            );
                           }).toList();
                         },
                       ),
@@ -1048,21 +1413,41 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
           ),
         ),
         if (hasOutliers) ...[
-          const SizedBox(height: 12),
+          SizedBox(height: _responsiveSize(12)),
           Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.shade200)),
+            padding: EdgeInsets.all(_responsiveSize(12)),
+            decoration: BoxDecoration(
+              color: Colors.orange.shade50,
+              borderRadius: BorderRadius.circular(_responsiveSize(14)),
+              border: Border.all(color: Colors.orange.shade200),
+            ),
             child: Row(
               children: [
-                Icon(Icons.info_outline, size: 16, color: Colors.orange.shade700),
-                const SizedBox(width: 8),
+                Icon(Icons.info_outline,
+                    size: _responsiveSize(isSmall ? 18 : 24),
+                    color: Colors.orange.shade700),
+                SizedBox(width: _responsiveSize(10)),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Valores fuera de rango detectados", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.orange)),
-                      const SizedBox(height: 2),
-                      Wrap(spacing: 8, children: outlierMessages.map((msg) => Text("• $msg", style: TextStyle(fontSize: 10, color: Colors.orange.shade700))).toList()),
+                      Text("Valores fuera de rango detectados",
+                          style: TextStyle(
+                            fontSize: _responsiveFont(isSmall ? 12 : 14),
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange,
+                          )),
+                      SizedBox(height: _responsiveSize(2)),
+                      Wrap(
+                        spacing: _responsiveSize(8),
+                        children: outlierMessages.map((msg) => Text(
+                          "• $msg",
+                          style: TextStyle(
+                            fontSize: _responsiveFont(isSmall ? 11 : 13),
+                            color: Colors.orange.shade700,
+                          ),
+                        )).toList(),
+                      ),
                     ],
                   ),
                 ),
@@ -1077,7 +1462,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   LineChartBarData _crearLineaConOutliers(String key, Color color, bool dashed, double minY, double maxY) {
     List<FlSpot> spots = [];
     List<bool> isOutlier = [];
-    
+
     for (int i = 0; i < signos.length; i++) {
       double value = double.tryParse(signos[i][key]?.toString() ?? "0") ?? 0;
       bool outlier = value < minY || value > maxY;
@@ -1085,7 +1470,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       double displayValue = value.clamp(minY, maxY);
       spots.add(FlSpot(i.toDouble(), displayValue));
     }
-    
+
     return LineChartBarData(
       spots: spots,
       isCurved: true,
@@ -1097,15 +1482,25 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         show: true,
         getDotPainter: (spot, percent, barData, index) {
           bool outlier = isOutlier[index.toInt()];
-          return FlDotCirclePainter(radius: outlier ? 6 : 4, color: outlier ? Colors.orange : color, strokeWidth: 2, strokeColor: Colors.white);
+          return FlDotCirclePainter(
+            radius: outlier ? 6 : 4,
+            color: outlier ? Colors.orange : color,
+            strokeWidth: 2,
+            strokeColor: Colors.white,
+          );
         },
       ),
-      belowBarData: BarAreaData(show: true, color: color.withOpacity(0.08), cutOffY: minY),
+      belowBarData: BarAreaData(
+        show: true,
+        color: color.withOpacity(0.06),
+        cutOffY: minY,
+      ),
       aboveBarData: BarAreaData(show: false),
     );
   }
 
   Widget _buildSignosResumenGrande() {
+    final isSmall = _isSmallScreen();
     final s = signos.first;
     final int sistolica = int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
     final int diastolica = int.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0;
@@ -1116,12 +1511,18 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       children: [
         Row(
           children: [
-            const Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.gray500),
-            const SizedBox(width: 6),
-            Text("Última medición: ${_formatFecha(s["fechaRegistro"])}", style: const TextStyle(fontSize: 13, color: AppTheme.gray500)),
+            Icon(Icons.calendar_today_outlined,
+                size: _responsiveSize(isSmall ? 14 : 18),
+                color: AppTheme.gray500),
+            SizedBox(width: _responsiveSize(6)),
+            Text("Última medición: ${_formatFecha(s["fechaRegistro"])}",
+                style: TextStyle(
+                  fontSize: _responsiveFont(isSmall ? 12 : 15),
+                  color: AppTheme.gray500,
+                )),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: _responsiveSize(16)),
         _bigSignoCard(
           icono: Icons.bloodtype,
           iconColor: AppTheme.danger,
@@ -1134,7 +1535,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
           barra: _barraPresion(sistolica),
           subtexto: "Normal: menos de 120/80",
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: _responsiveSize(12)),
         Row(
           children: [
             Expanded(
@@ -1149,7 +1550,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 badge: _estadoBadgeFC(fc),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: _responsiveSize(10)),
             Expanded(
               child: _smallSignoCard(
                 icono: Icons.air,
@@ -1180,12 +1581,20 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     required Widget barra,
     required String subtexto,
   }) {
+    final isSmall = _isSmallScreen();
+
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(_responsiveSize(isSmall ? 16 : 24)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.subtleShadow,
+        borderRadius: BorderRadius.circular(_responsiveSize(18)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: _responsiveSize(8),
+            offset: Offset(0, _responsiveSize(3)),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1193,23 +1602,44 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
           Row(
             children: [
               Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(16)),
-                child: Icon(icono, color: iconColor, size: 28),
+                width: _responsiveSize(isSmall ? 48 : 64),
+                height: _responsiveSize(isSmall ? 48 : 64),
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(_responsiveSize(14)),
+                ),
+                child: Icon(icono, color: iconColor,
+                    size: _responsiveSize(isSmall ? 24 : 32)),
               ),
-              const SizedBox(width: 16),
+              SizedBox(width: _responsiveSize(14)),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(titulo, style: const TextStyle(fontSize: 14, color: AppTheme.gray500)),
-                    const SizedBox(height: 4),
+                    Text(titulo,
+                        style: TextStyle(
+                          fontSize: _responsiveFont(isSmall ? 13 : 16),
+                          color: AppTheme.gray500,
+                        )),
+                    SizedBox(height: _responsiveSize(4)),
                     RichText(
                       text: TextSpan(
                         children: [
-                          TextSpan(text: valor, style: TextStyle(fontSize: 38, fontWeight: FontWeight.bold, color: valorColor)),
-                          TextSpan(text: "  $unidad", style: const TextStyle(fontSize: 15, color: AppTheme.gray500)),
+                          TextSpan(
+                            text: valor,
+                            style: TextStyle(
+                              fontSize: _responsiveFont(isSmall ? 32 : 44),
+                              fontWeight: FontWeight.bold,
+                              color: valorColor,
+                            ),
+                          ),
+                          TextSpan(
+                            text: "  $unidad",
+                            style: TextStyle(
+                              fontSize: _responsiveFont(isSmall ? 14 : 18),
+                              color: AppTheme.gray500,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1218,12 +1648,16 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: _responsiveSize(14)),
           badge,
-          const SizedBox(height: 14),
+          SizedBox(height: _responsiveSize(12)),
           barra,
-          const SizedBox(height: 8),
-          Text(subtexto, style: const TextStyle(fontSize: 12, color: AppTheme.gray500)),
+          SizedBox(height: _responsiveSize(8)),
+          Text(subtexto,
+              style: TextStyle(
+                fontSize: _responsiveFont(isSmall ? 11 : 14),
+                color: AppTheme.gray500,
+              )),
         ],
       ),
     );
@@ -1239,34 +1673,63 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     required Color valorColor,
     required Widget badge,
   }) {
+    final isSmall = _isSmallScreen();
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(_responsiveSize(isSmall ? 14 : 18)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.subtleShadow,
+        borderRadius: BorderRadius.circular(_responsiveSize(16)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: _responsiveSize(8),
+            offset: Offset(0, _responsiveSize(3)),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(12)),
-            child: Icon(icono, color: iconColor, size: 24),
+            width: _responsiveSize(isSmall ? 40 : 54),
+            height: _responsiveSize(isSmall ? 40 : 54),
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(_responsiveSize(12)),
+            ),
+            child: Icon(icono, color: iconColor,
+                size: _responsiveSize(isSmall ? 20 : 28)),
           ),
-          const SizedBox(height: 12),
-          Text(titulo, style: const TextStyle(fontSize: 12, color: AppTheme.gray500)),
-          const SizedBox(height: 4),
+          SizedBox(height: _responsiveSize(10)),
+          Text(titulo,
+              style: TextStyle(
+                fontSize: _responsiveFont(isSmall ? 11 : 14),
+                color: AppTheme.gray500,
+              )),
+          SizedBox(height: _responsiveSize(4)),
           RichText(
             text: TextSpan(
               children: [
-                TextSpan(text: valor, style: TextStyle(fontSize: 32, fontWeight: FontWeight.bold, color: valorColor)),
-                TextSpan(text: " $unidad", style: const TextStyle(fontSize: 13, color: AppTheme.gray500)),
+                TextSpan(
+                  text: valor,
+                  style: TextStyle(
+                    fontSize: _responsiveFont(isSmall ? 28 : 36),
+                    fontWeight: FontWeight.bold,
+                    color: valorColor,
+                  ),
+                ),
+                TextSpan(
+                  text: " $unidad",
+                  style: TextStyle(
+                    fontSize: _responsiveFont(isSmall ? 12 : 15),
+                    color: AppTheme.gray500,
+                  ),
+                ),
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: _responsiveSize(8)),
           badge,
         ],
       ),
@@ -1274,29 +1737,42 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _estadoBadgePresion(int sistolica) {
-    if (sistolica < 120) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1), AppTheme.success);
-    if (sistolica < 130) return _badgeWidget("Un poco elevada — consulta tu médico", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
-    if (sistolica < 140) return _badgeWidget("Elevada — avisa a tu médico pronto", AppTheme.warning.withOpacity(0.15), AppTheme.warning);
-    return _badgeWidget("Muy alta — busca atención médica", AppTheme.danger.withOpacity(0.1), AppTheme.danger);
+    if (sistolica < 120) return _badgeWidget("Normal ✓", AppTheme.success.withOpacity(0.1), AppTheme.success);
+    if (sistolica < 130) return _badgeWidget("Un poco elevada", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
+    if (sistolica < 140) return _badgeWidget("Elevada", AppTheme.warning.withOpacity(0.15), AppTheme.warning);
+    return _badgeWidget("Muy alta", AppTheme.danger.withOpacity(0.1), AppTheme.danger);
   }
 
   Widget _estadoBadgeFC(int fc) {
-    if (fc >= 60 && fc <= 100) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1), AppTheme.success);
-    if (fc < 60) return _badgeWidget("Baja — informa a tu médico", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
-    return _badgeWidget("Alta — informa a tu médico", AppTheme.warning.withOpacity(0.15), AppTheme.warning);
+    if (fc >= 60 && fc <= 100) return _badgeWidget("Normal ✓", AppTheme.success.withOpacity(0.1), AppTheme.success);
+    if (fc < 60) return _badgeWidget("Baja", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
+    return _badgeWidget("Alta", AppTheme.warning.withOpacity(0.15), AppTheme.warning);
   }
 
   Widget _estadoBadgeSpo2(int spo2) {
-    if (spo2 >= 95) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1), AppTheme.success);
-    if (spo2 >= 90) return _badgeWidget("Un poco bajo — avisa a tu médico", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
-    return _badgeWidget("Muy bajo — busca atención urgente", AppTheme.danger.withOpacity(0.1), AppTheme.danger);
+    if (spo2 >= 95) return _badgeWidget("Normal ✓", AppTheme.success.withOpacity(0.1), AppTheme.success);
+    if (spo2 >= 90) return _badgeWidget("Un poco bajo", AppTheme.warning.withOpacity(0.1), AppTheme.warning);
+    return _badgeWidget("Muy bajo", AppTheme.danger.withOpacity(0.1), AppTheme.danger);
   }
 
   Widget _badgeWidget(String texto, Color bg, Color fg) {
+    final isSmall = _isSmallScreen();
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
-      child: Text(texto, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+      padding: EdgeInsets.symmetric(
+        horizontal: _responsiveSize(isSmall ? 10 : 14),
+        vertical: _responsiveSize(isSmall ? 6 : 8),
+      ),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(_responsiveSize(8)),
+      ),
+      child: Text(texto,
+          style: TextStyle(
+            fontSize: _responsiveFont(isSmall ? 12 : 14),
+            fontWeight: FontWeight.w600,
+            color: fg,
+          )),
     );
   }
 
@@ -1326,12 +1802,12 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             Text("Alta", style: TextStyle(fontSize: 11, color: AppTheme.gray500)),
           ],
         ),
-        const SizedBox(height: 6),
+        SizedBox(height: _responsiveSize(6)),
         ClipRRect(
           borderRadius: BorderRadius.circular(100),
           child: LinearProgressIndicator(
             value: progreso,
-            minHeight: 8,
+            minHeight: _responsiveSize(8),
             backgroundColor: AppTheme.gray200,
             valueColor: AlwaysStoppedAnimation<Color>(colorBarra),
           ),
@@ -1341,24 +1817,33 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _buildReferenciaSignos() {
+    final isSmall = _isSmallScreen();
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(_responsiveSize(isSmall ? 14 : 18)),
       decoration: BoxDecoration(
         color: AppTheme.primary.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+        borderRadius: BorderRadius.circular(_responsiveSize(16)),
+        border: Border.all(color: AppTheme.primary.withOpacity(0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.info_outline, size: 16, color: AppTheme.primary),
-              const SizedBox(width: 8),
-              Text("Valores normales de referencia", style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: AppTheme.primary)),
+              Icon(Icons.info_outline,
+                  size: _responsiveSize(isSmall ? 18 : 22),
+                  color: AppTheme.primary),
+              SizedBox(width: _responsiveSize(8)),
+              Text("Valores normales de referencia",
+                  style: TextStyle(
+                    fontSize: _responsiveFont(isSmall ? 13 : 16),
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.primary,
+                  )),
             ],
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: _responsiveSize(12)),
           _filaReferencia("Presión arterial", "menos de 120/80 mmHg"),
           _filaReferencia("Frecuencia cardiaca", "entre 60 y 100 lpm"),
           _filaReferencia("Oxígeno en sangre", "entre 95% y 100%"),
@@ -1368,58 +1853,88 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _filaReferencia(String nombre, String valor) {
+    final isSmall = _isSmallScreen();
+
     return Padding(
-      padding: const EdgeInsets.only(top: 8),
+      padding: EdgeInsets.only(top: _responsiveSize(8)),
       child: Row(
         children: [
-          const Icon(Icons.circle, size: 6, color: AppTheme.primary),
-          const SizedBox(width: 8),
-          Text(nombre, style: const TextStyle(fontSize: 13)),
+          Icon(Icons.circle, size: _responsiveSize(isSmall ? 6 : 8),
+              color: AppTheme.primary),
+          SizedBox(width: _responsiveSize(8)),
+          Text(nombre,
+              style: TextStyle(fontSize: _responsiveFont(isSmall ? 13 : 15))),
           const Spacer(),
-          Text(valor, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+          Text(valor,
+              style: TextStyle(
+                fontSize: _responsiveFont(isSmall ? 13 : 15),
+                fontWeight: FontWeight.w600,
+              )),
         ],
       ),
     );
   }
 
   Widget _leyenda(Color color, String label) {
+    final isSmall = _isSmallScreen();
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(width: 12, height: 3, color: color),
-        const SizedBox(width: 6),
-        Text(label, style: const TextStyle(fontSize: 11)),
+        Container(
+          width: _responsiveSize(isSmall ? 10 : 14),
+          height: _responsiveSize(isSmall ? 3 : 4),
+          color: color,
+        ),
+        SizedBox(width: _responsiveSize(6)),
+        Text(label,
+            style: TextStyle(fontSize: _responsiveFont(isSmall ? 10 : 13))),
       ],
     );
   }
 
   Widget _buildSignoCard(Map<String, dynamic> s) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(16),
+    final isSmall = _isSmallScreen();
+
+    return Container(
+      margin: EdgeInsets.only(bottom: _responsiveSize(10)),
+      padding: EdgeInsets.all(_responsiveSize(isSmall ? 14 : 18)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.subtleShadow,
+        borderRadius: BorderRadius.circular(_responsiveSize(16)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: _responsiveSize(6),
+            offset: Offset(0, _responsiveSize(3)),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(color: AppTheme.danger.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-            child: const Icon(Icons.favorite, color: AppTheme.danger, size: 22),
+            padding: EdgeInsets.all(_responsiveSize(isSmall ? 8 : 12)),
+            decoration: BoxDecoration(
+              color: AppTheme.danger.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(_responsiveSize(10)),
+            ),
+            child: Icon(Icons.favorite, color: AppTheme.danger,
+                size: _responsiveSize(isSmall ? 18 : 26)),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: _responsiveSize(12)),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("${s["presionSistolica"]}/${s["presionDiastolica"]} mmHg", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                const SizedBox(height: 6),
+                Text("${s["presionSistolica"]}/${s["presionDiastolica"]} mmHg",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: _responsiveFont(isSmall ? 14 : 17),
+                    )),
+                SizedBox(height: _responsiveSize(6)),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
+                  spacing: _responsiveSize(8),
+                  runSpacing: _responsiveSize(4),
                   children: [
                     _pill("FC ${s["frecuenciaCardiaca"]}", Colors.pink),
                     _pill("SpO2 ${s["saturacionOxigeno"]}%", Colors.teal),
@@ -1428,50 +1943,80 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               ],
             ),
           ),
-          Text(_formatFecha(s["fechaRegistro"]), style: const TextStyle(fontSize: 11, color: AppTheme.gray500)),
+          Text(_formatFecha(s["fechaRegistro"]),
+              style: TextStyle(
+                fontSize: _responsiveFont(isSmall ? 11 : 13),
+                color: AppTheme.gray500,
+              )),
         ],
       ),
     );
   }
 
   Widget _pill(String text, Color color) {
+    final isSmall = _isSmallScreen();
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
-      child: Text(text, style: TextStyle(fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+      padding: EdgeInsets.symmetric(
+        horizontal: _responsiveSize(isSmall ? 6 : 10),
+        vertical: _responsiveSize(isSmall ? 4 : 6),
+      ),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(_responsiveSize(8)),
+      ),
+      child: Text(text,
+          style: TextStyle(
+            fontSize: _responsiveFont(isSmall ? 11 : 14),
+            color: color,
+            fontWeight: FontWeight.w600,
+          )),
     );
   }
 
   Widget _sintomasView() {
+    final isSmall = _isSmallScreen();
+
     if (sintomas.isEmpty) {
-      return _buildEmptyPage("Sin síntomas reportados", Icons.healing, "El paciente no ha registrado síntomas recientes.");
+      return _buildEmptyPage(
+        "Sin síntomas reportados",
+        Icons.healing,
+        "El paciente no ha registrado síntomas recientes.\nTodo parece estar bien.",
+      );
     }
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(_responsiveSize(16)),
       itemCount: sintomas.length,
       itemBuilder: (_, i) {
         final s = sintomas[i];
         final prioridad = s["prioridad"]?.toString() ?? "MEDIA";
-        final color = prioridad == "ALTA" ? AppTheme.danger : prioridad == "BAJA" ? AppTheme.success : AppTheme.warning;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(16),
+        final color = prioridad == "ALTA" ? AppTheme.danger :
+            prioridad == "BAJA" ? AppTheme.success : AppTheme.warning;
+        return Container(
+          margin: EdgeInsets.only(bottom: _responsiveSize(10)),
+          padding: EdgeInsets.all(_responsiveSize(isSmall ? 14 : 18)),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: AppTheme.subtleShadow,
+            borderRadius: BorderRadius.circular(_responsiveSize(16)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: _responsiveSize(8),
+                offset: Offset(0, _responsiveSize(3)),
+              ),
+            ],
+            border: Border.all(color: color.withOpacity(0.15)),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                width: 10,
-                height: 10,
-                margin: const EdgeInsets.only(top: 4),
+                width: _responsiveSize(isSmall ? 10 : 14),
+                height: _responsiveSize(isSmall ? 10 : 14),
+                margin: EdgeInsets.only(top: _responsiveSize(4)),
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
-              const SizedBox(width: 14),
+              SizedBox(width: _responsiveSize(12)),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1479,20 +2024,44 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     Row(
                       children: [
                         Expanded(
-                          child: Text(s["titulo"] ?? "", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          child: Text(s["titulo"] ?? "",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: _responsiveFont(isSmall ? 14 : 17),
+                              )),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                          child: Text(prioridad, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.bold)),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: _responsiveSize(10),
+                            vertical: _responsiveSize(4),
+                          ),
+                          decoration: BoxDecoration(
+                            color: color.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(_responsiveSize(16)),
+                          ),
+                          child: Text(prioridad,
+                              style: TextStyle(
+                                fontSize: _responsiveFont(isSmall ? 11 : 13),
+                                color: color,
+                                fontWeight: FontWeight.bold,
+                              )),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 6),
-                    Text(s["descripcion"] ?? "", style: const TextStyle(fontSize: 13, color: AppTheme.gray500)),
+                    SizedBox(height: _responsiveSize(6)),
+                    Text(s["descripcion"] ?? "",
+                        style: TextStyle(
+                          fontSize: _responsiveFont(isSmall ? 13 : 15),
+                          color: AppTheme.gray500,
+                          height: 1.4,
+                        )),
                     if (s["fecha"] != null) ...[
-                      const SizedBox(height: 6),
-                      Text(_formatFecha(s["fecha"]), style: const TextStyle(fontSize: 11, color: AppTheme.gray500)),
+                      SizedBox(height: _responsiveSize(6)),
+                      Text(_formatFecha(s["fecha"]),
+                          style: TextStyle(
+                            fontSize: _responsiveFont(isSmall ? 12 : 14),
+                            color: AppTheme.gray500,
+                          )),
                     ],
                   ],
                 ),
@@ -1505,20 +2074,35 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _tratamientosView() {
+    final isSmall = _isSmallScreen();
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: EdgeInsets.fromLTRB(
+            _responsiveSize(16),
+            _responsiveSize(16),
+            _responsiveSize(16),
+            _responsiveSize(12),
+          ),
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text("Agregar tratamiento", style: TextStyle(fontWeight: FontWeight.w600)),
+              icon: Icon(Icons.add, size: _responsiveSize(isSmall ? 20 : 24)),
+              label: Text(
+                isSmall ? "Agregar" : "Agregar tratamiento",
+                style: TextStyle(
+                  fontSize: _responsiveFont(isSmall ? 14 : 16),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.success,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(vertical: _responsiveSize(isSmall ? 14 : 16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_responsiveSize(12)),
+                ),
               ),
               onPressed: () => Navigator.push(
                 context,
@@ -1534,64 +2118,111 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         ),
         Expanded(
           child: tratamientos.isEmpty
-              ? _buildEmptyPage("Sin tratamientos", Icons.medical_services_outlined, "No hay tratamientos asignados a este paciente.")
+              ? _buildEmptyPage(
+                  "Sin tratamientos asignados",
+                  Icons.medical_services_outlined,
+                  "No hay tratamientos asignados a este paciente.\nToque el botón para agregar uno.",
+                )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: _responsiveSize(16)),
                   itemCount: tratamientos.length,
                   itemBuilder: (_, i) {
                     final t = tratamientos[i];
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin: const EdgeInsets.only(bottom: 10),
+                    return Container(
+                      margin: EdgeInsets.only(bottom: _responsiveSize(10)),
                       decoration: BoxDecoration(
                         color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: AppTheme.subtleShadow,
+                        borderRadius: BorderRadius.circular(_responsiveSize(16)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: _responsiveSize(8),
+                            offset: Offset(0, _responsiveSize(3)),
+                          ),
+                        ],
                       ),
                       child: FutureBuilder<List<Map<String, dynamic>>>(
-                        future: tratamientoService.getMedicamentos(int.parse(t["idTratamiento"].toString())),
+                        future: tratamientoService.getMedicamentos(
+                            int.parse(t["idTratamiento"].toString())),
                         builder: (ctx, snap) {
                           final meds = snap.data ?? [];
                           return ExpansionTile(
-                            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            leading: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(color: AppTheme.success.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-                              child: const Icon(Icons.medication, color: AppTheme.success, size: 22),
+                            tilePadding: EdgeInsets.symmetric(
+                              horizontal: _responsiveSize(16),
+                              vertical: _responsiveSize(8),
                             ),
-                            title: Text(t["descripcion"] ?? "", style: const TextStyle(fontWeight: FontWeight.w600)),
+                            leading: Container(
+                              padding: EdgeInsets.all(_responsiveSize(8)),
+                              decoration: BoxDecoration(
+                                color: AppTheme.success.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(_responsiveSize(10)),
+                              ),
+                              child: Icon(Icons.medication,
+                                  color: AppTheme.success,
+                                  size: _responsiveSize(isSmall ? 20 : 26)),
+                            ),
+                            title: Text(t["descripcion"] ?? "",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: _responsiveFont(isSmall ? 14 : 16),
+                                )),
                             subtitle: Text(
                               "${t["estado"] ?? "-"}  ·  ${_formatFecha(t["fechaInicio"])} → ${_formatFecha(t["fechaFin"])}",
-                              style: const TextStyle(fontSize: 11, color: AppTheme.gray500),
+                              style: TextStyle(
+                                fontSize: _responsiveFont(isSmall ? 11 : 14),
+                                color: AppTheme.gray500,
+                              ),
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 IconButton(
-                                  icon: const Icon(Icons.edit_outlined, size: 18, color: Colors.blue),
+                                  iconSize: _responsiveSize(isSmall ? 20 : 26),
+                                  icon: Icon(Icons.edit_outlined,
+                                      size: _responsiveSize(isSmall ? 20 : 26),
+                                      color: Colors.blue),
                                   tooltip: "Editar tratamiento",
                                   onPressed: () => Navigator.push(
                                     context,
-                                    MaterialPageRoute(builder: (_) => EditarTratamientoScreen(tratamiento: t)),
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          EditarTratamientoScreen(tratamiento: t),
+                                    ),
                                   ).then((actualizado) {
                                     if (actualizado == true) loadTratamientos();
                                   }),
                                 ),
-                                const Icon(Icons.expand_more, size: 20, color: AppTheme.gray400),
+                                Icon(Icons.expand_more,
+                                    size: _responsiveSize(isSmall ? 20 : 26),
+                                    color: AppTheme.gray400),
                               ],
                             ),
                             children: meds.isEmpty
                                 ? [
-                                    const Padding(
-                                      padding: EdgeInsets.all(16),
-                                      child: Text("Sin medicamentos asignados", style: TextStyle(fontSize: 13, color: AppTheme.gray500)),
+                                    Padding(
+                                      padding: EdgeInsets.all(_responsiveSize(16)),
+                                      child: Text("Sin medicamentos asignados",
+                                          style: TextStyle(
+                                            fontSize: _responsiveFont(isSmall ? 13 : 15),
+                                            color: AppTheme.gray500,
+                                          )),
                                     ),
                                   ]
                                 : meds.map((m) => ListTile(
-                                    leading: const Icon(Icons.medication_liquid, color: AppTheme.success, size: 20),
-                                    title: Text(m["nombre"] ?? "", style: const TextStyle(fontWeight: FontWeight.w600)),
-                                    subtitle: Text("${m["dosis"]} — Cada ${m["frecuencia"]}", style: const TextStyle(fontSize: 12)),
-                                  )).toList(),
+                              leading: Icon(Icons.medication_liquid,
+                                  color: AppTheme.success,
+                                  size: _responsiveSize(isSmall ? 18 : 24)),
+                              title: Text(m["nombre"] ?? "",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: _responsiveFont(isSmall ? 13 : 15),
+                                  )),
+                              subtitle: Text(
+                                  "${m["dosis"]} — Cada ${m["frecuencia"]}",
+                                  style: TextStyle(
+                                    fontSize: _responsiveFont(isSmall ? 12 : 14),
+                                  )),
+                            )).toList(),
                           );
                         },
                       ),
@@ -1604,20 +2235,35 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _citasView() {
+    final isSmall = _isSmallScreen();
+
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          padding: EdgeInsets.fromLTRB(
+            _responsiveSize(16),
+            _responsiveSize(16),
+            _responsiveSize(16),
+            _responsiveSize(12),
+          ),
           child: SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
-              icon: const Icon(Icons.list_alt, size: 18),
-              label: const Text("Ver / Gestionar citas"),
+              icon: Icon(Icons.list_alt, size: _responsiveSize(isSmall ? 20 : 24)),
+              label: Text(
+                isSmall ? "Ver citas" : "Ver / Gestionar citas",
+                style: TextStyle(
+                  fontSize: _responsiveFont(isSmall ? 14 : 16),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppTheme.primary,
-                side: const BorderSide(color: AppTheme.primary),
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                side: BorderSide(color: AppTheme.primary, width: isSmall ? 1 : 2),
+                padding: EdgeInsets.symmetric(vertical: _responsiveSize(isSmall ? 14 : 16)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(_responsiveSize(12)),
+                ),
               ),
               onPressed: () {
                 loadCitas();
@@ -1631,9 +2277,13 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         ),
         Expanded(
           child: citas.isEmpty
-              ? _buildEmptyPage("Sin citas registradas", Icons.event_busy, "Este paciente no tiene citas programadas.")
+              ? _buildEmptyPage(
+                  "Sin citas registradas",
+                  Icons.event_busy,
+                  "Este paciente no tiene citas programadas.\nAgende una cita cuando sea necesario.",
+                )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: EdgeInsets.symmetric(horizontal: _responsiveSize(16)),
                   itemCount: citas.length,
                   itemBuilder: (_, i) => _buildCitaCard(citas[i]),
                 ),
@@ -1643,17 +2293,26 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   Widget _buildCitaCard(Map<String, dynamic> c) {
+    final isSmall = _isSmallScreen();
     final estado = c["estado"]?.toString().toLowerCase() ?? "pendiente";
-    final estadoColor = estado == "aprobada" ? AppTheme.success : estado == "rechazada" || estado == "cancelada" ? AppTheme.danger : AppTheme.warning;
+    final estadoColor = estado == "aprobada" ? AppTheme.success :
+        estado == "rechazada" || estado == "cancelada" ? AppTheme.danger :
+        AppTheme.warning;
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
+    return Container(
+      margin: EdgeInsets.only(bottom: _responsiveSize(10)),
+      padding: EdgeInsets.all(_responsiveSize(isSmall ? 14 : 18)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.subtleShadow,
+        borderRadius: BorderRadius.circular(_responsiveSize(16)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: _responsiveSize(8),
+            offset: Offset(0, _responsiveSize(3)),
+          ),
+        ],
+        border: Border.all(color: estadoColor.withOpacity(0.15)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1661,47 +2320,83 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
           Row(
             children: [
               Expanded(
-                child: Text(c["motivo"] ?? "Sin motivo", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                child: Text(c["motivo"] ?? "Sin motivo",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: _responsiveFont(isSmall ? 14 : 17),
+                    )),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: estadoColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                child: Text(estado.toUpperCase(), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: estadoColor)),
+                padding: EdgeInsets.symmetric(
+                  horizontal: _responsiveSize(10),
+                  vertical: _responsiveSize(4),
+                ),
+                decoration: BoxDecoration(
+                  color: estadoColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(_responsiveSize(16)),
+                ),
+                child: Text(estado.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: _responsiveFont(isSmall ? 11 : 13),
+                      fontWeight: FontWeight.bold,
+                      color: estadoColor,
+                    )),
               ),
             ],
           ),
-          const SizedBox(height: 6),
-          Text(_formatFecha(c["fecha"]), style: const TextStyle(fontSize: 12, color: AppTheme.gray500)),
-          const SizedBox(height: 14),
+          SizedBox(height: _responsiveSize(6)),
+          Text(_formatFecha(c["fecha"]),
+              style: TextStyle(
+                fontSize: _responsiveFont(isSmall ? 13 : 15),
+                color: AppTheme.gray500,
+              )),
+          SizedBox(height: _responsiveSize(14)),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: AppTheme.primary,
-                    side: const BorderSide(color: AppTheme.gray500),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    side: BorderSide(color: AppTheme.primary, width: isSmall ? 1 : 1.5),
+                    padding: EdgeInsets.symmetric(vertical: _responsiveSize(isSmall ? 10 : 12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(_responsiveSize(10)),
+                    ),
                   ),
                   onPressed: () => _cambiarEstadoCita(c),
-                  child: const Text("Cambiar estado"),
+                  child: Text(
+                    isSmall ? "Cambiar" : "Cambiar estado",
+                    style: TextStyle(
+                      fontSize: _responsiveFont(isSmall ? 13 : 15),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: _responsiveSize(8)),
               OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.danger,
-                  side: const BorderSide(color: AppTheme.danger),
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  side: BorderSide(color: AppTheme.danger, width: isSmall ? 1 : 1.5),
+                  padding: EdgeInsets.symmetric(vertical: _responsiveSize(isSmall ? 10 : 12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(_responsiveSize(10)),
+                  ),
                 ),
                 onPressed: () async {
                   final ok = await citaService.eliminarCita(c["idCita"]);
                   if (ok && mounted) {
                     setState(() => citas.removeWhere((x) => x["idCita"] == c["idCita"]));
+                    _snack("✅ Cita eliminada correctamente");
                   }
                 },
-                child: const Text("Eliminar"),
+                child: Text(
+                  isSmall ? "Eliminar" : "Eliminar",
+                  style: TextStyle(
+                    fontSize: _responsiveFont(isSmall ? 13 : 15),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1716,41 +2411,60 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(_responsiveSize(20))),
+      ),
       backgroundColor: Colors.white,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setD) => Padding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+          padding: EdgeInsets.fromLTRB(
+            _responsiveSize(24),
+            _responsiveSize(20),
+            _responsiveSize(24),
+            _responsiveSize(24),
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Cambiar estado", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 16),
+              Text("Cambiar estado de la cita",
+                  style: TextStyle(
+                    fontSize: _responsiveFont(20),
+                    fontWeight: FontWeight.bold,
+                  )),
+              SizedBox(height: _responsiveSize(16)),
               ..._estadosCita.map((e) => RadioListTile<String>(
                     dense: true,
                     value: e,
                     groupValue: estadoSel,
-                    title: Text(e.toUpperCase(), style: const TextStyle(fontSize: 13)),
+                    title: Text(e.toUpperCase(),
+                        style: TextStyle(fontSize: _responsiveFont(15))),
                     activeColor: AppTheme.primary,
                     onChanged: (v) => setD(() => estadoSel = v!),
                   )),
-              const SizedBox(height: 8),
+              SizedBox(height: _responsiveSize(12)),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: EdgeInsets.symmetric(vertical: _responsiveSize(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(_responsiveSize(12)),
+                    ),
                   ),
                   onPressed: () async {
-                    final ok = await citaService.actualizarEstado(c["idCita"], estadoSel);
+                    final ok = await citaService.actualizarEstado(
+                        c["idCita"], estadoSel);
                     if (ok && mounted) setState(() => c["estado"] = estadoSel);
                     if (mounted) Navigator.pop(context);
                   },
-                  child: const Text("Guardar"),
+                  child: Text("Guardar cambios",
+                      style: TextStyle(
+                        fontSize: _responsiveFont(16),
+                        fontWeight: FontWeight.w600,
+                      )),
                 ),
               ),
             ],
@@ -1763,18 +2477,28 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   Widget _buildEmpty(String msg, IconData icon) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(_responsiveSize(24)),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.subtleShadow,
+        borderRadius: BorderRadius.circular(_responsiveSize(16)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: _responsiveSize(8),
+            offset: Offset(0, _responsiveSize(3)),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: AppTheme.gray300, size: 48),
-          const SizedBox(height: 12),
-          Text(msg, style: const TextStyle(color: AppTheme.gray500, fontSize: 14)),
+          Icon(icon, color: AppTheme.gray300, size: _responsiveSize(48)),
+          SizedBox(height: _responsiveSize(12)),
+          Text(msg,
+              style: TextStyle(
+                color: AppTheme.gray500,
+                fontSize: _responsiveFont(16),
+              )),
         ],
       ),
     );
@@ -1782,15 +2506,29 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
   Widget _buildEmptyPage(String title, IconData icon, String sub) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 64, color: AppTheme.gray300),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppTheme.gray500)),
-          const SizedBox(height: 8),
-          Text(sub, style: const TextStyle(color: AppTheme.gray400, fontSize: 14), textAlign: TextAlign.center),
-        ],
+      child: Padding(
+        padding: EdgeInsets.all(_responsiveSize(24)),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: _responsiveSize(64), color: AppTheme.gray300),
+            SizedBox(height: _responsiveSize(16)),
+            Text(title,
+                style: TextStyle(
+                  fontSize: _responsiveFont(20),
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.gray500,
+                )),
+            SizedBox(height: _responsiveSize(10)),
+            Text(sub,
+                style: TextStyle(
+                  color: AppTheme.gray400,
+                  fontSize: _responsiveFont(16),
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center),
+          ],
+        ),
       ),
     );
   }

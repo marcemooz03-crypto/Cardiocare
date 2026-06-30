@@ -69,9 +69,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       onNuevaNotificacion: (notificacion) {
         if (!mounted) return;
         setState(() {
-          // Insertar al inicio
           listaNotificaciones.insert(0, notificacion);
-          // Solo incrementar si no está leída
           if (!(notificacion["leida"] ?? false)) {
             notificacionesNoLeidas++;
           }
@@ -125,6 +123,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     );
   }
 
+  // ✅ CORREGIDO: openPerfil - ya no recarga el dashboard al volver
   void openPerfil() {
     if (idPaciente == null) return;
     Navigator.push(
@@ -137,6 +136,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         ),
       ),
     );
+    // ❌ ELIMINADO: .then((_) => loadProfile()) - Esto causaba la recarga innecesaria
   }
 
   void openConfiguracion() {
@@ -308,7 +308,6 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   void _mostrarPanelNotificaciones() {
-    // Marcar todas como leídas al abrir el panel
     _marcarTodasComoLeidas();
     
     showModalBottomSheet(

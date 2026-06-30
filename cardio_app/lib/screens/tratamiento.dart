@@ -35,7 +35,7 @@ class _TratamientoScreenState extends State<TratamientoScreen> {
     try {
       final data = await _service.getByPaciente(widget.idPaciente);
       
-      debugPrint("💊 TRATAMIENTOS RESPONSE: $data");
+      debugPrint(" TRATAMIENTOS RESPONSE: $data");
       
       if (mounted) {
         setState(() {
@@ -101,7 +101,7 @@ class _TratamientoScreenState extends State<TratamientoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Tratamientos 💊"),
+        title: const Text("Tratamientos "),
         elevation: 0,
         actions: [
           if (!_isLoading && _tratamientos.isNotEmpty)
