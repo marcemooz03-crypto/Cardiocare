@@ -67,7 +67,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   final Map<String, bool> _activoLocal = {};
   final Map<String, String> _horaOriginal = {};
 
-  // ✅ Cache para evitar recargas innecesarias
   bool _recordatoriosCargados = false;
   bool _tratamientosCargados = false;
   bool _signosCargados = false;
@@ -120,7 +119,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     return fa.compareTo(fb);
   }
 
-  // ✅ Guardar estado en SharedPreferences
   Future<void> _guardarEstadoRecordatorios() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -140,13 +138,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     }
   }
 
-  // ✅ Cargar estado desde SharedPreferences
   Future<void> _cargarEstadoRecordatorios() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final keyPrefix = 'recordatorios_${widget.idPaciente}_';
       
-      // No sobrescribir si ya hay datos en memoria
       if (_activoLocal.isNotEmpty && _horaOriginal.isNotEmpty) {
         debugPrint("📋 Datos en memoria ya cargados, omitiendo SharedPreferences");
         return;
@@ -192,9 +188,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       _cargarRecordatorios(),
     ]);
     
-    // ✅ Cargar estado guardado (después de cargar los recordatorios)
     await _cargarEstadoRecordatorios();
-    
     await _cargarTodosLosMensajesNoLeidos();
     
     if (!mounted) return;
@@ -323,7 +317,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   }
 
   Future<void> _cargarRecordatorios() async {
-    // ✅ Si ya están cargados y hay datos, NO recargar
     if (_recordatoriosCargados && _recordatoriosBD.isNotEmpty) {
       debugPrint("📋 Recordatorios ya cargados en cache, omitiendo recarga");
       return;
@@ -334,9 +327,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       if (!mounted) return;
 
       _recordatoriosBD.clear();
-      
-      // ✅ NO limpiar _activoLocal ni _horaOriginal si ya tienen datos guardados
-      // Solo establecer valores que no existan
 
       final Map<int, Map<String, dynamic>> porTratamiento = {};
       for (final r in lista) {
@@ -354,7 +344,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         if (rec != null) {
           _recordatoriosBD[key] = rec;
           
-          // ✅ Solo establecer si no existe en _horaOriginal
           if (!_horaOriginal.containsKey(key) || _horaOriginal[key] == "--:--") {
             String horaOriginal = rec["hora"]?.toString() ?? "";
             if (horaOriginal.length > 5) {
@@ -363,7 +352,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
             _horaOriginal[key] = horaOriginal;
           }
           
-          // ✅ Solo establecer si no existe en _activoLocal
           if (!_activoLocal.containsKey(key)) {
             final activo = rec["activo"] == 1 || rec["activo"] == true;
             _activoLocal[key] = activo;
@@ -557,13 +545,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 final noLeidos = _mensajesNoLeidosPorMedico[idMedico] ?? 0;
                 
                 return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppTheme.primary.withOpacity(0.1),
-                    child: Text(
-                      nombreMedico.isNotEmpty ? nombreMedico[0].toUpperCase() : "M",
-                      style: const TextStyle(color: AppTheme.primary, fontWeight: FontWeight.bold),
-                    ),
-                  ),
+                  leading: _buildCircleAvatarMedico(nombreMedico),
                   title: Text(nombreMedico, style: const TextStyle(fontWeight: FontWeight.w600)),
                   subtitle: Text(especialidad.isNotEmpty ? especialidad : "Médico tratante"),
                   trailing: Row(
@@ -622,6 +604,108 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
 
   int _toInt(dynamic v) => int.tryParse(v?.toString() ?? "") ?? 0;
 
+  // ✅ AVATAR DEL PACIENTE CON IMAGEN LOCAL
+  Widget _buildAvatarPaciente(String nombre) {
+    return Container(
+      width: 70,
+      height: 70,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withOpacity(0.2),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+        image: const DecorationImage(
+          image: AssetImage('assets/images/profile.jpg'),
+          fit: BoxFit.cover,
+        ),
+      ),
+      child: Align(
+        alignment: Alignment.bottomRight,
+        child: Container(
+          width: 22,
+          height: 22,
+          decoration: const BoxDecoration(
+            color: AppTheme.success,
+            shape: BoxShape.circle,
+            border: Border.fromBorderSide(
+              BorderSide(color: Colors.white, width: 2),
+            ),
+          ),
+          child: const Icon(
+            Icons.check,
+            color: Colors.white,
+            size: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ AVATAR DEL MÉDICO CON IMAGEN LOCAL
+  Widget _buildCircleAvatarMedico(String nombre) {
+    return CircleAvatar(
+      radius: 24,
+      backgroundColor: AppTheme.primary.withOpacity(0.1),
+      backgroundImage: const AssetImage('assets/images/medico.png'),
+      onBackgroundImageError: (_, __) {
+        // Si falla la imagen, mostrar iniciales
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black.withOpacity(0.1),
+        ),
+        child: Center(
+          child: Text(
+            nombre.isNotEmpty ? nombre[0].toUpperCase() : "M",
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 16,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ AVATAR DEL MÉDICO EN LA TARJETA (VERSIÓN GRANDE)
+  Widget _buildMedicoAvatarGrande(String nombre) {
+    return Container(
+      width: 55,
+      height: 55,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+        image: const DecorationImage(
+          image: AssetImage('assets/images/medico.jpg'),
+          fit: BoxFit.cover,
+        ),
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.black.withOpacity(0.1),
+        ),
+        child: Center(
+          child: Text(
+            nombre.isNotEmpty ? nombre[0].toUpperCase() : "M",
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _toggleRecordatorio(String key, bool nuevoValor, Map<String, dynamic> med) async {
     if (!nuevoValor) {
       try {
@@ -637,20 +721,20 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               };
               _activoLocal[key] = false;
             });
-            await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+            await _guardarEstadoRecordatorios();
             _snack("✗ Recordatorio desactivado para ${med["nombre"]}");
           } else {
             setState(() {
               _activoLocal[key] = false;
             });
-            await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+            await _guardarEstadoRecordatorios();
             _snack("✗ Recordatorio desactivado");
           }
         } else {
           setState(() {
             _activoLocal[key] = false;
           });
-          await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+          await _guardarEstadoRecordatorios();
           _snack("✗ Recordatorio desactivado");
         }
         return;
@@ -715,7 +799,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           _activoLocal[key] = true;
           _horaOriginal[key] = horaFormateada;
         });
-        await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+        await _guardarEstadoRecordatorios();
       } else {
         final idTratamiento = int.tryParse(key.split("_").first) ?? 0;
         if (idTratamiento == 0) {
@@ -740,7 +824,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           _activoLocal[key] = true;
           _horaOriginal[key] = horaFormateada;
         });
-        await _guardarEstadoRecordatorios(); // ✅ Guardar estado
+        await _guardarEstadoRecordatorios();
       }
       
       _snack("✓ Recordatorio activado para ${med["nombre"]} a las $horaFormateada");
@@ -974,34 +1058,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         ],
                       ),
                     ),
-                    Stack(
-                      children: [
-                        Container(
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: IconButton(
-                            icon: const Icon(Icons.chat_bubble_outline, color: Colors.white, size: 26),
-                            onPressed: abrirChatGeneral,
-                          ),
-                        ),
-                        if (mensajesNoLeidos > 0)
-                          Positioned(
-                            right: 8,
-                            top: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
-                              child: Text(
-                                mensajesNoLeidos > 9 ? "9+" : "$mensajesNoLeidos",
-                                style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(width: 8),
+                    // ✅ SOLO EL ICONO DE CONFIGURACIÓN - ELIMINADO EL CHAT
                     Container(
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.2),
@@ -2052,20 +2109,48 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
+  // ✅ HEADER CON FOTO DE PERFIL DEL PACIENTE (profile.png)
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(gradient: AppTheme.primaryGradient.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: AppTheme.primary.withOpacity(0.2))),
+      decoration: BoxDecoration(
+        gradient: AppTheme.primaryGradient.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
+      ),
       child: Row(
         children: [
-          Container(width: 70, height: 70, decoration: const BoxDecoration(gradient: AppTheme.primaryGradient, shape: BoxShape.circle), child: Center(child: Text((paciente?["nombre"] ?? "").isNotEmpty ? paciente!["nombre"][0].toUpperCase() : "P", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 28)))),
+          _buildAvatarPaciente(paciente?["nombre"] ?? ""),
           const SizedBox(width: 16),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(paciente?["nombre"] ?? "", style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)), const SizedBox(height: 6), Text("🏥 EPS: ${paciente?["eps"] ?? "-"}", style: const TextStyle(fontSize: 15, color: AppTheme.gray500))])),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  paciente?["nombre"] ?? "",
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.gray700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  "🏥 EPS: ${paciente?["eps"] ?? "-"}",
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: AppTheme.gray500,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
+  // ✅ TARJETA DEL MÉDICO CON FOTO (medico.png)
   Widget _buildMedicoCard() {
     if (medicos.isEmpty) {
       return Container(
@@ -2144,24 +2229,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       ),
       child: Row(
         children: [
-          Container(
-            width: 55,
-            height: 55,
-            decoration: const BoxDecoration(
-              color: Colors.white24,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                nombreMedico.isNotEmpty ? nombreMedico[0].toUpperCase() : "M",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                ),
-              ),
-            ),
-          ),
+          // ✅ Foto de perfil del médico (medico.png)
+          _buildMedicoAvatarGrande(nombreMedico),
           const SizedBox(width: 14),
           Expanded(
             child: Column(

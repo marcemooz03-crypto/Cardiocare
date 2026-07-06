@@ -1,32 +1,19 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:mime/mime.dart';
 
-/// Servicio de chat — sincronizado con las rutas del backend:
-///
-///   POST   /chat/conversacion
-///   GET    /chat/conversacion/:idUsuario/:idMedico
-///   POST   /chat/mensaje
-///   GET    /chat/mensajes/:idConversacion
-///   GET    /chat/no-leidos/:idConversacion/:idUsuario
-///   PUT    /chat/marcar-leidos/:idConversacion   { idUsuario }
-///
-/// La tabla mensaje usa la columna "fecha" (no "fechaEnvio"); el campo
-/// leído/no-leído devuelve { total: N } y los mensajes son arrays planos.
 class ChatService {
-  // ⚠️ Cambia por la IP/puerto real de tu backend
   static const baseUrl = "${ApiConfig.baseUrl}/chat";
 
   // ────────────────────────────────────────────────────────────────────────────
   // CONVERSACIÓN
   // ────────────────────────────────────────────────────────────────────────────
 
-  /// Busca la conversación entre paciente y médico.
-  /// Si no existe la crea (POST /chat/conversacion).
-  /// Devuelve el idConversacion o null si falla.
   Future<int?> getOrCreateConversacion(int idPaciente, int idMedico) async {
     try {
-      // ── 1. Intentar GET primero ──────────────────────────────────────────
       final getUri = Uri.parse("$baseUrl/conversacion/$idPaciente/$idMedico");
       final getRes = await http.get(getUri);
 
@@ -36,13 +23,12 @@ class ChatService {
         if (id != null) return id;
       }
 
-      // ── 2. Si no existe (404) → crear ────────────────────────────────────
       final postUri = Uri.parse("$baseUrl/conversacion");
       final postRes = await http.post(
         postUri,
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
-          "idUsuario":     idPaciente,
+          "idUsuario": idPaciente,
           "idProfesional": idMedico,
         }),
       );
@@ -61,10 +47,6 @@ class ChatService {
   // MENSAJES
   // ────────────────────────────────────────────────────────────────────────────
 
-  /// GET /chat/mensajes/:idConversacion
-  /// Devuelve lista de mensajes ordenados por "fecha" ASC.
-  /// Cada mensaje tiene: idMensaje, idConversacion, idRemitente, contenido,
-  ///                      fecha, leido
   Future<List<Map<String, dynamic>>> getMensajes(int idConversacion) async {
     try {
       final uri = Uri.parse("$baseUrl/mensajes/$idConversacion");
@@ -82,10 +64,9 @@ class ChatService {
     return [];
   }
 
-  /// POST /chat/mensaje  { idConversacion, idRemitente, contenido }
   Future<bool> enviarMensaje({
-    required int    idConversacion,
-    required int    idRemitente,
+    required int idConversacion,
+    required int idRemitente,
     required String contenido,
   }) async {
     try {
@@ -95,8 +76,8 @@ class ChatService {
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "idConversacion": idConversacion,
-          "idRemitente":    idRemitente,
-          "contenido":      contenido,
+          "idRemitente": idRemitente,
+          "contenido": contenido,
         }),
       );
       return res.statusCode == 200 || res.statusCode == 201;
@@ -106,12 +87,34 @@ class ChatService {
     return false;
   }
 
+  /// ✅ ELIMINAR TODOS LOS MENSAJES DE UNA CONVERSACIÓN
+  Future<bool> eliminarMensajes(int idConversacion) async {
+    try {
+      final uri = Uri.parse("$baseUrl/mensajes/$idConversacion");
+      final res = await http.delete(uri);
+      return res.statusCode == 200;
+    } catch (e) {
+      debugLog("eliminarMensajes", e);
+    }
+    return false;
+  }
+
+  /// ✅ ELIMINAR UN MENSAJE INDIVIDUAL
+  Future<bool> eliminarMensaje(int idMensaje) async {
+    try {
+      final uri = Uri.parse("$baseUrl/mensaje/$idMensaje");
+      final res = await http.delete(uri);
+      return res.statusCode == 200;
+    } catch (e) {
+      debugLog("eliminarMensaje", e);
+    }
+    return false;
+  }
+
   // ────────────────────────────────────────────────────────────────────────────
   // NOTIFICACIONES
   // ────────────────────────────────────────────────────────────────────────────
 
-  /// GET /chat/no-leidos/:idConversacion/:idUsuario
-  /// Backend devuelve { total: N }
   Future<int> getMensajesNoLeidos(int idConversacion, int idUsuario) async {
     try {
       final uri = Uri.parse("$baseUrl/no-leidos/$idConversacion/$idUsuario");
@@ -119,7 +122,6 @@ class ChatService {
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        // El backend devuelve { total: N }
         return int.tryParse(data["total"]?.toString() ?? "0") ?? 0;
       }
     } catch (e) {
@@ -128,7 +130,6 @@ class ChatService {
     return 0;
   }
 
-  /// PUT /chat/marcar-leidos/:idConversacion   body: { idUsuario }
   Future<void> marcarLeidos(int idConversacion, int idUsuario) async {
     try {
       final uri = Uri.parse("$baseUrl/marcar-leidos/$idConversacion");
@@ -141,25 +142,7 @@ class ChatService {
       debugLog("marcarLeidos", e);
     }
   }
-  Future<bool> eliminarMensajes(int idConversacion) async {
-  try {
-    final uri = Uri.parse(
-      "$baseUrl/chat/mensajes/$idConversacion",
-    );
 
-    final res = await http.delete(uri);
-
-    return res.statusCode == 200;
-  } catch (e) {
-    debugLog("eliminarMensajes", e);
-  }
-
-  return false;
-}
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // UTILIDAD
-  // ────────────────────────────────────────────────────────────────────────────
   void debugLog(String method, Object error) {
     // ignore: avoid_print
     print("❌ ChatService.$method => $error");

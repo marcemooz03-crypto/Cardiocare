@@ -1,5 +1,5 @@
 // ==============================================
-// MEDICO_DASHBOARD
+// MEDICO_DASHBOARD - VERSIÓN PARA ADULTOS MAYORES
 // ==============================================
 
 import 'package:cardio_app/app.theme.dart';
@@ -41,7 +41,6 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
   bool loading = true;
   bool _cargandoNotificaciones = false;
   
-  // Filtros y ordenamiento
   String _filtroEPS = "Todas";
   List<String> _epsDisponibles = ["Todas"];
   String _ordenPor = "EPS";
@@ -69,7 +68,6 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
           notificaciones.insert(0, notificacion);
           notificacionesNoLeidas++;
         });
-        // Las notificaciones ya no muestran SnackBar, solo se acumulan en la campanita
       },
     );
   }
@@ -218,17 +216,23 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Row(
           children: [
-            Icon(Icons.logout, color: AppTheme.danger, size: 28),
-            const SizedBox(width: 12),
-            Text("Cerrar sesión", style: AppTheme.title2),
+            Icon(Icons.logout, color: AppTheme.danger, size: 32),
+            const SizedBox(width: 14),
+            Text("Cerrar sesión", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
           ],
         ),
-        content: Text("¿Estás seguro de que deseas cerrar sesión?", style: AppTheme.body2),
+        content: Text(
+          "¿Estás seguro de que deseas cerrar sesión?",
+          style: TextStyle(fontSize: 18),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text("Cancelar", style: TextStyle(fontSize: 17)),
+          ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
@@ -239,7 +243,7 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
               );
             },
             style: AppTheme.dangerButtonStyle,
-            child: const Text("Cerrar sesión"),
+            child: Text("Cerrar sesión", style: TextStyle(fontSize: 17)),
           ),
         ],
       ),
@@ -267,97 +271,73 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
   Widget build(BuildContext context) {
     final screen = MediaQuery.of(context).size;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSmall = screen.width < 360;
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(100),
+        preferredSize: const Size.fromHeight(110),
         child: Container(
           decoration: const BoxDecoration(
             gradient: AppTheme.primaryGradient,
             borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(24),
-              bottomRight: Radius.circular(24),
+              bottomLeft: Radius.circular(28),
+              bottomRight: Radius.circular(28),
             ),
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Row(
                 children: [
+                  // ✅ Logo más grande
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     child: const Center(
-                      child: Icon(Icons.local_hospital, color: Colors.white, size: 24),
+                      child: Icon(Icons.local_hospital, color: Colors.white, size: 28),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("CardioCare", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 2),
-                        Text("Panel del médico", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text(
+                          "CardioCare",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "Panel del médico",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
                       ],
                     ),
                   ),
-                  Stack(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
-                          onPressed: () => _mostrarPanelNotificaciones(),
-                        ),
-                      ),
-                      if (notificacionesNoLeidas > 0)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
-                            child: Text(
-                              notificacionesNoLeidas > 9 ? "9+" : "$notificacionesNoLeidas",
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                    ],
+                  // ✅ Botones más grandes
+                  _buildAppBarButton(
+                    Icons.notifications_outlined,
+                    () => _mostrarPanelNotificaciones(),
+                    badge: notificacionesNoLeidas > 0 ? notificacionesNoLeidas : null,
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                    child: IconButton(
-                      icon: const Icon(Icons.edit_outlined, color: Colors.white, size: 24),
-                      onPressed: openEditarPerfil,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                    child: IconButton(
-                      icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
-                      onPressed: abrirConfiguracion,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
-                    child: IconButton(
-                      icon: const Icon(Icons.logout, color: Colors.white, size: 24),
-                      onPressed: logout,
-                    ),
-                  ),
+                  const SizedBox(width: 6),
+                  _buildAppBarButton(Icons.edit_outlined, openEditarPerfil),
+                  const SizedBox(width: 6),
+                  _buildAppBarButton(Icons.settings_outlined, abrirConfiguracion),
+                  const SizedBox(width: 6),
+                  _buildAppBarButton(Icons.logout, logout),
                 ],
               ),
             ),
@@ -365,7 +345,12 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
         ),
       ),
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 5,
+                color: AppTheme.primary,
+              ),
+            )
           : RefreshIndicator(
               onRefresh: loadAll,
               color: AppTheme.primary,
@@ -376,23 +361,23 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
                   children: [
                     _buildHeader(screen),
                     Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(18),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildEstadisticas(screen),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 24),
                           _buildFiltrosYOrdenamiento(),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 20),
                           _buildSectionHeader("📋 Pacientes asignados", pacientesFiltrados.length),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 16),
                           if (pacientesFiltrados.isEmpty && pacientes.isNotEmpty)
                             _buildNoResultados()
                           else if (pacientesFiltrados.isEmpty)
                             _buildEmpty()
                           else
                             ...pacientesFiltrados.map(_buildPacienteCard),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 30),
                         ],
                       ),
                     ),
@@ -402,56 +387,107 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
             ),
     );
   }
-  
+
+  // ✅ Botón de AppBar más grande
+  Widget _buildAppBarButton(IconData icon, VoidCallback onPressed, {int? badge}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Stack(
+        children: [
+          IconButton(
+            icon: Icon(icon, color: Colors.white, size: 28),
+            onPressed: onPressed,
+            padding: const EdgeInsets.all(12),
+          ),
+          if (badge != null && badge > 0)
+            Positioned(
+              right: 6,
+              top: 6,
+              child: Container(
+                padding: const EdgeInsets.all(5),
+                decoration: const BoxDecoration(
+                  color: AppTheme.danger,
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  badge > 9 ? "9+" : "$badge",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFiltrosYOrdenamiento() {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: AppTheme.subtleShadow,
       ),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       child: Column(
         children: [
+          // ✅ Filtro EPS - texto más grande
           Row(
             children: [
-              const Icon(Icons.filter_alt, size: 20, color: AppTheme.primary),
-              const SizedBox(width: 8),
-              const Text("Filtrar por EPS:", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 12),
+              Icon(Icons.filter_alt, size: 24, color: AppTheme.primary),
+              const SizedBox(width: 10),
+              Text(
+                "Filtrar por EPS:",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: BoxDecoration(
                     color: AppTheme.gray50,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppTheme.gray300),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.gray300, width: 1.5),
                   ),
                   child: DropdownButton<String>(
                     value: _filtroEPS,
                     isExpanded: true,
                     underline: const SizedBox(),
-                    items: _epsDisponibles.map((eps) => DropdownMenuItem(value: eps, child: Text(eps))).toList(),
+                    style: const TextStyle(fontSize: 16, color: AppTheme.gray700),
+                    items: _epsDisponibles.map((eps) => DropdownMenuItem(
+                      value: eps,
+                      child: Text(eps, style: const TextStyle(fontSize: 16)),
+                    )).toList(),
                     onChanged: _cambiarFiltroEPS,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
+          // ✅ Orden - botones más grandes
           Row(
             children: [
-              const Icon(Icons.sort, size: 20, color: AppTheme.primary),
-              const SizedBox(width: 8),
-              const Text("Ordenar por:", style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-              const SizedBox(width: 12),
+              Icon(Icons.sort, size: 24, color: AppTheme.primary),
+              const SizedBox(width: 10),
+              Text(
+                "Ordenar por:",
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(width: 14),
               Expanded(
                 child: Row(
                   children: [
                     _buildOrdenOption("EPS", "🏥"),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     _buildOrdenOption("nombre", "📝"),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 10),
                     _buildOrdenOption("fecha", "📅"),
                   ],
                 ),
@@ -469,20 +505,28 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
       child: GestureDetector(
         onTap: () => _cambiarOrden(orden),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primary.withOpacity(0.1) : AppTheme.gray50,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: isSelected ? AppTheme.primary : AppTheme.gray300, width: isSelected ? 1.5 : 1),
+            color: isSelected ? AppTheme.primary.withOpacity(0.12) : AppTheme.gray50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? AppTheme.primary : AppTheme.gray300,
+              width: isSelected ? 2 : 1.5,
+            ),
           ),
           child: Center(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text(icono, style: const TextStyle(fontSize: 14)),
-                const SizedBox(width: 4),
-                Text(orden == "EPS" ? "EPS" : orden == "nombre" ? "Nombre" : "Fecha",
-                  style: TextStyle(fontSize: 11, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal, color: isSelected ? AppTheme.primary : AppTheme.gray500),
+                Text(icono, style: const TextStyle(fontSize: 18)),
+                const SizedBox(width: 6),
+                Text(
+                  orden == "EPS" ? "EPS" : orden == "nombre" ? "Nombre" : "Fecha",
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? AppTheme.primary : AppTheme.gray500,
+                  ),
                 ),
               ],
             ),
@@ -493,7 +537,6 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
   }
 
   void _mostrarPanelNotificaciones() {
-    // Marcar todas como leídas al abrir el panel
     if (notificacionesNoLeidas > 0) {
       marcarTodasComoLeidas();
     }
@@ -501,7 +544,9 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       backgroundColor: AppTheme.white,
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.8,
@@ -512,17 +557,28 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
           return Column(
             children: [
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.05),
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+                  color: AppTheme.primary.withOpacity(0.06),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(28),
+                    topRight: Radius.circular(28),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.notifications, color: AppTheme.primary, size: 28),
-                    const SizedBox(width: 12),
-                    const Expanded(child: Text("Notificaciones", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                    const Icon(Icons.notifications, color: AppTheme.primary, size: 32),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Text(
+                        "Notificaciones",
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 30),
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ],
                 ),
               ),
@@ -533,9 +589,12 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.notifications_none, size: 64, color: AppTheme.gray300),
-                            const SizedBox(height: 16),
-                            const Text("No hay notificaciones", style: TextStyle(fontSize: 16, color: AppTheme.gray500)),
+                            Icon(Icons.notifications_none, size: 72, color: AppTheme.gray300),
+                            const SizedBox(height: 20),
+                            const Text(
+                              "No hay notificaciones",
+                              style: TextStyle(fontSize: 18, color: AppTheme.gray500),
+                            ),
                           ],
                         ),
                       )
@@ -565,35 +624,66 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
                               Navigator.pop(context);
                             },
                             child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                              padding: const EdgeInsets.all(12),
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: leida ? AppTheme.white : color.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: leida ? AppTheme.gray300 : color.withOpacity(0.3)),
+                                color: leida ? AppTheme.white : color.withOpacity(0.06),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: leida ? AppTheme.gray200 : color.withOpacity(0.3),
+                                  width: 1.5,
+                                ),
                               ),
                               child: Row(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                                    child: Icon(icono, color: color, size: 22),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: color.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Icon(icono, color: color, size: 26),
                                   ),
-                                  const SizedBox(width: 14),
+                                  const SizedBox(width: 16),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(n["pacienteNombre"] ?? "Paciente", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                                        const SizedBox(height: 4),
-                                        Text(n["mensaje"] ?? "", style: const TextStyle(fontSize: 13, color: AppTheme.gray500)),
-                                        const SizedBox(height: 4),
-                                        Text(_formatFecha(n["fecha"]), style: const TextStyle(fontSize: 11, color: AppTheme.gray400)),
+                                        Text(
+                                          n["pacienteNombre"] ?? "Paciente",
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 17,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          n["mensaje"] ?? "",
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            color: AppTheme.gray500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _formatFecha(n["fecha"]),
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: AppTheme.gray400,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
                                   if (!leida)
-                                    Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                                    Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
                                 ],
                               ),
                             ),
@@ -636,33 +726,53 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
   }
 
   Widget _buildHeader(Size screen) {
+    final isSmall = screen.width < 360;
+    
     return Container(
       width: double.infinity,
       color: AppTheme.white,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: EdgeInsets.fromLTRB(
+        isSmall ? 16 : 24,
+        isSmall ? 16 : 24,
+        isSmall ? 16 : 24,
+        isSmall ? 16 : 24,
+      ),
       child: Row(
         children: [
+          // ✅ Foto de perfil más grande
           Container(
-            width: 70,
-            height: 70,
+            width: 80,
+            height: 80,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
-              boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+              border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 3),
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withOpacity(0.3),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: ClipOval(
               child: Image.asset(
                 "assets/images/medico.jpg",
-                width: 70,
-                height: 70,
+                width: 80,
+                height: 80,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
                     decoration: BoxDecoration(gradient: AppTheme.primaryGradient),
                     child: Center(
                       child: Text(
-                        medico?["nombre"]?.isNotEmpty == true ? medico!["nombre"][0].toUpperCase() : widget.nombre[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+                        medico?["nombre"]?.isNotEmpty == true 
+                          ? medico!["nombre"][0].toUpperCase() 
+                          : widget.nombre[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   );
@@ -670,33 +780,66 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 18),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(medico?["nombre"] ?? widget.nombre, style: AppTheme.title1),
-                const SizedBox(height: 4),
-                Text(medico?["especialidad"] ?? "Especialista", style: AppTheme.body2.copyWith(color: AppTheme.gray500)),
+                Text(
+                  medico?["nombre"] ?? widget.nombre,
+                  style: TextStyle(
+                    fontSize: isSmall ? 18 : 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.gray700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  medico?["especialidad"] ?? "Especialista",
+                  style: TextStyle(
+                    fontSize: isSmall ? 15 : 17,
+                    color: AppTheme.gray500,
+                  ),
+                ),
                 if (medico?["correo"] != null) ...[
-                  const SizedBox(height: 2),
-                  Text(medico!["correo"], style: AppTheme.caption),
+                  const SizedBox(height: 4),
+                  Text(
+                    medico!["correo"],
+                    style: TextStyle(
+                      fontSize: isSmall ? 13 : 15,
+                      color: AppTheme.gray400,
+                    ),
+                  ),
                 ],
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
-              color: AppTheme.success.withOpacity(0.1),
+              color: AppTheme.success.withOpacity(0.12),
               border: Border.all(color: AppTheme.success.withOpacity(0.3)),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Row(
               children: [
-                Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle)),
-                const SizedBox(width: 6),
-                const Text("Activo", style: TextStyle(color: AppTheme.success, fontSize: 12, fontWeight: FontWeight.w600)),
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: AppTheme.success,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  "Activo",
+                  style: TextStyle(
+                    color: AppTheme.success,
+                    fontSize: isSmall ? 13 : 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -706,6 +849,7 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
   }
 
   Widget _buildEstadisticas(Size screen) {
+    final isSmall = screen.width < 360;
     final activos = pacientes.where((p) => p["activo"] != false).length;
     final stats = [
       {"label": "👥 Total pacientes", "value": pacientes.length.toString(), "icon": Icons.people_outline, "color": AppTheme.primary},
@@ -720,23 +864,47 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
         return Expanded(
           child: Container(
             margin: EdgeInsets.only(right: e.key < stats.length - 1 ? 12 : 0),
-            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+            padding: EdgeInsets.symmetric(
+              vertical: isSmall ? 14 : 18,
+              horizontal: isSmall ? 10 : 14,
+            ),
             decoration: BoxDecoration(
               color: AppTheme.white,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(22),
               boxShadow: AppTheme.subtleShadow,
             ),
             child: Column(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                  child: Icon(s["icon"] as IconData, color: color, size: 24),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    s["icon"] as IconData,
+                    color: color,
+                    size: isSmall ? 26 : 30,
+                  ),
                 ),
-                const SizedBox(height: 10),
-                Text(s["value"] as String, style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-                const SizedBox(height: 4),
-                Text(s["label"] as String, style: AppTheme.caption, textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                Text(
+                  s["value"] as String,
+                  style: TextStyle(
+                    fontSize: isSmall ? 26 : 30,
+                    fontWeight: FontWeight.bold,
+                    color: color,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  s["label"] as String,
+                  style: TextStyle(
+                    fontSize: isSmall ? 11 : 13,
+                    color: AppTheme.gray500,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
@@ -748,12 +916,29 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
   Widget _buildSectionHeader(String titulo, int count) {
     return Row(
       children: [
-        Text(titulo, style: AppTheme.title1),
+        Text(
+          titulo,
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: AppTheme.gray700,
+          ),
+        ),
         const Spacer(),
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-          child: Text("$count", style: const TextStyle(fontSize: 13, color: AppTheme.primary, fontWeight: FontWeight.w600)),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppTheme.primary.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Text(
+            "$count",
+            style: TextStyle(
+              fontSize: 16,
+              color: AppTheme.primary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ),
       ],
     );
@@ -766,18 +951,24 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
     final tieneFoto = p["foto"] != null && p["foto"].toString().isNotEmpty;
     final eps = p["eps"] ?? "Sin EPS";
 
-    final colors = [const Color(0xFF3B82F6), const Color(0xFF10B981), const Color(0xFF8B5CF6), const Color(0xFFEC4899), const Color(0xFFF59E0B)];
+    final colors = [
+      const Color(0xFF3B82F6),
+      const Color(0xFF10B981),
+      const Color(0xFF8B5CF6),
+      const Color(0xFFEC4899),
+      const Color(0xFFF59E0B),
+    ];
     final color = colors[nombre.codeUnitAt(0) % colors.length];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 14),
       decoration: BoxDecoration(
         color: AppTheme.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         boxShadow: AppTheme.subtleShadow,
       ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(22),
         onTap: () {
           if (idPaciente == null) return;
           Navigator.push(
@@ -794,53 +985,109 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
           );
         },
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(18),
           child: Row(
             children: [
+              // ✅ Avatar más grande
               Container(
-                width: 55,
-                height: 55,
-                decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: color.withOpacity(0.3), width: 2)),
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: color.withOpacity(0.3), width: 2.5),
+                ),
                 child: ClipOval(
                   child: tieneFoto
-                      ? Image.network(p["foto"], width: 55, height: 55, fit: BoxFit.cover,
+                      ? Image.network(
+                          p["foto"],
+                          width: 60,
+                          height: 60,
+                          fit: BoxFit.cover,
                           errorBuilder: (context, error, stackTrace) => Container(
                             decoration: BoxDecoration(color: color.withOpacity(0.15)),
-                            child: Center(child: Text(inicial, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 22))),
-                          ))
+                            child: Center(
+                              child: Text(
+                                inicial,
+                                style: TextStyle(
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 24,
+                                ),
+                              ),
+                            ),
+                          ),
+                        )
                       : Container(
                           decoration: BoxDecoration(color: color.withOpacity(0.15)),
-                          child: Center(child: Text(inicial, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 22))),
+                          child: Center(
+                            child: Text(
+                              inicial,
+                              style: TextStyle(
+                                color: color,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 24,
+                              ),
+                            ),
+                          ),
                         ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(nombre, style: AppTheme.title2),
-                    const SizedBox(height: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
-                      child: Text("🏥 $eps", style: TextStyle(fontSize: 11, color: AppTheme.primary, fontWeight: FontWeight.w500)),
+                    Text(
+                      nombre,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.gray700,
+                      ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        "🏥 $eps",
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     Wrap(
-                      spacing: 6,
+                      spacing: 8,
                       runSpacing: 4,
                       children: [
                         if (p["tipoHipertension"] != null && p["tipoHipertension"].toString().isNotEmpty)
-                          _chip("❤️ HTA: ${p["tipoHipertension"]}", AppTheme.warning.withOpacity(0.1), AppTheme.warning),
+                          _chip(
+                            "❤️ HTA: ${p["tipoHipertension"]}",
+                            AppTheme.warning.withOpacity(0.12),
+                            AppTheme.warning,
+                          ),
                         if (p["edad"] != null)
-                          _chip("🎂 ${p["edad"]} años", AppTheme.info.withOpacity(0.1), AppTheme.info),
+                          _chip(
+                            "🎂 ${p["edad"]} años",
+                            AppTheme.info.withOpacity(0.12),
+                            AppTheme.info,
+                          ),
                       ],
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, size: 20, color: AppTheme.gray500),
+              Icon(
+                Icons.chevron_right,
+                size: 28,
+                color: AppTheme.gray400,
+              ),
             ],
           ),
         ),
@@ -850,24 +1097,52 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
 
   Widget _chip(String text, Color bg, Color textColor) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
-      child: Text(text, style: TextStyle(fontSize: 12, color: textColor, fontWeight: FontWeight.w500)),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 14,
+          color: textColor,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 
   Widget _buildEmpty() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(color: AppTheme.white, borderRadius: BorderRadius.circular(20), boxShadow: AppTheme.subtleShadow),
+      padding: const EdgeInsets.all(44),
+      decoration: BoxDecoration(
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: AppTheme.subtleShadow,
+      ),
       child: Column(
         children: [
-          Icon(Icons.people_outline, size: 64, color: AppTheme.gray300),
-          const SizedBox(height: 16),
-          const Text("No tienes pacientes asignados", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.gray500)),
-          const SizedBox(height: 8),
-          const Text("Los pacientes aparecerán aquí cuando sean asignados", style: TextStyle(color: AppTheme.gray400, fontSize: 13), textAlign: TextAlign.center),
+          Icon(Icons.people_outline, size: 72, color: AppTheme.gray300),
+          const SizedBox(height: 20),
+          Text(
+            "No tienes pacientes asignados",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.gray500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Los pacientes aparecerán aquí cuando sean asignados",
+            style: TextStyle(
+              fontSize: 16,
+              color: AppTheme.gray400,
+            ),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );
@@ -876,15 +1151,33 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
   Widget _buildNoResultados() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(color: AppTheme.white, borderRadius: BorderRadius.circular(20), boxShadow: AppTheme.subtleShadow),
+      padding: const EdgeInsets.all(44),
+      decoration: BoxDecoration(
+        color: AppTheme.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: AppTheme.subtleShadow,
+      ),
       child: Column(
         children: [
-          Icon(Icons.filter_alt_off, size: 64, color: AppTheme.gray300),
-          const SizedBox(height: 16),
-          const Text("No hay pacientes con este filtro", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.gray500)),
-          const SizedBox(height: 8),
-          Text("Prueba con otro filtro de EPS: $_filtroEPS", style: const TextStyle(color: AppTheme.gray400, fontSize: 13), textAlign: TextAlign.center),
+          Icon(Icons.filter_alt_off, size: 72, color: AppTheme.gray300),
+          const SizedBox(height: 20),
+          Text(
+            "No hay pacientes con este filtro",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.gray500,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            "Prueba con otro filtro de EPS: $_filtroEPS",
+            style: TextStyle(
+              fontSize: 16,
+              color: AppTheme.gray400,
+            ),
+            textAlign: TextAlign.center,
+          ),
         ],
       ),
     );

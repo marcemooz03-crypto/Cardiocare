@@ -4,6 +4,8 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	
+	<!-- ✅ INFORMACIÓN DE LA APLICACIÓN -->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -24,8 +26,42 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	
+	<!-- ✅ REQUIERE IPHONE / IPAD -->
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	
+	<!-- ✅ PERMISO DE CÁMARA -->
+	<key>NSCameraUsageDescription</key>
+	<string>Necesitamos acceso a la cámara para tomar fotos y compartirlas con tu médico</string>
+	
+	<!-- ✅ PERMISO DE GALERÍA - LEER -->
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Necesitamos acceso a tu galería para seleccionar imágenes y compartirlas con tu médico</string>
+	
+	<!-- ✅ PERMISO DE GALERÍA - AGREGAR -->
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Necesitamos acceso para guardar imágenes en tu galería</string>
+	
+	<!-- ✅ PERMISO DE MICRÓFONO (para grabación de audio) -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Necesitamos acceso al micrófono para grabar mensajes de audio</string>
+	
+	<!-- ✅ PERMISO DE NOTIFICACIONES -->
+	<key>NSUserNotificationsUsageDescription</key>
+	<string>Necesitamos enviarte notificaciones para recordatorios de medicamentos y citas médicas</string>
+	
+	<!-- ✅ PERMISO DE LOCALIZACIÓN (opcional, para recordatorios basados en ubicación) -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Necesitamos tu ubicación para recordatorios basados en tu posición</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Necesitamos tu ubicación para recordatorios basados en tu posición</string>
+	
+	<!-- ✅ PERMISO DE CONTACTOS (opcional, para compartir con cuidadores) -->
+	<key>NSContactsUsageDescription</key>
+	<string>Necesitamos acceso a tus contactos para compartir información con tus cuidadores</string>
+	
+	<!-- ✅ CONFIGURACIÓN DE ESCENAS -->
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -47,18 +83,26 @@
 			</array>
 		</dict>
 	</dict>
+	
+	<!-- ✅ CONFIGURACIÓN DE APLICACIÓN -->
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	
+	<!-- ✅ CONFIGURACIÓN DE LANZAMIENTO -->
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
+	
+	<!-- ✅ ORIENTACIONES SOPORTADAS (IPHONE) -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	
+	<!-- ✅ ORIENTACIONES SOPORTADAS (IPAD) -->
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -66,5 +110,105 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	
+	<!-- ✅ CONFIGURACIÓN DE TIPOS DE ARCHIVO SOPORTADOS PARA FILE PICKER -->
+	<key>UTImportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>public.image</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>jpg</string>
+					<string>jpeg</string>
+					<string>png</string>
+					<string>gif</string>
+					<string>webp</string>
+					<string>heic</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>public.pdf</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>pdf</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>public.plain-text</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>txt</string>
+					<string>md</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.microsoft.word.doc</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>doc</string>
+					<string>docx</string>
+				</array>
+			</dict>
+		</dict>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.microsoft.excel.xls</string>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>xls</string>
+					<string>xlsx</string>
+				</array>
+			</dict>
+		</dict>
+	</array>
+	
+	<!-- ✅ CONFIGURACIÓN DE DOCUMENTOS (para compartir archivos) -->
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	
+	<!-- ✅ CONFIGURACIÓN PARA BACKGROUND (notificaciones push) -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>remote-notification</string>
+	</array>
+	
+	<!-- ✅ CONFIGURACIÓN PARA HTTP (permitir conexiones no seguras en desarrollo) -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
+	
+	<!-- ✅ CONFIGURACIÓN PARA COMPARTIR ARCHIVOS -->
+	<key>UISupportsDocumentBrowser</key>
+	<false/>
+	
+	<!-- ✅ CONFIGURACIÓN DE ICONOS DE APLICACIÓN (si usas iconos alternativos) -->
+	<key>CFBundleIcons</key>
+	<dict/>
+	<key>CFBundleIcons~ipad</key>
+	<dict/>
 </dict>
 </plist>

@@ -12,14 +12,15 @@ class ChatScreen extends StatefulWidget {
     super.key,
     required this.idConversacion,
     required this.idUsuario,
-    required this.nombre, required String especialista,
+    required this.nombre,
+    required String especialista,
   });
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateMixin {
+class _ChatScreenState extends State<ChatScreen> {
   final chatService = ChatService();
 
   final _controller = TextEditingController();
@@ -28,42 +29,11 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
   List<Map<String, dynamic>> mensajes = [];
 
   bool enviando = false;
-  bool _mostrarRespuestasRapidas = false;
-  bool _mostrarAdjuntos = false;
-  
-  late AnimationController _animationController;
-  late Animation<double> _animation;
-
   Timer? _timer;
-
-  // Respuestas rápidas médicas profesional
-  final List<Map<String, dynamic>> _respuestasRapidas = [
-    {"texto": "Mis síntomas han empeorado", "icono": Icons.warning_amber_rounded, "color": AppTheme.danger, "gradiente": [AppTheme.danger, AppTheme.danger.withOpacity(0.7)]},
-    {"texto": "Necesito ajustar mi medicación", "icono": Icons.medication_outlined, "color": AppTheme.warning, "gradiente": [AppTheme.warning, AppTheme.warning.withOpacity(0.7)]},
-    {"texto": "Me siento mejor hoy", "icono": Icons.favorite_outline, "color": AppTheme.success, "gradiente": [AppTheme.success, AppTheme.successLight]},
-    {"texto": "Solicitar una cita", "icono": Icons.calendar_month_outlined, "color": AppTheme.info, "gradiente": [AppTheme.info, AppTheme.info.withOpacity(0.7)]},
-    {"texto": "Registrar signos vitales", "icono": Icons.monitor_heart_outlined, "color": AppTheme.primary, "gradiente": [AppTheme.primary, AppTheme.primaryLight]},
-    {"texto": "Reportar fiebre", "icono": Icons.thermostat_outlined, "color": AppTheme.danger, "gradiente": [AppTheme.danger, AppTheme.danger.withOpacity(0.7)]},
-    {"texto": "Próxima cita médica", "icono": Icons.event_available_outlined, "color": AppTheme.info, "gradiente": [AppTheme.info, AppTheme.info.withOpacity(0.7)]},
-    {"texto": "Solicitar incapacidad", "icono": Icons.description_outlined, "color": AppTheme.warning, "gradiente": [AppTheme.warning, AppTheme.warning.withOpacity(0.7)]},
-  ];
-
-  // Opciones de adjuntos
-  final List<Map<String, dynamic>> _opcionesAdjuntos = [
-    {"icono": Icons.camera_alt, "label": "Cámara", "color": AppTheme.primary},
-    {"icono": Icons.image, "label": "Galería", "color": AppTheme.success},
-    {"icono": Icons.description, "label": "Documento", "color": AppTheme.warning},
-    {"icono": Icons.mic, "label": "Audio", "color": AppTheme.danger},
-  ];
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 300),
-      vsync: this,
-    );
-    _animation = CurvedAnimation(parent: _animationController, curve: Curves.easeInOut);
     _loadMensajes();
     _timer = Timer.periodic(
       const Duration(seconds: 3),
@@ -76,7 +46,6 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     _timer?.cancel();
     _controller.dispose();
     _scroll.dispose();
-    _animationController.dispose();
     super.dispose();
   }
 
@@ -125,14 +94,12 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     } catch (_) {}
   }
 
-  Future<void> _enviarMensaje({String? textoPredefinido}) async {
-    final texto = textoPredefinido ?? _controller.text.trim();
+  Future<void> _enviarMensaje() async {
+    final texto = _controller.text.trim();
     if (texto.isEmpty || enviando) return;
 
     setState(() {
       enviando = true;
-      _mostrarRespuestasRapidas = false;
-      _mostrarAdjuntos = false;
     });
 
     _controller.clear();
@@ -146,24 +113,7 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       await _loadMensajes();
     } catch (e) {
       debugPrint("❌ ERROR ENVIAR => $e");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.error_outline, color: Colors.white, size: 20),
-                SizedBox(width: 12),
-                Expanded(child: Text("Error al enviar mensaje")),
-              ],
-            ),
-            backgroundColor: AppTheme.danger,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            duration: const Duration(seconds: 2),
-            margin: const EdgeInsets.all(16),
-          ),
-        );
-      }
+      _mostrarError("Error al enviar mensaje");
     } finally {
       if (mounted) {
         setState(() {
@@ -171,6 +121,20 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
         });
       }
     }
+  }
+
+  void _mostrarError(String mensaje) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(mensaje, style: const TextStyle(fontSize: 18)),
+        backgroundColor: AppTheme.danger,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   void _scrollToBottom() {
@@ -219,180 +183,102 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     return int.tryParse(m["idRemitente"]?.toString() ?? "0") == widget.idUsuario;
   }
 
-  void _toggleRespuestasRapidas() {
-    setState(() {
-      if (_mostrarRespuestasRapidas) {
-        _animationController.reverse();
-        Future.delayed(const Duration(milliseconds: 200), () {
-          if (mounted) setState(() => _mostrarRespuestasRapidas = false);
-        });
-      } else {
-        setState(() {
-          _mostrarRespuestasRapidas = true;
-          _mostrarAdjuntos = false;
-        });
-        _animationController.forward();
-      }
-    });
-  }
-
-  void _toggleAdjuntos() {
-    setState(() {
-      if (_mostrarAdjuntos) {
-        _animationController.reverse();
-        Future.delayed(const Duration(milliseconds: 200), () {
-          if (mounted) setState(() => _mostrarAdjuntos = false);
-        });
-      } else {
-        setState(() {
-          _mostrarAdjuntos = true;
-          _mostrarRespuestasRapidas = false;
-        });
-        _animationController.forward();
-      }
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.gray100,
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(110),
+        preferredSize: const Size.fromHeight(100),
         child: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: AppTheme.primaryGradient,
-            borderRadius: BorderRadius.only(
+            borderRadius: const BorderRadius.only(
               bottomLeft: Radius.circular(24),
               bottomRight: Radius.circular(24),
             ),
           ),
           child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 24),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
-                        ),
-                        child: CircleAvatar(
-                          radius: 22,
-                          backgroundColor: Colors.white.withOpacity(0.2),
-                          child: Text(
-                            widget.nombre.isNotEmpty ? widget.nombre[0].toUpperCase() : "M",
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              widget.nombre,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: const BoxDecoration(
-                                    color: AppTheme.success,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                const Text(
-                                  "En línea",
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.white70,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.medical_services_outlined, color: Colors.white, size: 22),
-                          onPressed: _toggleRespuestasRapidas,
-                          tooltip: "Respuestas rápidas",
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: PopupMenuButton<String>(
-                          icon: const Icon(Icons.more_vert, color: Colors.white),
-                          onSelected: (value) async {
-                            if (value == "borrar") {
-                              final ok = await chatService.eliminarMensajes(widget.idConversacion);
-                              if (ok) {
-                                setState(() => mensajes.clear());
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: const Text("Chat vaciado correctamente"),
-                                      backgroundColor: AppTheme.success,
-                                      behavior: SnackBarBehavior.floating,
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      margin: const EdgeInsets.all(16),
-                                    ),
-                                  );
-                                }
-                              }
-                            }
-                          },
-                          itemBuilder: (_) => [
-                            const PopupMenuItem(
-                              value: "borrar",
-                              child: Row(
-                                children: [
-                                  Icon(Icons.delete_outline, color: AppTheme.danger),
-                                  SizedBox(width: 10),
-                                  Text("Vaciar conversación"),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  // ✅ Botón regreso más grande
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 32),
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  // ✅ Inicial del nombre con fondo
+                  Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                      border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        widget.nombre.isNotEmpty ? widget.nombre[0].toUpperCase() : "M",
+                        style: TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          widget.nombre,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        const Row(
+                          children: [
+                            Icon(Icons.circle, color: AppTheme.success, size: 12),
+                            SizedBox(width: 8),
+                            Text(
+                              "En línea",
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.white70,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // ✅ Menú de opciones más grande
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.more_vert, color: Colors.white, size: 32),
+                      onPressed: _mostrarOpciones,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -409,256 +295,172 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                     itemBuilder: (_, i) => _buildBurbuja(mensajes[i], i),
                   ),
           ),
-          if (_mostrarRespuestasRapidas || _mostrarAdjuntos)
-            FadeTransition(
-              opacity: _animation,
-              child: SizeTransition(
-                sizeFactor: _animation,
-                child: _mostrarRespuestasRapidas ? _buildRespuestasRapidas() : _buildOpcionesAdjuntos(),
-              ),
-            ),
           _buildInputBar(),
         ],
       ),
     );
   }
 
-  Widget _buildRespuestasRapidas() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
-          ),
-        ],
+  void _mostrarOpciones() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
+      backgroundColor: Colors.white,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 60,
+              height: 5,
+              margin: const EdgeInsets.only(top: 16),
+              decoration: BoxDecoration(
+                color: AppTheme.gray300,
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+            const SizedBox(height: 20),
+            // ✅ Opción de eliminar con texto grande
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  color: AppTheme.danger.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.quickreply, size: 18, color: AppTheme.primary),
+                child: const Icon(Icons.delete_outline, color: AppTheme.danger, size: 30),
               ),
-              const SizedBox(width: 10),
-              const Text(
-                "Respuestas rápidas",
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.gray700,
-                ),
+              title: const Text(
+                "Eliminar conversación",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
               ),
-              const Spacer(),
-              GestureDetector(
-                onTap: _toggleRespuestasRapidas,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.gray100,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.close, size: 16, color: AppTheme.gray500),
-                ),
+              subtitle: const Text(
+                "Borrar todos los mensajes",
+                style: TextStyle(fontSize: 16, color: AppTheme.gray500),
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            height: 100,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _respuestasRapidas.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
-              itemBuilder: (_, index) {
-                final r = _respuestasRapidas[index];
-                return GestureDetector(
-                  onTap: () => _enviarMensaje(textoPredefinido: r["texto"]),
-                  child: Container(
-                    width: 140,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: r["gradiente"] as List<Color>,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: (r["color"] as Color).withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(r["icono"] as IconData, color: Colors.white, size: 22),
-                        const SizedBox(height: 8),
-                        Text(
-                          r["texto"] as String,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
+              onTap: () {
+                Navigator.pop(context);
+                _eliminarConversacion();
               },
             ),
-          ),
-        ],
+            const Divider(height: 1, color: AppTheme.gray200),
+            ListTile(
+              leading: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppTheme.gray100,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.close, color: AppTheme.gray500, size: 30),
+              ),
+              title: const Text(
+                "Cancelar",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              ),
+              onTap: () => Navigator.pop(context),
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildOpcionesAdjuntos() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(20),
-          topRight: Radius.circular(20),
+  Future<void> _eliminarConversacion() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: const Text(
+          "Eliminar conversación",
+          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 12,
-            offset: const Offset(0, -4),
+        content: const Text(
+          "¿Eliminar todos los mensajes?\nEsta acción no se puede deshacer.",
+          style: TextStyle(fontSize: 18),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              "Cancelar",
+              style: TextStyle(fontSize: 18, color: AppTheme.gray500),
+            ),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.attach_file, size: 18, color: AppTheme.primary),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.danger,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
               ),
-              const SizedBox(width: 10),
-              const Text(
-                "Adjuntar archivo",
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.gray700,
-                ),
-              ),
-              const Spacer(),
-              GestureDetector(
-                onTap: _toggleAdjuntos,
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.gray100,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.close, size: 16, color: AppTheme.gray500),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: _opcionesAdjuntos.map((opt) {
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text("${opt["label"]} - Próximamente disponible"),
-                        backgroundColor: AppTheme.info,
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        margin: const EdgeInsets.all(16),
-                      ),
-                    );
-                    _toggleAdjuntos();
-                  },
-                  child: Column(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: (opt["color"] as Color).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(opt["icono"], color: opt["color"], size: 24),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        opt["label"] as String,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: AppTheme.gray600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }).toList(),
+            ),
+            child: const Text("Eliminar", style: TextStyle(fontSize: 18)),
           ),
         ],
       ),
     );
+
+    if (confirmar != true || !mounted) return;
+
+    try {
+      final ok = await chatService.eliminarMensajes(widget.idConversacion);
+      if (ok && mounted) {
+        setState(() => mensajes.clear());
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text("Conversación eliminada", style: TextStyle(fontSize: 18)),
+            backgroundColor: AppTheme.success,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(16),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("❌ ERROR eliminarConversacion => $e");
+    }
   }
 
   Widget _buildEmpty() {
     return Center(
       child: Column(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          // ✅ Icono más grande
           Container(
-            padding: const EdgeInsets.all(28),
+            padding: const EdgeInsets.all(36),
             decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.08),
+              color: AppTheme.gray200,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.chat_bubble_outline,
-              size: 56,
-              color: AppTheme.primary.withOpacity(0.6),
+              size: 72,
+              color: AppTheme.gray400,
             ),
           ),
-          const SizedBox(height: 20),
-          Text(
+          const SizedBox(height: 28),
+          const Text(
             "Inicia tu conversación",
-            style: AppTheme.title1,
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.gray700,
+            ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            "Escribe tu primer mensaje o usa\nlas respuestas rápidas médicas",
-            textAlign: TextAlign.center,
-            style: AppTheme.body2.copyWith(color: AppTheme.gray500),
+          const SizedBox(height: 12),
+          const Text(
+            "Escribe un mensaje para comenzar",
+            style: TextStyle(
+              fontSize: 18,
+              color: AppTheme.gray500,
+            ),
           ),
         ],
       ),
@@ -671,7 +473,6 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
     final hora = _formatHora(m["fecha"]);
     final fecha = _formatFechaSeparador(m["fecha"]);
     
-    // Mostrar separador de fecha si es necesario
     bool mostrarFecha = false;
     if (index == 0) {
       mostrarFecha = true;
@@ -682,11 +483,12 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       }
     }
 
-    bool showAvatar = true;
+    // ✅ Mostrar inicial del remitente en lugar de imagen
+    bool showInitial = true;
     if (index > 0) {
       final prev = mensajes[index - 1];
       if (_esMio(prev) == esMio) {
-        showAvatar = false;
+        showInitial = false;
       }
     }
 
@@ -694,20 +496,24 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
       children: [
         if (mostrarFecha)
           Container(
-            margin: const EdgeInsets.symmetric(vertical: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            margin: const EdgeInsets.symmetric(vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             decoration: BoxDecoration(
               color: AppTheme.gray200.withOpacity(0.6),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
             ),
             child: Text(
               fecha,
-              style: AppTheme.caption.copyWith(color: AppTheme.gray500),
+              style: TextStyle(
+                fontSize: 15,
+                color: AppTheme.gray500,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         Padding(
           padding: EdgeInsets.only(
-            top: showAvatar ? 8 : 2,
+            top: showInitial ? 10 : 2,
             bottom: 2,
             left: esMio ? 60 : 0,
             right: esMio ? 0 : 60,
@@ -717,48 +523,50 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               if (!esMio) ...[
-                if (showAvatar)
+                if (showInitial)
+                  // ✅ Inicial del remitente (médico)
                   Container(
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 1.5),
+                      color: AppTheme.primary.withOpacity(0.15),
+                      border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
                     ),
-                    child: CircleAvatar(
-                      radius: 18,
-                      backgroundColor: AppTheme.primary.withOpacity(0.1),
+                    child: Center(
                       child: Text(
                         widget.nombre.isNotEmpty ? widget.nombre[0].toUpperCase() : "M",
-                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primary),
+                        style: TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
                       ),
                     ),
                   )
                 else
-                  const SizedBox(width: 40),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 48),
+                const SizedBox(width: 10),
               ],
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
                   decoration: BoxDecoration(
                     gradient: esMio
-                        ? const LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [AppTheme.primary, AppTheme.primaryLight],
-                          )
+                        ? AppTheme.primaryGradient
                         : null,
                     color: esMio ? null : Colors.white,
                     borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(20),
-                      topRight: const Radius.circular(20),
-                      bottomLeft: Radius.circular(esMio ? 20 : 4),
-                      bottomRight: Radius.circular(esMio ? 4 : 20),
+                      topLeft: const Radius.circular(22),
+                      topRight: const Radius.circular(22),
+                      bottomLeft: Radius.circular(esMio ? 22 : 6),
+                      bottomRight: Radius.circular(esMio ? 6 : 22),
                     ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.06),
-                        blurRadius: 6,
-                        offset: const Offset(0, 2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
                       ),
                     ],
                   ),
@@ -766,28 +574,29 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // ✅ Texto del mensaje más grande
                       Text(
                         contenido,
                         style: TextStyle(
-                          fontSize: 15,
-                          height: 1.4,
+                          fontSize: 18,
+                          height: 1.5,
                           color: esMio ? Colors.white : AppTheme.gray700,
                         ),
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 8),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             hora,
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 13,
                               color: esMio ? Colors.white70 : AppTheme.gray400,
                             ),
                           ),
                           if (esMio) ...[
-                            const SizedBox(width: 6),
-                            const Icon(Icons.done_all, size: 14, color: Colors.white70),
+                            const SizedBox(width: 8),
+                            const Icon(Icons.done_all, size: 18, color: Colors.white70),
                           ],
                         ],
                       ),
@@ -795,6 +604,33 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
                   ),
                 ),
               ),
+              if (esMio) ...[
+                // ✅ Inicial del remitente (paciente)
+                if (showInitial) ...[
+                  const SizedBox(width: 10),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: AppTheme.primary.withOpacity(0.15),
+                      border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
+                    ),
+                    child: Center(
+                      child: Text(
+                        "P",
+                        style: TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(width: 48),
+                ],
+              ],
             ],
           ),
         ),
@@ -804,89 +640,87 @@ class _ChatScreenState extends State<ChatScreen> with SingleTickerProviderStateM
 
   Widget _buildInputBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
+          topLeft: Radius.circular(28),
+          topRight: Radius.circular(28),
         ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.08),
             blurRadius: 12,
-            offset: const Offset(0, -4),
+            offset: const Offset(0, -6),
           ),
         ],
       ),
       child: SafeArea(
         child: Row(
           children: [
-            GestureDetector(
-              onTap: _toggleAdjuntos,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppTheme.gray100,
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Icon(Icons.attach_file, size: 22, color: AppTheme.primary),
-              ),
-            ),
-            const SizedBox(width: 12),
+            // ✅ Campo de texto más grande
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
                   color: AppTheme.gray100,
-                  borderRadius: BorderRadius.circular(28),
+                  borderRadius: BorderRadius.circular(30),
                 ),
                 child: TextField(
                   controller: _controller,
                   maxLines: null,
                   keyboardType: TextInputType.multiline,
                   textCapitalization: TextCapitalization.sentences,
-                  style: const TextStyle(fontSize: 15, color: AppTheme.gray700),
-                  decoration: const InputDecoration(
+                  style: const TextStyle(
+                    fontSize: 18,
+                    color: AppTheme.gray700,
+                  ),
+                  decoration: InputDecoration(
                     hintText: "Escribe un mensaje...",
-                    hintStyle: TextStyle(color: AppTheme.gray400, fontSize: 14),
+                    hintStyle: TextStyle(
+                      color: AppTheme.gray400,
+                      fontSize: 17,
+                    ),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 16,
+                    ),
                   ),
                   onSubmitted: (_) => _enviarMensaje(),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 14),
+            // ✅ Botón enviar más grande
             GestureDetector(
-              onTap: () => _enviarMensaje(),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                width: 48,
-                height: 48,
+              onTap: _enviarMensaje,
+              child: Container(
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppTheme.primary, AppTheme.primaryLight],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  gradient: AppTheme.primaryGradient,
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
                       color: AppTheme.primary.withOpacity(0.4),
-                      blurRadius: 8,
-                      offset: const Offset(0, 3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
                 child: enviando
                     ? const Padding(
-                        padding: EdgeInsets.all(12),
+                        padding: EdgeInsets.all(18),
                         child: CircularProgressIndicator(
                           color: Colors.white,
-                          strokeWidth: 2,
+                          strokeWidth: 3,
                         ),
                       )
-                    : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
+                    : const Icon(
+                        Icons.send_rounded,
+                        color: Colors.white,
+                        size: 30,
+                      ),
               ),
             ),
           ],

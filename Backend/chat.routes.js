@@ -9,6 +9,7 @@ const {
   getNoLeidos,
   marcarLeidos,
   eliminarMensajes,
+  eliminarMensaje, // ✅ NUEVO: eliminar un mensaje individual
 } = require("./chat.controller");
 
 // ─── CONVERSACIÓN ─────────────────────────────────────────────────────────────
@@ -18,6 +19,10 @@ router.get("/conversacion/:idUsuario/:idMedico", obtenerConversacion);
 // ─── MENSAJES ─────────────────────────────────────────────────────────────────
 router.post("/mensaje", enviarMensaje);
 router.get("/mensajes/:idConversacion", obtenerMensajes);
+
+// ─── ELIMINAR MENSAJES ──────────────────────────────────────────────────────
+router.delete("/mensajes/:idConversacion", eliminarMensajes); // Eliminar todos
+router.delete("/mensaje/:idMensaje", eliminarMensaje);       // ✅ Eliminar uno
 
 // ─── NOTIFICACIONES ───────────────────────────────────────────────────────────
 router.get("/no-leidos/:idConversacion/:idUsuario", getNoLeidos);
@@ -41,8 +46,5 @@ if (process.env.NODE_ENV !== "production") {
     });
   });
 }
-router.delete(
-  "/mensajes/:idConversacion",
-  eliminarMensajes
-);
+
 module.exports = router;

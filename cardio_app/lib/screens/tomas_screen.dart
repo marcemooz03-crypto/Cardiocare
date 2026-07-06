@@ -31,15 +31,70 @@ class _TomasScreenState extends State<TomasScreen> {
     _iniciar();
   }
 
+  // ✅ AHORA: Solo carga tomas, NO las regenera automáticamente
   Future<void> _iniciar() async {
     try {
       setState(() => loading = true);
       await _cargarRecordatorios();
-      await _tomaService.generarHoy(widget.idPaciente);
+      // ✅ SOLO CARGAR TOMAS, NO REGENERAR
       await _cargarTomas();
     } catch (e) {
       debugPrint("❌ ERROR iniciar => $e");
       if (mounted) setState(() => loading = false);
+    }
+  }
+
+  // ✅ NUEVO: Regenerar tomas manualmente (con confirmación)
+  Future<void> _regenerarTomas() async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.refresh, color: AppTheme.warning, size: 28),
+            const SizedBox(width: 12),
+            Text("Regenerar tomas", style: AppTheme.title2),
+          ],
+        ),
+        content: Text(
+          "¿Regenerar todas las tomas de hoy?\n\n"
+          "Esto eliminará las tomas actuales y creará nuevas basadas en los recordatorios activos.",
+          style: AppTheme.body2,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancelar", style: TextStyle(color: AppTheme.gray500)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: AppTheme.warningButtonStyle,
+            child: const Text("Regenerar"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true || !mounted) return;
+
+    try {
+      setState(() => loading = true);
+      
+      // ✅ Eliminar tomas de hoy
+      await _tomaService.eliminarTomasHoy(widget.idPaciente);
+      
+      // ✅ Generar nuevas tomas
+      await _tomaService.generarHoy(widget.idPaciente);
+      
+      // ✅ Cargar las nuevas tomas
+      await _cargarTomas();
+      
+      _mostrarMensaje("🔄 Tomas regeneradas correctamente", AppTheme.success);
+    } catch (e) {
+      debugPrint("❌ ERROR regenerarTomas => $e");
+      _mostrarMensaje("Error al regenerar tomas", AppTheme.danger);
+      setState(() => loading = false);
     }
   }
 
@@ -61,6 +116,7 @@ class _TomasScreenState extends State<TomasScreen> {
         loading = false;
         _tomasSeleccionadas.clear();
       });
+      debugPrint("📋 Tomas cargadas: ${tomas.length}");
     } catch (e) {
       debugPrint("❌ ERROR cargar tomas => $e");
       if (mounted) setState(() => loading = false);
@@ -294,6 +350,19 @@ class _TomasScreenState extends State<TomasScreen> {
                       ),
                     ),
                   ),
+                  // ✅ Botón para regenerar tomas
+                  if (!loading && tomas.isNotEmpty)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
+                        icon: const Icon(Icons.refresh, color: Colors.white, size: 26),
+                        onPressed: _regenerarTomas,
+                        tooltip: "Regenerar tomas",
+                      ),
+                    ),
                   // ✅ Botón para modo selección
                   if (!loading && tomas.isNotEmpty)
                     Container(
@@ -347,6 +416,27 @@ class _TomasScreenState extends State<TomasScreen> {
                               ? _buildEmptyState() 
                               : _buildMedicamentosList(),
                           const SizedBox(height: 30),
+                          // ✅ Botón para regenerar tomas al final (si está vacío)
+                          if (tomas.isEmpty && recordatorios.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: OutlinedButton.icon(
+                                onPressed: _regenerarTomas,
+                                icon: const Icon(Icons.refresh, size: 20),
+                                label: const Text("Regenerar tomas"),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppTheme.primary,
+                                  side: const BorderSide(color: AppTheme.primary),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -593,13 +683,15 @@ class _TomasScreenState extends State<TomasScreen> {
       child: Column(
         children: [
           Icon(
-            Icons.celebration_outlined,
+            recordatorios.isEmpty ? Icons.notifications_off : Icons.celebration_outlined,
             size: 64,
             color: AppTheme.gray300,
           ),
           const SizedBox(height: 16),
           Text(
-            "🎉 ¡Sin medicamentos por hoy!",
+            recordatorios.isEmpty 
+                ? "🔕 Sin recordatorios activos" 
+                : "🎉 ¡Sin medicamentos por hoy!",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -609,7 +701,7 @@ class _TomasScreenState extends State<TomasScreen> {
           const SizedBox(height: 8),
           Text(
             recordatorios.isEmpty
-                ? "No hay recordatorios activos para hoy"
+                ? "Activa recordatorios desde tu perfil clínico"
                 : "Has completado todas tus tomas del día",
             style: TextStyle(
               fontSize: 14,
@@ -631,7 +723,7 @@ class _TomasScreenState extends State<TomasScreen> {
                   Icon(Icons.info_outline, color: AppTheme.warning, size: 20),
                   const SizedBox(width: 8),
                   Text(
-                    "Activa recordatorios desde tu perfil",
+                    "Ve a 'Mi Perfil Clínico' > 'Recordatorios'",
                     style: TextStyle(
                       fontSize: 13,
                       color: AppTheme.warning,
@@ -768,7 +860,6 @@ class _TomasScreenState extends State<TomasScreen> {
       ),
       child: Row(
         children: [
-          // ✅ Checkbox en modo selección
           if (_modoSeleccion)
             Padding(
               padding: const EdgeInsets.only(right: 8),
@@ -854,7 +945,6 @@ class _TomasScreenState extends State<TomasScreen> {
                 ],
               ),
             ),
-            // ✅ Botón de eliminar individual
             const SizedBox(width: 8),
             GestureDetector(
               onTap: () => _eliminarTomaIndividual(t),

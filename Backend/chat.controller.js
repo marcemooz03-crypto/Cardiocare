@@ -121,6 +121,46 @@ exports.obtenerMensajes = (req, res) => {
   });
 };
 
+/** DELETE /chat/mensajes/:idConversacion - ELIMINAR TODOS LOS MENSAJES */
+exports.eliminarMensajes = (req, res) => {
+  const { idConversacion } = req.params;
+
+  const sql = `
+    DELETE FROM mensaje
+    WHERE idConversacion = ?
+  `;
+
+  db.query(sql, [idConversacion], (err) => {
+    if (err) {
+      return res.status(500).json({
+        error: "Error al eliminar mensajes",
+        detail: err,
+      });
+    }
+    res.json({ ok: true });
+  });
+};
+
+/** DELETE /chat/mensaje/:idMensaje - ELIMINAR UN MENSAJE */
+exports.eliminarMensaje = (req, res) => {
+  const { idMensaje } = req.params;
+
+  const sql = `
+    DELETE FROM mensaje
+    WHERE idMensaje = ?
+  `;
+
+  db.query(sql, [idMensaje], (err) => {
+    if (err) {
+      return res.status(500).json({
+        error: "Error al eliminar mensaje",
+        detail: err,
+      });
+    }
+    res.json({ ok: true });
+  });
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // NOTIFICACIONES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,25 +199,6 @@ exports.marcarLeidos = (req, res) => {
 
   db.query(sql, [idConversacion, idUsuario], (err) => {
     if (err) return res.status(500).json({ error: "Error al marcar leídos", detail: err });
-    res.json({ ok: true });
-  });
-};
-exports.eliminarMensajes = (req, res) => {
-  const { idConversacion } = req.params;
-
-  const sql = `
-    DELETE FROM mensaje
-    WHERE idConversacion = ?
-  `;
-
-  db.query(sql, [idConversacion], (err) => {
-    if (err) {
-      return res.status(500).json({
-        error: "Error al eliminar mensajes",
-        detail: err,
-      });
-    }
-
     res.json({ ok: true });
   });
 };
