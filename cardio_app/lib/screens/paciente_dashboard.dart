@@ -189,7 +189,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   // ==============================
   Future<void> _limpiarTodasLasNotificaciones() async {
     try {
-      await notificacionService.limpiarNotificaciones();
+      notificacionService.limpiarNotificaciones(widget.idUsuario);
       setState(() {
         notificaciones.clear();
         notificacionesNoLeidas = 0;

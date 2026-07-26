@@ -169,6 +169,164 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     } catch (_) {}
   }
 
+  // ==============================
+  // 🔴 CARGAR ALERTAS - ACTUALIZADO
+  // ==============================
+  Future<void> loadAlertas() async {
+    try {
+      final data = await alertaService.getAlertas(widget.idPaciente);
+      if (!mounted) return;
+      setState(() => alertas = List<Map<String, dynamic>>.from(data));
+    } catch (e) {
+      debugPrint("ERROR ALERTAS => $e");
+    }
+  }
+
+  // ==============================
+  // 🟡 MARCAR ALERTA COMO LEÍDA - ACTUALIZADO
+  // ==============================
+  Future<void> _marcarAlertaComoLeida(int idAlerta) async {
+    try {
+      final ok = await alertaService.marcarComoLeida(idAlerta);
+      if (ok && mounted) {
+        _snack("✅ Alerta marcada como leída/atendida");
+        await loadAlertas();
+      } else {
+        _snack("❌ Error al marcar la alerta", isError: true);
+      }
+    } catch (e) {
+      debugPrint("❌ Error marcando alerta: $e");
+      _snack("❌ Error al marcar la alerta", isError: true);
+    }
+  }
+
+  // ==============================
+  // 🟡 MARCAR TODAS LAS ALERTAS COMO LEÍDAS - ACTUALIZADO
+  // ==============================
+  Future<void> _marcarTodasAlertasComoLeidas() async {
+    try {
+      final ok = await alertaService.marcarTodasAtendidas(widget.idPaciente);
+      if (ok && mounted) {
+        _snack("✅ Todas las alertas marcadas como atendidas");
+        await loadAlertas();
+      } else {
+        _snack("❌ Error al marcar todas las alertas", isError: true);
+      }
+    } catch (e) {
+      debugPrint("❌ Error marcando todas las alertas: $e");
+      _snack("❌ Error al marcar todas las alertas", isError: true);
+    }
+  }
+
+  // ==============================
+  // 🗑️ ELIMINAR ALERTA - ACTUALIZADO
+  // ==============================
+  Future<void> _eliminarAlerta(int idAlerta) async {
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Eliminar alerta'),
+        content: const Text('¿Estás seguro de que deseas eliminar esta alerta?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmar != true) return;
+
+    try {
+      final ok = await alertaService.eliminarAlerta(idAlerta);
+      if (ok && mounted) {
+        _snack("✅ Alerta eliminada correctamente");
+        await loadAlertas();
+      } else {
+        _snack("❌ Error al eliminar la alerta", isError: true);
+      }
+    } catch (e) {
+      debugPrint("❌ Error eliminando alerta: $e");
+      _snack("❌ Error al eliminar la alerta", isError: true);
+    }
+  }
+
+  // ==============================
+  // 📊 MOSTRAR ESTADÍSTICAS DE ALERTAS - ACTUALIZADO
+  // ==============================
+  Future<void> _mostrarEstadisticasAlertas() async {
+    try {
+      final estadisticas = await alertaService.getEstadisticasDetalladas(widget.idPaciente);
+      
+      if (!mounted) return;
+      
+      showModalBottomSheet(
+        context: context,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        builder: (context) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                "📊 Estadísticas de Alertas",
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              _buildStatRow("Total", estadisticas['total']?.toString() ?? "0"),
+              _buildStatRow("Pendientes", estadisticas['pendientes']?.toString() ?? "0"),
+              _buildStatRow("Atendidas", estadisticas['atendidas']?.toString() ?? "0"),
+              const SizedBox(height: 16),
+              const Text("Por nivel:", style: TextStyle(fontWeight: FontWeight.bold)),
+              ...(estadisticas['por_nivel'] as Map<String, int>).entries.map((e) =>
+                _buildStatRow(e.key, e.value.toString())
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text("Cerrar"),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint("❌ Error mostrando estadísticas: $e");
+    }
+  }
+
+  Widget _buildStatRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 15)),
+          Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
   Future<void> loadAll() async {
     setState(() => loading = true);
     await Future.wait([
@@ -191,16 +349,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       setState(() => adherencia = data);
     } catch (e) {
       debugPrint("ERROR ADHERENCIA => $e");
-    }
-  }
-
-  Future<void> loadAlertas() async {
-    try {
-      final data = await alertaService.getAlertas(widget.idPaciente);
-      if (!mounted) return;
-      setState(() => alertas = List<Map<String, dynamic>>.from(data));
-    } catch (e) {
-      debugPrint("ERROR ALERTAS => $e");
     }
   }
 
@@ -691,242 +839,213 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: alertas.length,
-      itemBuilder: (_, i) {
-        final a = alertas[i];
-        final nivel = (a["nivel"] ?? "Bajo").toString();
-        final estado = (a["estado"] ?? "PENDIENTE").toString();
-        final origen = (a["origen"] ?? "SISTEMA").toString();
-        final descripcion = a["descripcion"]?.toString() ?? "";
-
-        Color color;
-        Color bgColor;
-        IconData icono;
-        String titulo;
-
-        switch (nivel.toLowerCase()) {
-          case "alto":
-            color = AppTheme.danger;
-            bgColor = AppTheme.danger.withOpacity(0.12);
-            icono = Icons.warning_amber_rounded;
-            titulo = "🔴 ALERTA CRÍTICA";
-            break;
-          case "medio":
-            color = AppTheme.warning;
-            bgColor = AppTheme.warning.withOpacity(0.12);
-            icono = Icons.info_outline;
-            titulo = "🟡 ALERTA IMPORTANTE";
-            break;
-          default:
-            color = AppTheme.info;
-            bgColor = AppTheme.info.withOpacity(0.12);
-            icono = Icons.check_circle_outline;
-            titulo = "🔵 INFORMACIÓN";
-        }
-
-        String origenTexto = "";
-        String origenIcono = "";
-        switch (origen.toUpperCase()) {
-          case "SIGNO":
-            origenTexto = "Signos vitales";
-            origenIcono = "🩺";
-            break;
-          case "SINTOMA":
-            origenTexto = "Síntomas reportados";
-            origenIcono = "🤒";
-            break;
-          case "MANUAL":
-            origenTexto = "Registro manual";
-            origenIcono = "📝";
-            break;
-          default:
-            origenTexto = "Sistema";
-            origenIcono = "⚙️";
-        }
-
-        String infoEspecifica = "";
-        String accionRecomendada = "";
-        
-        if (descripcion.toLowerCase().contains("presion") || 
-            descripcion.toLowerCase().contains("presión")) {
-          infoEspecifica = "La presión arterial está fuera de los rangos normales";
-          accionRecomendada = "Tomar medicación según indicación médica y monitorear cada 2 horas";
-        } else if (descripcion.toLowerCase().contains("frecuencia") || 
-                   descripcion.toLowerCase().contains("cardiaca")) {
-          infoEspecifica = "La frecuencia cardíaca presenta valores anormales";
-          accionRecomendada = "Reposar y verificar nuevamente en 15 minutos";
-        } else if (descripcion.toLowerCase().contains("saturacion") || 
-                   descripcion.toLowerCase().contains("oxígeno")) {
-          infoEspecifica = "La saturación de oxígeno está baja";
-          accionRecomendada = "Mantener posición semi-sentada y contactar al médico";
-        } else if (descripcion.toLowerCase().contains("sintoma") || 
-                   descripcion.toLowerCase().contains("síntoma")) {
-          infoEspecifica = "El paciente ha reportado síntomas preocupantes";
-          accionRecomendada = "Realizar seguimiento y evaluar necesidad de cita médica";
-        } else if (descripcion.toLowerCase().contains("cita")) {
-          infoEspecifica = "Hay una cita médica pendiente o próxima a vencer";
-          accionRecomendada = "Confirmar asistencia o reprogramar si es necesario";
-        } else {
-          infoEspecifica = descripcion;
-          accionRecomendada = "Monitorear la evolución del paciente";
-        }
-
-        return Container(
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+    return Column(
+      children: [
+        // Botones de acción para alertas
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.done_all, size: 18),
+                  label: const Text("Marcar todas"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.success,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: _marcarTodasAlertasComoLeidas,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.analytics, size: 18),
+                  label: const Text("Estadísticas"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: _mostrarEstadisticasAlertas,
+                ),
               ),
             ],
-            border: Border.all(color: color.withOpacity(0.3), width: 2),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(18),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: alertas.length,
+            itemBuilder: (_, i) {
+              final a = alertas[i];
+              final nivel = (a["nivel"] ?? "Bajo").toString();
+              final estado = (a["estado"] ?? "PENDIENTE").toString();
+              final origen = (a["origen"] ?? "SISTEMA").toString();
+              final descripcion = a["descripcion"]?.toString() ?? "";
+              final idAlerta = safeId(a["idAlerta"]);
+              final leida = a["leida"] == true;
+
+              Color color;
+              Color bgColor;
+              IconData icono;
+              String titulo;
+
+              switch (nivel.toLowerCase()) {
+                case "alto":
+                  color = AppTheme.danger;
+                  bgColor = AppTheme.danger.withOpacity(0.12);
+                  icono = Icons.warning_amber_rounded;
+                  titulo = "🔴 ALERTA CRÍTICA";
+                  break;
+                case "medio":
+                  color = AppTheme.warning;
+                  bgColor = AppTheme.warning.withOpacity(0.12);
+                  icono = Icons.info_outline;
+                  titulo = "🟡 ALERTA IMPORTANTE";
+                  break;
+                default:
+                  color = AppTheme.info;
+                  bgColor = AppTheme.info.withOpacity(0.12);
+                  icono = Icons.check_circle_outline;
+                  titulo = "🔵 INFORMACIÓN";
+              }
+
+              String origenTexto = "";
+              String origenIcono = "";
+              switch (origen.toUpperCase()) {
+                case "SIGNO":
+                  origenTexto = "Signos vitales";
+                  origenIcono = "🩺";
+                  break;
+                case "SINTOMA":
+                  origenTexto = "Síntomas reportados";
+                  origenIcono = "🤒";
+                  break;
+                case "MANUAL":
+                  origenTexto = "Registro manual";
+                  origenIcono = "📝";
+                  break;
+                default:
+                  origenTexto = "Sistema";
+                  origenIcono = "⚙️";
+              }
+
+              String infoEspecifica = "";
+              String accionRecomendada = "";
+              
+              if (descripcion.toLowerCase().contains("presion") || 
+                  descripcion.toLowerCase().contains("presión")) {
+                infoEspecifica = "La presión arterial está fuera de los rangos normales";
+                accionRecomendada = "Tomar medicación según indicación médica y monitorear cada 2 horas";
+              } else if (descripcion.toLowerCase().contains("frecuencia") || 
+                         descripcion.toLowerCase().contains("cardiaca")) {
+                infoEspecifica = "La frecuencia cardíaca presenta valores anormales";
+                accionRecomendada = "Reposar y verificar nuevamente en 15 minutos";
+              } else if (descripcion.toLowerCase().contains("saturacion") || 
+                         descripcion.toLowerCase().contains("oxígeno")) {
+                infoEspecifica = "La saturación de oxígeno está baja";
+                accionRecomendada = "Mantener posición semi-sentada y contactar al médico";
+              } else if (descripcion.toLowerCase().contains("sintoma") || 
+                         descripcion.toLowerCase().contains("síntoma")) {
+                infoEspecifica = "El paciente ha reportado síntomas preocupantes";
+                accionRecomendada = "Realizar seguimiento y evaluar necesidad de cita médica";
+              } else if (descripcion.toLowerCase().contains("cita")) {
+                infoEspecifica = "Hay una cita médica pendiente o próxima a vencer";
+                accionRecomendada = "Confirmar asistencia o reprogramar si es necesario";
+              } else {
+                infoEspecifica = descripcion;
+                accionRecomendada = "Monitorear la evolución del paciente";
+              }
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: bgColor,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(21),
-                    topRight: Radius.circular(21),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Icon(icono, color: color, size: 32),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(titulo, 
-                            style: TextStyle(
-                              fontSize: 16, 
-                              fontWeight: FontWeight.bold, 
-                              color: color,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Text("$origenIcono $origenTexto", 
-                                style: const TextStyle(fontSize: 14, color: AppTheme.gray500),
-                              ),
-                              const SizedBox(width: 10),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: estado == "ATENDIDA" 
-                                      ? AppTheme.success.withOpacity(0.12) 
-                                      : AppTheme.warning.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Text(
-                                  estado == "ATENDIDA" ? "✓ Atendida" : "⏳ Pendiente",
-                                  style: TextStyle(
-                                    fontSize: 13, 
-                                    fontWeight: FontWeight.w600, 
-                                    color: estado == "ATENDIDA" 
-                                        ? AppTheme.success 
-                                        : AppTheme.warning,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                  color: leida ? Colors.grey.shade50 : Colors.white,
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
+                  border: Border.all(
+                    color: leida ? AppTheme.gray300 : color.withOpacity(0.3), 
+                    width: leida ? 1 : 2,
+                  ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(18),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(18),
                       decoration: BoxDecoration(
-                        color: AppTheme.gray50,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: AppTheme.gray200.withOpacity(0.3)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.description, size: 20, color: AppTheme.primary),
-                              SizedBox(width: 10),
-                              Text("¿Qué ocurrió?", 
-                                style: TextStyle(
-                                  fontSize: 14, 
-                                  fontWeight: FontWeight.bold, 
-                                  color: AppTheme.gray700,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(infoEspecifica, 
-                            style: const TextStyle(
-                              fontSize: 15, 
-                              height: 1.5, 
-                              color: AppTheme.gray700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: color.withOpacity(0.2)),
+                        color: leida ? AppTheme.gray100 : bgColor,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(21),
+                          topRight: Radius.circular(21),
+                        ),
                       ),
                       child: Row(
                         children: [
                           Container(
-                            padding: const EdgeInsets.all(10),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: color.withOpacity(0.15), 
-                              borderRadius: BorderRadius.circular(12),
+                              color: (leida ? AppTheme.gray500 : color).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                            child: Icon(Icons.medical_services, size: 22, color: color),
+                            child: Icon(icono, color: leida ? AppTheme.gray500 : color, size: 32),
                           ),
-                          const SizedBox(width: 14),
+                          const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text("Acción recomendada", 
-                                  style: TextStyle(fontSize: 13, color: AppTheme.gray500),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(accionRecomendada, 
+                                Text(titulo, 
                                   style: TextStyle(
-                                    fontSize: 15, 
-                                    fontWeight: FontWeight.w500, 
-                                    color: color,
+                                    fontSize: 16, 
+                                    fontWeight: FontWeight.bold, 
+                                    color: leida ? AppTheme.gray500 : color,
                                   ),
+                                ),
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Text("$origenIcono $origenTexto", 
+                                      style: TextStyle(
+                                        fontSize: 14, 
+                                        color: leida ? AppTheme.gray500 : AppTheme.gray500,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: estado == "ATENDIDA" 
+                                            ? AppTheme.success.withOpacity(0.12) 
+                                            : AppTheme.warning.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Text(
+                                        estado == "ATENDIDA" ? "✓ Atendida" : "⏳ Pendiente",
+                                        style: TextStyle(
+                                          fontSize: 13, 
+                                          fontWeight: FontWeight.w600, 
+                                          color: estado == "ATENDIDA" 
+                                              ? AppTheme.success 
+                                              : AppTheme.warning,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -934,51 +1053,130 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                         ],
                       ),
                     ),
-                    const SizedBox(height: 14),
-                    Row(
-                      children: [
-                        Icon(Icons.access_time, size: 18, color: AppTheme.gray400),
-                        const SizedBox(width: 8),
-                        Text(_formatFechaDetalle(a["fecha"]), 
-                          style: const TextStyle(fontSize: 14, color: AppTheme.gray400),
-                        ),
-                        const Spacer(),
-                        if (estado.toUpperCase() != "ATENDIDA")
-                          ElevatedButton(
-                            onPressed: () async {
-                              final id = safeId(a["idAlerta"]);
-                              if (id != null) {
-                                final ok = await alertaService.marcarAlertaLeida(id);
-                                if (ok && mounted) {
-                                  setState(() => a["leida"] = 1);
-                                  _snack("✅ Alerta marcada como atendida");
-                                  await loadAlertas();
-                                }
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.success,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    Padding(
+                      padding: const EdgeInsets.all(18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: leida ? AppTheme.gray50 : AppTheme.gray50,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: AppTheme.gray200.withOpacity(0.3)),
                             ),
-                            child: const Text("Marcar atendida", 
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Row(
+                                  children: [
+                                    Icon(Icons.description, size: 20, color: AppTheme.primary),
+                                    SizedBox(width: 10),
+                                    Text("¿Qué ocurrió?", 
+                                      style: TextStyle(
+                                        fontSize: 14, 
+                                        fontWeight: FontWeight.bold, 
+                                        color: AppTheme.gray700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text(infoEspecifica, 
+                                  style: TextStyle(
+                                    fontSize: 15, 
+                                    height: 1.5, 
+                                    color: leida ? AppTheme.gray500 : AppTheme.gray700,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                      ],
+                          const SizedBox(height: 14),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: (leida ? AppTheme.gray200 : color).withOpacity(0.08),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: (leida ? AppTheme.gray300 : color).withOpacity(0.2)),
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color: (leida ? AppTheme.gray300 : color).withOpacity(0.15), 
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Icon(Icons.medical_services, size: 22, color: leida ? AppTheme.gray500 : color),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text("Acción recomendada", 
+                                        style: TextStyle(fontSize: 13, color: AppTheme.gray500),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(accionRecomendada, 
+                                        style: TextStyle(
+                                          fontSize: 15, 
+                                          fontWeight: FontWeight.w500, 
+                                          color: leida ? AppTheme.gray500 : color,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            children: [
+                              Icon(Icons.access_time, size: 18, color: AppTheme.gray400),
+                              const SizedBox(width: 8),
+                              Text(_formatFechaDetalle(a["fecha"]), 
+                                style: const TextStyle(fontSize: 14, color: AppTheme.gray400),
+                              ),
+                              const Spacer(),
+                              if (!leida && idAlerta != null) ...[
+                                ElevatedButton(
+                                  onPressed: () => _marcarAlertaComoLeida(idAlerta),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppTheme.success,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                  child: const Text("Marcar atendida", 
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 22),
+                                  onPressed: () => _eliminarAlerta(idAlerta),
+                                  tooltip: "Eliminar alerta",
+                                ),
+                              ],
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ],
+              );
+            },
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 

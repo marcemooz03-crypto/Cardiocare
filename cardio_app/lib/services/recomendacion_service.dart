@@ -4,14 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class RecomendacionService {
+  // ⚠️ CAMBIA ESTA IP POR LA DE TU PC
   final String baseUrl = "${ApiConfig.baseUrl}/recomendaciones";
 
   // Codifica titulo+categoria dentro del campo descripcion
+  // Formato guardado: "##TITULO##Reducir sal||##CATEGORIA##Alimentación||##DESC##texto..."
   String _encode(String titulo, String categoria, String descripcion) {
     return "##TITULO##$titulo||##CATEGORIA##$categoria||##DESC##$descripcion";
   }
 
-  // Parsea el campo descripcion
+  // Parsea el campo descripcion y devuelve titulo, categoria y descripcion por separado
   static Map<String, String> parseDescripcion(String raw) {
     if (raw.contains("##TITULO##")) {
       try {
@@ -29,6 +31,7 @@ class RecomendacionService {
         };
       } catch (_) {}
     }
+    // Registro antiguo sin formato → mostrar todo como descripcion
     return {
       "titulo": "Recomendación",
       "categoria": "Otros",
@@ -60,7 +63,7 @@ class RecomendacionService {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data["ok"] == true || data["success"] == true;
+        return data["ok"] == true;
       }
       return false;
     } catch (e) {
@@ -69,37 +72,23 @@ class RecomendacionService {
     }
   }
 
-  // ✅ LISTAR POR PACIENTE
-  Future<List<Map<dynamic, dynamic>>> getByPaciente(int idPaciente) async {
+  // ✅ LISTAR POR PACIENTE (parsea descripcion automáticamente)
+  Future<List<Map<String, dynamic>>> getByPaciente(int idPaciente) async {
     try {
       final url = Uri.parse("$baseUrl/paciente/$idPaciente");
       final response = await http.get(url);
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        
-        // Manejar diferentes formatos de respuesta
-        List<dynamic> raw;
-        if (data is Map && data.containsKey("recomendaciones")) {
-          raw = data["recomendaciones"];
-        } else if (data is Map && data.containsKey("data")) {
-          raw = data["data"];
-        } else if (data is List) {
-          raw = data;
-        } else {
-          raw = [];
-        }
+        final raw = List<Map<String, dynamic>>.from(jsonDecode(response.body));
 
+        // Inyectar titulo y categoria parseados en cada item
         return raw.map((item) {
           final parsed = parseDescripcion(item["descripcion"] ?? "");
           return {
             ...item,
-            "idRecomendacion": item["idRecomendacion"] ?? item["id"],
             "titulo": parsed["titulo"],
             "categoria": parsed["categoria"],
             "descripcion": parsed["descripcion"],
-            // ✅ Asegurar campo leida
-            "leida": item["leida"] == true,
           };
         }).toList();
       }
@@ -107,45 +96,6 @@ class RecomendacionService {
     } catch (e) {
       debugPrint("ERROR GET RECOMENDACIONES => $e");
       return [];
-    }
-  }
-
-  // ✅ OBTENER RECOMENDACIÓN POR ID
-  Future<Map<String, dynamic>?> getRecomendacion(int idRecomendacion) async {
-    try {
-      final url = Uri.parse("$baseUrl/$idRecomendacion");
-      final response = await http.get(url);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        
-        Map<String, dynamic>? item;
-        if (data is Map) {
-          if (data.containsKey("recomendacion")) {
-            item = data["recomendacion"];
-          } else if (data.containsKey("data")) {
-            item = data["data"];
-          } else {
-            item = data.cast<String, dynamic>();
-          }
-        }
-
-        if (item != null) {
-          final parsed = parseDescripcion(item["descripcion"] ?? "");
-          return {
-            ...item,
-            "idRecomendacion": item["idRecomendacion"] ?? item["id"],
-            "titulo": parsed["titulo"],
-            "categoria": parsed["categoria"],
-            "descripcion": parsed["descripcion"],
-            "leida": item["leida"] == true,
-          };
-        }
-      }
-      return null;
-    } catch (e) {
-      debugPrint("ERROR GET RECOMENDACION => $e");
-      return null;
     }
   }
 
@@ -162,68 +112,6 @@ class RecomendacionService {
       return false;
     } catch (e) {
       debugPrint("ERROR DELETE RECOMENDACION => $e");
-      return false;
-    }
-  }
-
-  // ✅ MARCAR COMO LEÍDA
-  Future<bool> marcarComoLeida(int idRecomendacion) async {
-    try {
-      final url = Uri.parse("$baseUrl/$idRecomendacion/leida");
-      final response = await http.put(
-        url,
-        headers: {"Content-Type": "application/json"},
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data["ok"] == true || data["success"] == true;
-      }
-      return false;
-    } catch (e) {
-      debugPrint("ERROR MARCAR RECOMENDACION LEIDA => $e");
-      return false;
-    }
-  }
-
-  // ✅ OBTENER RECOMENDACIONES NO LEÍDAS
-  Future<List<Map<dynamic, dynamic>>> getRecomendacionesNoLeidas(int idPaciente) async {
-    final todas = await getByPaciente(idPaciente);
-    return todas.where((r) => r["leida"] != true).toList();
-  }
-
-  // ✅ CONTAR RECOMENDACIONES NO LEÍDAS
-  Future<int> contarRecomendacionesNoLeidas(int idPaciente) async {
-    final noLeidas = await getRecomendacionesNoLeidas(idPaciente);
-    return noLeidas.length;
-  }
-
-  // ✅ ACTUALIZAR RECOMENDACIÓN
-  Future<bool> actualizar({
-    required int idRecomendacion,
-    required String titulo,
-    required String categoria,
-    required String descripcion,
-  }) async {
-    try {
-      final url = Uri.parse("$baseUrl/actualizar/$idRecomendacion");
-      final encoded = _encode(titulo, categoria, descripcion);
-
-      final response = await http.put(
-        url,
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "descripcion": encoded,
-        }),
-      );
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data["ok"] == true || data["success"] == true;
-      }
-      return false;
-    } catch (e) {
-      debugPrint("ERROR ACTUALIZAR RECOMENDACION => $e");
       return false;
     }
   }

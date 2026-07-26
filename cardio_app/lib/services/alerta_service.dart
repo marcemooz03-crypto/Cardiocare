@@ -274,6 +274,7 @@ class AlertaService {
     try {
       final res = await http.put(
         Uri.parse("$baseUrl/$idAlerta/atendida"),
+        headers: {"Content-Type": "application/json"},
       );
       
       print("📝 MARCAR ATENDIDA: ${res.statusCode}");
@@ -309,7 +310,11 @@ class AlertaService {
           headers: {"Content-Type": "application/json"},
         );
         print("📝 MARCAR LEÍDA: ${res.statusCode}");
-        return res.statusCode == 200;
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          return data["ok"] == true || data["success"] == true;
+        }
+        return false;
       } catch (e) {
         print("ERROR MARCAR LEÍDA => $e");
         return false;
@@ -321,16 +326,63 @@ class AlertaService {
   }
 
   // ==========================
+  // 🟡 MARCAR TODAS COMO ATENDIDAS
+  // ==========================
+  Future<bool> marcarTodasAtendidas(int idPaciente) async {
+    try {
+      final alertas = await getAlertasPendientes(idPaciente);
+      bool todasExitosas = true;
+      
+      for (var alerta in alertas) {
+        final id = alerta['idAlerta'] ?? alerta['id'];
+        if (id != null) {
+          final exito = await marcarAtendida(id);
+          if (!exito) todasExitosas = false;
+        }
+      }
+      
+      return todasExitosas;
+    } catch (e) {
+      print("ERROR MARCAR TODAS ATENDIDAS => $e");
+      return false;
+    }
+  }
+
+  // ==========================
   // 🗑️ ELIMINAR ALERTA
   // ==========================
   Future<bool> eliminarAlerta(int idAlerta) async {
     try {
       final res = await http.delete(
         Uri.parse("$baseUrl/$idAlerta"),
+        headers: {"Content-Type": "application/json"},
       );
       return res.statusCode == 200;
     } catch (e) {
       print("ERROR ELIMINAR ALERTA => $e");
+      return false;
+    }
+  }
+
+  // ==========================
+  // 🗑️ ELIMINAR TODAS LAS ALERTAS
+  // ==========================
+  Future<bool> eliminarTodasAlertas(int idPaciente) async {
+    try {
+      final alertas = await getAlertas(idPaciente);
+      bool todasExitosas = true;
+      
+      for (var alerta in alertas) {
+        final id = alerta['idAlerta'] ?? alerta['id'];
+        if (id != null) {
+          final exito = await eliminarAlerta(id);
+          if (!exito) todasExitosas = false;
+        }
+      }
+      
+      return todasExitosas;
+    } catch (e) {
+      print("ERROR ELIMINAR TODAS ALERTAS => $e");
       return false;
     }
   }
@@ -410,6 +462,16 @@ class AlertaService {
   }
 
   // ==========================
+  // 🔍 OBTENER ALERTAS ATENDIDAS
+  // ==========================
+  Future<List<Map<String, dynamic>>> getAlertasAtendidas(int idPaciente) async {
+    final alertas = await getAlertas(idPaciente);
+    return alertas.where((a) => 
+      a['estado']?.toString()?.toUpperCase() == 'ATENDIDA'
+    ).toList();
+  }
+
+  // ==========================
   // 🔍 OBTENER ALERTAS NO LEÍDAS
   // ==========================
   Future<List<Map<String, dynamic>>> getAlertasNoLeidas(int idPaciente) async {
@@ -425,5 +487,94 @@ class AlertaService {
   Future<int> contarAlertasNoLeidas(int idPaciente) async {
     final noLeidas = await getAlertasNoLeidas(idPaciente);
     return noLeidas.length;
+  }
+
+  // ==========================
+  // 📊 CONTAR ALERTAS POR NIVEL
+  // ==========================
+  Future<Map<String, int>> contarAlertasPorNivel(int idPaciente) async {
+    final alertas = await getAlertas(idPaciente);
+    final Map<String, int> conteo = {};
+    
+    for (var alerta in alertas) {
+      final nivel = alerta['nivel']?.toString() ?? 'Desconocido';
+      conteo[nivel] = (conteo[nivel] ?? 0) + 1;
+    }
+    
+    return conteo;
+  }
+
+  // ==========================
+  // 📊 OBTENER ALERTAS POR RANGO DE FECHAS
+  // ==========================
+  Future<List<Map<String, dynamic>>> getAlertasByFecha(
+    int idPaciente,
+    String fechaInicio,
+    String fechaFin,
+  ) async {
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/paciente/$idPaciente/rango?inicio=$fechaInicio&fin=$fechaFin"),
+        headers: {"Content-Type": "application/json"},
+      );
+
+      print("📊 ALERTAS RANGO RESPONSE: ${res.statusCode}");
+
+      if (res.statusCode == 200) {
+        List<Map<String, dynamic>> alertas = 
+            List<Map<String, dynamic>>.from(jsonDecode(res.body));
+        return _enriquecerAlertas(alertas);
+      }
+      return [];
+    } catch (e) {
+      print("ERROR ALERTAS RANGO => $e");
+      return [];
+    }
+  }
+
+  // ==========================
+  // 📊 OBTENER ÚLTIMAS ALERTAS
+  // ==========================
+  Future<List<Map<String, dynamic>>> getUltimasAlertas(
+    int idPaciente, {
+    int limit = 10,
+  }) async {
+    try {
+      final alertas = await getAlertas(idPaciente);
+      
+      // Ordenar por fecha descendente
+      alertas.sort((a, b) {
+        try {
+          final fa = DateTime.parse(a['fecha'].toString());
+          final fb = DateTime.parse(b['fecha'].toString());
+          return fb.compareTo(fa);
+        } catch (_) {
+          return 0;
+        }
+      });
+      
+      return alertas.take(limit).toList();
+    } catch (e) {
+      print("ERROR OBTENER ÚLTIMAS ALERTAS => $e");
+      return [];
+    }
+  }
+
+  // ==========================
+  // 📊 OBTENER ALERTAS POR ORIGEN
+  // ==========================
+  Future<List<Map<String, dynamic>>> getAlertasByOrigen(
+    int idPaciente,
+    String origen,
+  ) async {
+    try {
+      final alertas = await getAlertas(idPaciente);
+      return alertas.where((a) =>
+        a['origen']?.toString().toLowerCase() == origen.toLowerCase()
+      ).toList();
+    } catch (e) {
+      print("ERROR ALERTAS POR ORIGEN => $e");
+      return [];
+    }
   }
 }
