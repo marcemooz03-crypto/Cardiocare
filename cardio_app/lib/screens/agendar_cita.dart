@@ -25,9 +25,9 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
   TimeOfDay? _selectedTime;
   bool _isLoading = false;
 
-  // Estados de cita según estándar Sanitas
+  // ✅ ESTADOS CORREGIDOS (SOLO VALORES CORTOS)
   static const List<String> _estadosCita = [
-    "Pendiente de confirmación",
+    "Pendiente",      // ✅ Ahora es corto y no da error
     "Confirmada",
     "Completada",
     "Cancelada",
@@ -62,14 +62,19 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
       _selectedTime!.minute,
     );
 
-    final exito = await _citaService.agendarCita({
+    // 🔥 DATOS CORRECTOS CON ESTADO CORTO
+    final datosCita = {
       "idPaciente": widget.idPaciente,
       "idProfesional": _selectedMedicoId,
       "fecha": fechaHoraCompleta.toIso8601String(),
       "motivo": _motivoController.text.trim(),
-      "estado": _estadosCita[0], // "Pendiente de confirmación"
+      "estado": _estadosCita[0], // ✅ "Pendiente" (corto)
       "fechaSolicitud": DateTime.now().toIso8601String(),
-    });
+    };
+
+    print("📤 Enviando cita con estado: '${datosCita["estado"]}'");
+
+    final exito = await _citaService.agendarCita(datosCita);
 
     setState(() => _isLoading = false);
 

@@ -1200,7 +1200,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     lineTouchData: LineTouchData(
                       enabled: true,
                       touchTooltipData: LineTouchTooltipData(
-                        tooltipRoundedRadius: 10,
                         tooltipPadding: const EdgeInsets.all(12),
                         getTooltipItems: (touchedSpots) {
                           return touchedSpots.map((touchedSpot) {
@@ -1983,7 +1982,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 loadCitas();
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => CitasScreen(citas: citas)),
+                  MaterialPageRoute(builder: (_) => CitasScreen(citas: citas, esMedico: true, )),
                 );
               },
             ),

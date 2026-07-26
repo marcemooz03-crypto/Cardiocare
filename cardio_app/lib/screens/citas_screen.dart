@@ -20,7 +20,7 @@ class _CitasScreenState extends State<CitasScreen> {
   late List<Map<String, dynamic>> _citas;
   bool _isLoading = false;
 
-  // Mapa de estados con colores y texto amigable
+  // ✅ MAPA DE ESTADOS - Solo para mostrar en UI
   final Map<String, Map<String, dynamic>> _estadosConfig = {
     "Pendiente": {
       "label": "Pendiente de confirmación",
@@ -28,25 +28,25 @@ class _CitasScreenState extends State<CitasScreen> {
       "bgColor": Color(0xFFFFF3E0),
       "icon": Icons.pending_actions,
     },
-    "aprobada": {
-      "label": "Confirmada",
-      "color": Colors.green,
-      "bgColor": Color(0xFFE8F5E9),
-      "icon": Icons.check_circle,
-    },
     "Confirmada": {
       "label": "Confirmada",
       "color": Colors.green,
       "bgColor": Color(0xFFE8F5E9),
       "icon": Icons.check_circle,
     },
-    "rechazada": {
+    "Aprobada": {
+      "label": "Aprobada",
+      "color": Colors.green,
+      "bgColor": Color(0xFFE8F5E9),
+      "icon": Icons.check_circle,
+    },
+    "Rechazada": {
       "label": "Rechazada",
       "color": Colors.red,
       "bgColor": Color(0xFFFFEBEE),
       "icon": Icons.cancel,
     },
-    "cancelada": {
+    "Cancelada": {
       "label": "Cancelada",
       "color": Colors.grey,
       "bgColor": Color(0xFFF5F5F5),
@@ -65,6 +65,10 @@ class _CitasScreenState extends State<CitasScreen> {
     super.initState();
     _citas = List<Map<String, dynamic>>.from(widget.citas);
     _ordenarCitas();
+    debugPrint("📋 CITAS RECIBIDAS: ${_citas.length}");
+    for (var c in _citas) {
+      debugPrint("   - ${c['motivo']} | Estado: ${c['estado']}");
+    }
   }
 
   // ==============================
@@ -129,7 +133,7 @@ class _CitasScreenState extends State<CitasScreen> {
   }
 
   // ==============================
-  // 🟢 APROBAR CITA
+  // 🟢 APROBAR CITA (Profesional)
   // ==============================
   Future<void> _aprobarCita(int id) async {
     final confirmacion = await _mostrarDialogConfirmacion(
@@ -147,6 +151,13 @@ class _CitasScreenState extends State<CitasScreen> {
     
     if (exito) {
       _mostrarMensajeExito('Cita confirmada exitosamente');
+      // 🔥 Actualizar el estado localmente
+      setState(() {
+        final index = _citas.indexWhere((c) => c["idCita"] == id);
+        if (index != -1) {
+          _citas[index]["estado"] = "Aprobada";
+        }
+      });
       await _recargarCitas();
     } else {
       _mostrarMensajeError('No se pudo confirmar la cita');
@@ -154,7 +165,7 @@ class _CitasScreenState extends State<CitasScreen> {
   }
 
   // ==============================
-  // 🔴 RECHAZAR CITA
+  // 🔴 RECHAZAR CITA (Profesional)
   // ==============================
   Future<void> _rechazarCita(int id) async {
     final confirmacion = await _mostrarDialogConfirmacion(
@@ -173,6 +184,13 @@ class _CitasScreenState extends State<CitasScreen> {
     
     if (exito) {
       _mostrarMensajeExito('Cita rechazada', esError: false);
+      // 🔥 Actualizar el estado localmente
+      setState(() {
+        final index = _citas.indexWhere((c) => c["idCita"] == id);
+        if (index != -1) {
+          _citas[index]["estado"] = "Rechazada";
+        }
+      });
       await _recargarCitas();
     } else {
       _mostrarMensajeError('No se pudo rechazar la cita');
@@ -193,13 +211,19 @@ class _CitasScreenState extends State<CitasScreen> {
 
     setState(() => _isLoading = true);
     
-    // Asumiendo que existe un método cancelarCita en el servicio
     final exito = await _citaService.cancelarCita(id);
     
     setState(() => _isLoading = false);
     
     if (exito) {
       _mostrarMensajeExito('Cita cancelada', esError: false);
+      // 🔥 Actualizar el estado localmente
+      setState(() {
+        final index = _citas.indexWhere((c) => c["idCita"] == id);
+        if (index != -1) {
+          _citas[index]["estado"] = "Cancelada";
+        }
+      });
       await _recargarCitas();
     } else {
       _mostrarMensajeError('No se pudo cancelar la cita');
@@ -284,13 +308,25 @@ class _CitasScreenState extends State<CitasScreen> {
   // 🎨 ESTADO CHIP
   // ==============================
   Widget _buildEstadoChip(String estado) {
-    final config = _estadosConfig[estado] ?? _estadosConfig["Pendiente"];
-    final estadoLower = estado.toLowerCase();
-    final configKey = _estadosConfig.keys.firstWhere(
-      (key) => key.toLowerCase() == estadoLower,
-      orElse: () => "Pendiente",
-    );
-    final finalConfig = _estadosConfig[configKey] ?? _estadosConfig["Pendiente"]!;
+    // Buscar configuración exacta
+    String? configKey;
+    
+    // Primero buscar coincidencia exacta
+    if (_estadosConfig.containsKey(estado)) {
+      configKey = estado;
+    } else {
+      // Buscar por coincidencia de mayúsculas/minúsculas
+      final estadoLower = estado.toLowerCase();
+      for (var key in _estadosConfig.keys) {
+        if (key.toLowerCase() == estadoLower) {
+          configKey = key;
+          break;
+        }
+      }
+    }
+    
+    // Si no encuentra, usar "Pendiente" por defecto
+    final finalConfig = _estadosConfig[configKey ?? "Pendiente"] ?? _estadosConfig["Pendiente"]!;
     
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -319,11 +355,13 @@ class _CitasScreenState extends State<CitasScreen> {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint("🔍 BUILD CITAS - Total: ${_citas.length}, esMedico: ${widget.esMedico}");
+    
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: Text(
-          widget.esMedico ? "Agenda profesional" : "Mis citas médicas",
+          widget.esMedico ? "📋 Agenda profesional" : "📋 Mis citas médicas",
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         elevation: 0,
@@ -355,11 +393,23 @@ class _CitasScreenState extends State<CitasScreen> {
                 itemCount: _citas.length,
                 itemBuilder: (context, index) {
                   final cita = _citas[index];
-                  final estado = cita["estado"] ?? "Pendiente";
+                  final estado = cita["estado"]?.toString() ?? "Pendiente";
+                  
+                  // 🔥 CORREGIDO: Usar mayúsculas para comparar
+                  final estadoLower = estado.toLowerCase();
+                  
+                  // Para médico: solo mostrar citas pendientes o aprobadas
                   final puedeGestionar = widget.esMedico && 
-                      (estado.toLowerCase() == "pendiente");
+                      (estadoLower == "pendiente" || estadoLower == "pendiente de confirmación");
+                  
+                  // Para paciente: puede cancelar si está pendiente o aprobada
                   final puedeCancelar = !widget.esMedico && 
-                      (estado.toLowerCase() == "pendiente" || estado.toLowerCase() == "aprobada");
+                      (estadoLower == "pendiente" || 
+                       estadoLower == "pendiente de confirmación" || 
+                       estadoLower == "aprobada" || 
+                       estadoLower == "confirmada");
+                  
+                  debugPrint("📌 Cita ${index+1}: ${cita['motivo']} | Estado: '$estado' | puedeGestionar: $puedeGestionar");
                   
                   return _buildCitaCard(cita, estado, puedeGestionar, puedeCancelar);
                 },
@@ -530,7 +580,7 @@ class _CitasScreenState extends State<CitasScreen> {
                       if (puedeGestionar) ...[
                         Expanded(
                           child: _buildAccionBoton(
-                            texto: 'Confirmar',
+                            texto: '✅ Confirmar',
                             icon: Icons.check,
                             color: Colors.green,
                             onPressed: () => _aprobarCita(cita["idCita"]),
@@ -539,7 +589,7 @@ class _CitasScreenState extends State<CitasScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _buildAccionBoton(
-                            texto: 'Rechazar',
+                            texto: '❌ Rechazar',
                             icon: Icons.close,
                             color: Colors.red,
                             onPressed: () => _rechazarCita(cita["idCita"]),
@@ -548,7 +598,7 @@ class _CitasScreenState extends State<CitasScreen> {
                       ] else if (puedeCancelar) ...[
                         Expanded(
                           child: _buildAccionBoton(
-                            texto: 'Cancelar cita',
+                            texto: '🚫 Cancelar cita',
                             icon: Icons.cancel,
                             color: Colors.red,
                             onPressed: () => _cancelarCita(cita["idCita"]),
@@ -623,7 +673,10 @@ class _CitasScreenState extends State<CitasScreen> {
             _buildDetalleFila('Fecha', _formatearFechaCompleta(cita["fecha"])),
             if (_formatearHora(cita["fecha"]).isNotEmpty)
               _buildDetalleFila('Hora', _formatearHora(cita["fecha"])),
-            _buildDetalleFila('Estado', cita["estado"] ?? 'Pendiente'),
+            _buildDetalleFila('Estado', _obtenerEstadoLabel(cita["estado"] ?? 'Pendiente')),
+            _buildDetalleFila('ID Cita', cita["idCita"]?.toString() ?? 'N/A'),
+            if (widget.esMedico && cita["pacienteNombre"] != null)
+              _buildDetalleFila('Paciente', cita["pacienteNombre"]),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -645,6 +698,29 @@ class _CitasScreenState extends State<CitasScreen> {
         ),
       ),
     );
+  }
+
+  String _obtenerEstadoLabel(String estado) {
+    // Buscar configuración del estado
+    String? configKey;
+    
+    if (_estadosConfig.containsKey(estado)) {
+      configKey = estado;
+    } else {
+      final estadoLower = estado.toLowerCase();
+      for (var key in _estadosConfig.keys) {
+        if (key.toLowerCase() == estadoLower) {
+          configKey = key;
+          break;
+        }
+      }
+    }
+    
+    if (configKey != null && _estadosConfig[configKey] != null) {
+      return _estadosConfig[configKey]!["label"];
+    }
+    
+    return estado; // Si no encuentra, mostrar el estado original
   }
 
   Widget _buildDetalleFila(String label, String valor) {

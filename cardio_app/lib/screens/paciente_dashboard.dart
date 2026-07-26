@@ -28,8 +28,11 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   Map<String, dynamic>? paciente;
   int? idPaciente;
   bool loading = true;
+  
+  // 🔥 NOTIFICACIONES - IGUAL QUE MEDICO
+  List<Map<String, dynamic>> notificaciones = [];
   int notificacionesNoLeidas = 0;
-  List<Map<String, dynamic>> listaNotificaciones = [];
+  bool _cargandoNotificaciones = false;
 
   @override
   void initState() {
@@ -50,45 +53,191 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     _iniciarEscuchaNotificaciones();
   }
 
+  // ==============================
+  // 🔥 CARGAR NOTIFICACIONES - IGUAL QUE MEDICO
+  // ==============================
   Future<void> _cargarNotificaciones() async {
+    setState(() => _cargandoNotificaciones = true);
     try {
-      final notifs = await notificacionService.getNotificacionesPaciente(widget.idUsuario);
+      final data = await notificacionService.getNotificacionesPaciente(widget.idUsuario);
       if (!mounted) return;
       setState(() {
-        listaNotificaciones = notifs;
-        notificacionesNoLeidas = notifs.where((n) => n["leida"] == false).length;
+        notificaciones = List<Map<String, dynamic>>.from(data);
+        notificacionesNoLeidas = notificaciones.where((n) => n["leida"] != true).length;
+        _cargandoNotificaciones = false;
       });
+      debugPrint("📋 Notificaciones cargadas: ${notificaciones.length}");
     } catch (e) {
       debugPrint("❌ Error cargando notificaciones: $e");
+      setState(() {
+        notificaciones = [];
+        notificacionesNoLeidas = 0;
+        _cargandoNotificaciones = false;
+      });
     }
   }
 
+  // ==============================
+  // 🔥 INICIAR ESCUCHA - IGUAL QUE MEDICO
+  // ==============================
   void _iniciarEscuchaNotificaciones() {
     notificacionService.escucharNotificacionesPaciente(
       widget.idUsuario,
       onNuevaNotificacion: (notificacion) {
         if (!mounted) return;
+        debugPrint("📨 NUEVA NOTIFICACIÓN: ${notificacion['mensaje']}");
         setState(() {
-          listaNotificaciones.insert(0, notificacion);
+          notificaciones.insert(0, notificacion);
           if (!(notificacion["leida"] ?? false)) {
             notificacionesNoLeidas++;
           }
         });
+        _mostrarSnackbarNotificacion(notificacion);
       },
     );
+    debugPrint("🔔 Escucha de notificaciones iniciada");
+  }
+
+  // ==============================
+  // 🔥 MOSTRAR SNACKBAR - IGUAL QUE MEDICO
+  // ==============================
+  void _mostrarSnackbarNotificacion(Map<String, dynamic> notificacion) {
+    final mensaje = notificacion['mensaje'] ?? 'Nueva notificación';
+    final tipo = notificacion['tipo']?.toString() ?? 'info';
+    
+    Color color;
+    IconData icono;
+    
+    switch (tipo) {
+      case 'signo':
+        color = AppTheme.danger;
+        icono = Icons.monitor_heart;
+        break;
+      case 'sintoma':
+        color = AppTheme.warning;
+        icono = Icons.healing;
+        break;
+      case 'cita':
+        color = AppTheme.info;
+        icono = Icons.event;
+        break;
+      case 'recomendacion':
+        color = AppTheme.primary;
+        icono = Icons.lightbulb_outline;
+        break;
+      default:
+        color = AppTheme.primary;
+        icono = Icons.notifications;
+    }
+    
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(icono, color: Colors.white, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                mensaje,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 4),
+        margin: const EdgeInsets.all(16),
+        elevation: 6,
+      ),
+    );
+  }
+
+  // ==============================
+  // 🔥 MARCAR NOTIFICACIÓN COMO LEÍDA - IGUAL QUE MEDICO
+  // ==============================
+  Future<void> _marcarNotificacionComoLeida(String idNotificacion) async {
+    await notificacionService.marcarComoLeida(idNotificacion);
+    setState(() {
+      final index = notificaciones.indexWhere((n) => n["id"] == idNotificacion);
+      if (index != -1) {
+        notificaciones[index]["leida"] = true;
+        notificacionesNoLeidas = notificaciones.where((n) => n["leida"] != true).length;
+      }
+    });
+  }
+
+  // ==============================
+  // 🔥 MARCAR TODAS COMO LEÍDAS - IGUAL QUE MEDICO
+  // ==============================
+  Future<void> _marcarTodasComoLeidas() async {
+    await notificacionService.marcarTodasComoLeidas(widget.idUsuario);
+    setState(() {
+      for (var n in notificaciones) {
+        n["leida"] = true;
+      }
+      notificacionesNoLeidas = 0;
+    });
+    debugPrint("✅ Todas las notificaciones marcadas como leídas");
+  }
+
+  // ==============================
+  // 🔥 LIMPIAR TODAS - IGUAL QUE MEDICO
+  // ==============================
+  Future<void> _limpiarTodasLasNotificaciones() async {
+    try {
+      await notificacionService.limpiarNotificaciones();
+      setState(() {
+        notificaciones.clear();
+        notificacionesNoLeidas = 0;
+      });
+      debugPrint("✅ Notificaciones limpiadas");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("🧹 Notificaciones limpiadas"),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint("❌ Error limpiando notificaciones: $e");
+    }
+  }
+
+  // ==============================
+  // 🔥 ABRIR DETALLE DE NOTIFICACIÓN - IGUAL QUE MEDICO
+  // ==============================
+  void _abrirDetalleNotificacion(Map<String, dynamic> notificacion) {
+    // Si la notificación tiene idPaciente, abrir el perfil
+    final idPacienteNotif = notificacion["idPaciente"];
+    if (idPacienteNotif != null && idPacienteNotif == idPaciente) {
+      // Ya estamos en el dashboard del paciente, podemos abrir el perfil
+      openPerfil();
+    }
   }
 
   Future<void> loadProfile() async {
     setState(() => loading = true);
-    final data = await profile.getPaciente(widget.idUsuario);
-    if (!mounted) return;
-    setState(() {
-      paciente = data;
-      idPaciente = data["idPaciente"] != null
-          ? int.tryParse(data["idPaciente"].toString())
-          : null;
-      loading = false;
-    });
+    try {
+      final data = await profile.getPaciente(widget.idUsuario);
+      if (!mounted) return;
+      setState(() {
+        paciente = data;
+        idPaciente = data["idPaciente"] != null
+            ? int.tryParse(data["idPaciente"].toString())
+            : null;
+        loading = false;
+      });
+    } catch (e) {
+      debugPrint("❌ Error cargando perfil: $e");
+      setState(() => loading = false);
+    }
   }
 
   void logout() {
@@ -109,6 +258,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
+              notificacionService.detenerEscucha();
               Navigator.pushAndRemoveUntil(
                 context,
                 MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -123,7 +273,6 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     );
   }
 
-  // ✅ CORREGIDO: openPerfil - ya no recarga el dashboard al volver
   void openPerfil() {
     if (idPaciente == null) return;
     Navigator.push(
@@ -136,7 +285,6 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         ),
       ),
     );
-    // ❌ ELIMINADO: .then((_) => loadProfile()) - Esto causaba la recarga innecesaria
   }
 
   void openConfiguracion() {
@@ -151,22 +299,228 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     ).then((_) => loadProfile());
   }
 
-  void _marcarTodasComoLeidas() async {
-    await notificacionService.marcarTodasComoLeidas(widget.idUsuario);
-    setState(() {
-      notificacionesNoLeidas = 0;
-      for (var notif in listaNotificaciones) {
-        notif["leida"] = true;
-      }
-    });
+  // ==============================
+  // 🔥 PANEL DE NOTIFICACIONES - IGUAL QUE MEDICO
+  // ==============================
+  void _mostrarPanelNotificaciones() {
+    if (notificacionesNoLeidas > 0) {
+      _marcarTodasComoLeidas();
+    }
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      backgroundColor: AppTheme.white,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.8,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) {
+          return Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.06),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(28),
+                    topRight: Radius.circular(28),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.notifications, color: AppTheme.primary, size: 32),
+                    const SizedBox(width: 14),
+                    const Expanded(
+                      child: Text(
+                        "Notificaciones",
+                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (notificaciones.isNotEmpty)
+                      TextButton(
+                        onPressed: () {
+                          _limpiarTodasLasNotificaciones();
+                          Navigator.pop(context);
+                        },
+                        child: const Text(
+                          "Limpiar todo",
+                          style: TextStyle(color: AppTheme.danger, fontSize: 16),
+                        ),
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.close, size: 30),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(),
+              Expanded(
+                child: notificaciones.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.notifications_none, size: 72, color: AppTheme.gray300),
+                            const SizedBox(height: 20),
+                            const Text(
+                              "No hay notificaciones",
+                              style: TextStyle(fontSize: 18, color: AppTheme.gray500),
+                            ),
+                            const SizedBox(height: 10),
+                            const Text(
+                              "Las notificaciones aparecerán aquí",
+                              style: TextStyle(fontSize: 15, color: AppTheme.gray400),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        controller: scrollController,
+                        itemCount: notificaciones.length,
+                        itemBuilder: (context, index) {
+                          final n = notificaciones[index];
+                          final tipo = n["tipo"] ?? "info";
+                          final leida = n["leida"] == true;
+                          
+                          Color color;
+                          IconData icono;
+                          
+                          switch (tipo) {
+                            case "signo": color = AppTheme.danger; icono = Icons.monitor_heart; break;
+                            case "sintoma": color = AppTheme.warning; icono = Icons.healing; break;
+                            case "cita": color = AppTheme.info; icono = Icons.event; break;
+                            case "alerta": color = AppTheme.danger; icono = Icons.warning_amber; break;
+                            case "recomendacion": color = AppTheme.primary; icono = Icons.lightbulb_outline; break;
+                            default: color = AppTheme.primary; icono = Icons.notifications;
+                          }
+                          
+                          return GestureDetector(
+                            onTap: () {
+                              if (!leida) _marcarNotificacionComoLeida(n["id"]);
+                              _abrirDetalleNotificacion(n);
+                              Navigator.pop(context);
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: leida ? AppTheme.white : color.withOpacity(0.06),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                  color: leida ? AppTheme.gray200 : color.withOpacity(0.3),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: color.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Icon(icono, color: color, size: 26),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          _getTipoLabel(tipo),
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 17,
+                                            color: color,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          n["mensaje"] ?? "",
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            color: AppTheme.gray500,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _formatFecha(n["fecha"]),
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            color: AppTheme.gray400,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (!leida)
+                                    Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
-  void _limpiarTodasLasNotificaciones() {
-    notificacionService.limpiarNotificaciones();
-    setState(() {
-      listaNotificaciones.clear();
-      notificacionesNoLeidas = 0;
-    });
+  String _getTipoLabel(String tipo) {
+    switch (tipo) {
+      case "signo": return "📊 Signos vitales";
+      case "sintoma": return "🤒 Síntomas";
+      case "cita": return "📅 Cita médica";
+      case "alerta": return "⚠️ Alerta de salud";
+      case "recomendacion": return "💡 Recomendación médica";
+      default: return "📨 Notificación";
+    }
+  }
+
+  String _formatFecha(dynamic fecha) {
+    try {
+      if (fecha != null && fecha.toString().isNotEmpty) {
+        DateTime fechaTime;
+        if (fecha is DateTime) {
+          fechaTime = fecha;
+        } else {
+          fechaTime = DateTime.parse(fecha.toString());
+        }
+        final ahora = DateTime.now();
+        final diferencia = ahora.difference(fechaTime);
+        
+        if (diferencia.inMinutes < 1) {
+          return "Ahora";
+        } else if (diferencia.inHours < 1) {
+          return "Hace ${diferencia.inMinutes} min";
+        } else if (diferencia.inDays < 1) {
+          return "Hace ${diferencia.inHours} horas";
+        } else if (diferencia.inDays < 7) {
+          return "Hace ${diferencia.inDays} días";
+        } else {
+          return "${fechaTime.day}/${fechaTime.month}/${fechaTime.year}";
+        }
+      }
+      return "Fecha no disponible";
+    } catch (_) {
+      return "Fecha no disponible";
+    }
   }
 
   @override
@@ -212,55 +566,16 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                       ],
                     ),
                   ),
-                  Stack(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 24),
-                          onPressed: () => _mostrarPanelNotificaciones(),
-                        ),
-                      ),
-                      if (notificacionesNoLeidas > 0)
-                        Positioned(
-                          right: 8,
-                          top: 8,
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: const BoxDecoration(color: AppTheme.danger, shape: BoxShape.circle),
-                            child: Text(
-                              notificacionesNoLeidas > 9 ? "9+" : "$notificacionesNoLeidas",
-                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                    ],
+                  // 🔥 BOTÓN DE NOTIFICACIONES CON CONTADOR - IGUAL QUE MEDICO
+                  _buildAppBarButton(
+                    Icons.notifications_outlined,
+                    _mostrarPanelNotificaciones,
+                    badge: notificacionesNoLeidas > 0 ? notificacionesNoLeidas : null,
                   ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
-                      onPressed: openConfiguracion,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.logout, color: Colors.white, size: 24),
-                      onPressed: logout,
-                    ),
-                  ),
+                  const SizedBox(width: 6),
+                  _buildAppBarButton(Icons.settings_outlined, openConfiguracion),
+                  const SizedBox(width: 6),
+                  _buildAppBarButton(Icons.logout, logout),
                 ],
               ),
             ),
@@ -307,162 +622,41 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     );
   }
 
-  void _mostrarPanelNotificaciones() {
-    _marcarTodasComoLeidas();
-    
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      backgroundColor: AppTheme.white,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.8,
-        minChildSize: 0.5,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (context, scrollController) {
-          return Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.05),
-                  borderRadius: const BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+  // ✅ BOTÓN DE APP BAR - IGUAL QUE MEDICO
+  Widget _buildAppBarButton(IconData icon, VoidCallback onPressed, {int? badge}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Stack(
+        children: [
+          IconButton(
+            icon: Icon(icon, color: Colors.white, size: 24),
+            onPressed: onPressed,
+            padding: const EdgeInsets.all(10),
+          ),
+          if (badge != null && badge > 0)
+            Positioned(
+              right: 4,
+              top: 4,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: const BoxDecoration(
+                  color: AppTheme.danger,
+                  shape: BoxShape.circle,
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.notifications, color: AppTheme.primary, size: 28),
-                    const SizedBox(width: 12),
-                    const Expanded(child: Text("Notificaciones", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
-                    if (listaNotificaciones.isNotEmpty)
-                      TextButton(
-                        onPressed: () {
-                          _limpiarTodasLasNotificaciones();
-                          Navigator.pop(context);
-                        },
-                        child: const Text("Limpiar todo", style: TextStyle(color: AppTheme.danger)),
-                      ),
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-                  ],
+                child: Text(
+                  badge > 9 ? "9+" : "$badge",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
-              const Divider(),
-              Expanded(
-                child: listaNotificaciones.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.notifications_none, size: 64, color: AppTheme.gray300),
-                            const SizedBox(height: 16),
-                            const Text("No hay notificaciones", style: TextStyle(fontSize: 16, color: AppTheme.gray500)),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        controller: scrollController,
-                        itemCount: listaNotificaciones.length,
-                        itemBuilder: (context, index) {
-                          final notificacion = listaNotificaciones[index];
-                          final tipo = notificacion["tipo"] ?? "info";
-                          final mensaje = notificacion["mensaje"] ?? "Nueva actualización";
-                          final fechaFormateada = notificacion["fechaFormateada"] ?? "Fecha no disponible";
-                          final bool esNueva = !(notificacion["leida"] ?? true);
-                          
-                          Color colorNotificacion;
-                          IconData iconoNotificacion;
-                          
-                          switch (tipo) {
-                            case "signo":
-                              colorNotificacion = AppTheme.danger;
-                              iconoNotificacion = Icons.monitor_heart;
-                              break;
-                            case "sintoma":
-                              colorNotificacion = AppTheme.warning;
-                              iconoNotificacion = Icons.healing;
-                              break;
-                            case "cita":
-                              colorNotificacion = AppTheme.info;
-                              iconoNotificacion = Icons.event;
-                              break;
-                            case "recomendacion":
-                              colorNotificacion = AppTheme.primary;
-                              iconoNotificacion = Icons.lightbulb_outline;
-                              break;
-                            default:
-                              colorNotificacion = AppTheme.primary;
-                              iconoNotificacion = Icons.notifications;
-                          }
-                          
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: esNueva ? AppTheme.primary.withOpacity(0.05) : AppTheme.white,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: esNueva ? AppTheme.primary.withOpacity(0.3) : AppTheme.gray200,
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(10),
-                                  decoration: BoxDecoration(
-                                    color: colorNotificacion.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(iconoNotificacion, color: colorNotificacion, size: 22),
-                                ),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        mensaje,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                          color: esNueva ? AppTheme.primary : null,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        fechaFormateada,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: AppTheme.gray500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                if (esNueva)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.primary,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: const Text(
-                                      "NUEVA",
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-              ),
-            ],
-          );
-        },
+            ),
+        ],
       ),
     );
   }

@@ -34,66 +34,110 @@ class AlertaService {
   }
 
   // ==========================
-  // 🏷️ ENRIQUECER ALERTAS CON ORIGEN
+  // 🔴 OBTENER ALERTA POR ID
+  // ==========================
+  Future<Map<String, dynamic>?> getAlerta(int idAlerta) async {
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/$idAlerta"),
+      );
+
+      print("📦 ALERTA RESPONSE: ${res.statusCode}");
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        // Si la respuesta es un objeto con datos
+        if (data is Map<String, dynamic>) {
+          // Si tiene un campo 'data' o 'alerta'
+          if (data.containsKey('data')) {
+            return _enriquecerAlerta(data['data']);
+          } else if (data.containsKey('alerta')) {
+            return _enriquecerAlerta(data['alerta']);
+          }
+          return _enriquecerAlerta(data);
+        }
+        // Si es una lista, tomar el primero
+        if (data is List && data.isNotEmpty) {
+          return _enriquecerAlerta(data.first);
+        }
+      }
+    } catch (e) {
+      print("ERROR GET ALERTA => $e");
+    }
+    return null;
+  }
+
+  // ==========================
+  // 🏷️ ENRIQUECER UNA SOLA ALERTA
+  // ==========================
+  Map<String, dynamic> _enriquecerAlerta(Map<String, dynamic> alerta) {
+    // Obtener el origen
+    final origen = alerta['origen']?.toString()?.toLowerCase() ?? 'sistema';
+    
+    // Obtener nombre_origen
+    final nombreOrigen = alerta['nombre_origen']?.toString() ?? 
+                         alerta['nombrePaciente']?.toString() ?? 
+                         'Desconocido';
+    
+    // Definir datos visuales según el origen
+    String label = '';
+    String icon = '';
+    String color = '';
+    
+    switch (origen) {
+      case 'paciente':
+        label = 'Paciente';
+        icon = '👤';
+        color = '#10B981';
+        break;
+      case 'medico':
+      case 'médico':
+        label = 'Médico';
+        icon = '⚕️';
+        color = '#3B82F6';
+        break;
+      case 'admin':
+      case 'administrador':
+        label = 'Admin';
+        icon = '👑';
+        color = '#4F46E5';
+        break;
+      case 'signo':
+      case 'signos':
+        label = 'Signos Vitales';
+        icon = '❤️';
+        color = '#EF4444';
+        break;
+      case 'sistema':
+      default:
+        label = 'Sistema';
+        icon = '💻';
+        color = '#6B7280';
+        break;
+    }
+    
+    // Agregar datos enriquecidos
+    alerta['origen_label'] = label;
+    alerta['origen_icon'] = icon;
+    alerta['origen_color'] = color;
+    alerta['nombre_origen'] = nombreOrigen;
+    alerta['origen_detalle'] = '$label: $nombreOrigen';
+    
+    // ✅ Asegurar que el campo 'leida' existe
+    if (!alerta.containsKey('leida')) {
+      alerta['leida'] = alerta['estado'] == 'ATENDIDA';
+    }
+    
+    return alerta;
+  }
+
+  // ==========================
+  // 🏷️ ENRIQUECER LISTA DE ALERTAS
   // ==========================
   List<Map<String, dynamic>> _enriquecerAlertas(
       List<Map<String, dynamic>> alertas,
   ) {
-    for (var alerta in alertas) {
-      // Obtener el origen
-      final origen = alerta['origen']?.toString()?.toLowerCase() ?? 'sistema';
-      
-      // Obtener nombre_origen (directamente del campo de la BD)
-      final nombreOrigen = alerta['nombre_origen']?.toString() ?? 
-                           alerta['nombrePaciente']?.toString() ?? 
-                           'Desconocido';
-      
-      // Definir datos visuales según el origen
-      String label = '';
-      String icon = '';
-      String color = '';
-      
-      switch (origen) {
-        case 'paciente':
-          label = 'Paciente';
-          icon = '👤';
-          color = '#10B981';
-          break;
-        case 'medico':
-        case 'médico':
-          label = 'Médico';
-          icon = '⚕️';
-          color = '#3B82F6';
-          break;
-        case 'admin':
-        case 'administrador':
-          label = 'Admin';
-          icon = '👑';
-          color = '#4F46E5';
-          break;
-        case 'signo':
-        case 'signos':
-          label = 'Signos Vitales';
-          icon = '❤️';
-          color = '#EF4444';
-          break;
-        case 'sistema':
-        default:
-          label = 'Sistema';
-          icon = '💻';
-          color = '#6B7280';
-          break;
-      }
-      
-      // Agregar datos enriquecidos
-      alerta['origen_label'] = label;
-      alerta['origen_icon'] = icon;
-      alerta['origen_color'] = color;
-      alerta['nombre_origen'] = nombreOrigen; // Asegurar que existe
-      alerta['origen_detalle'] = '$label: $nombreOrigen';
-    }
-    
-    return alertas;
+    return alertas.map((alerta) => _enriquecerAlerta(alerta)).toList();
   }
 
   // ==========================
@@ -135,7 +179,7 @@ class AlertaService {
 
       if (res.statusCode == 200 || res.statusCode == 201) {
         final data = jsonDecode(res.body);
-        return data["ok"] == true || data["success"] == true;
+        return data["ok"] == true || data["success"] == true || data["idAlerta"] != null;
       }
       return false;
     } catch (e) {
@@ -231,7 +275,14 @@ class AlertaService {
       final res = await http.put(
         Uri.parse("$baseUrl/$idAlerta/atendida"),
       );
-      return res.statusCode == 200;
+      
+      print("📝 MARCAR ATENDIDA: ${res.statusCode}");
+      
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data["ok"] == true || data["success"] == true;
+      }
+      return false;
     } catch (e) {
       print("ERROR MARCAR ATENDIDA => $e");
       return false;
@@ -239,10 +290,34 @@ class AlertaService {
   }
 
   // ==========================
-  // 🟡 MARCAR ALERTA COMO LEÍDA (compatibilidad)
+  // 🟡 MARCAR ALERTA COMO LEÍDA
   // ==========================
-  Future<bool> marcarAlertaLeida(int idAlerta) async {
-    return await marcarAtendida(idAlerta);
+  Future<bool> marcarComoLeida(int idAlerta) async {
+    try {
+      // Intentar marcar como atendida primero
+      final resultado = await marcarAtendida(idAlerta);
+      
+      if (resultado) {
+        print("✅ Alerta $idAlerta marcada como leída/atendida");
+        return true;
+      }
+      
+      // Si falla, intentar con endpoint específico de leída
+      try {
+        final res = await http.put(
+          Uri.parse("$baseUrl/$idAlerta/leida"),
+          headers: {"Content-Type": "application/json"},
+        );
+        print("📝 MARCAR LEÍDA: ${res.statusCode}");
+        return res.statusCode == 200;
+      } catch (e) {
+        print("ERROR MARCAR LEÍDA => $e");
+        return false;
+      }
+    } catch (e) {
+      print("ERROR MARCAR COMO LEÍDA => $e");
+      return false;
+    }
   }
 
   // ==========================
@@ -322,5 +397,33 @@ class AlertaService {
     }
     
     return estadisticas;
+  }
+
+  // ==========================
+  // 🔍 OBTENER ALERTAS PENDIENTES
+  // ==========================
+  Future<List<Map<String, dynamic>>> getAlertasPendientes(int idPaciente) async {
+    final alertas = await getAlertas(idPaciente);
+    return alertas.where((a) => 
+      a['estado']?.toString()?.toUpperCase() != 'ATENDIDA'
+    ).toList();
+  }
+
+  // ==========================
+  // 🔍 OBTENER ALERTAS NO LEÍDAS
+  // ==========================
+  Future<List<Map<String, dynamic>>> getAlertasNoLeidas(int idPaciente) async {
+    final alertas = await getAlertas(idPaciente);
+    return alertas.where((a) => 
+      a['leida'] != true && a['estado']?.toString()?.toUpperCase() != 'ATENDIDA'
+    ).toList();
+  }
+
+  // ==========================
+  // 📊 CONTAR ALERTAS NO LEÍDAS
+  // ==========================
+  Future<int> contarAlertasNoLeidas(int idPaciente) async {
+    final noLeidas = await getAlertasNoLeidas(idPaciente);
+    return noLeidas.length;
   }
 }

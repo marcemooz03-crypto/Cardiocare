@@ -1,4 +1,3 @@
-// lib/services/notificacion_service.dart
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -21,19 +20,25 @@ class NotificacionService {
   Timer? _pollingTimer;
   final List<Map<String, dynamic>> _notificaciones = [];
   final Set<String> _notificacionesIds = {};
-  final Set<String> _notificacionesLeidas = {}; // ✅ Guardar IDs de notificaciones leídas
+  final Set<String> _notificacionesLeidas = {};
+  final Map<String, bool> _estadoCache = {};
   
   // Configuración
   static const Duration _pollingInterval = Duration(seconds: 30);
   static const int _maxNotificaciones = 100;
-  static const String _storageKey = 'notificaciones';
-  static const String _leidasKey = 'notificaciones_leidas';
+  static const String _storageKey = 'notificaciones_v2';
+  static const String _leidasKey = 'notificaciones_leidas_v2';
   
   // ==============================================
-  // CONSTRUCTOR - Cargar notificaciones guardadas
+  // CONSTRUCTOR
   // ==============================================
   NotificacionService() {
-    _cargarNotificacionesGuardadas();
+    _inicializar();
+  }
+  
+  Future<void> _inicializar() async {
+    await _cargarNotificacionesGuardadas();
+    await _sincronizarConBaseDatos();
   }
   
   // ==============================================
@@ -53,18 +58,16 @@ class NotificacionService {
         for (var item in decoded) {
           final Map<String, dynamic> notif = Map<String, dynamic>.from(item);
           _notificaciones.add(notif);
-          _notificacionesIds.add(notif["id"] ?? "");
-        }
-        
-        // Mantener solo las últimas 100
-        if (_notificaciones.length > _maxNotificaciones) {
-          _notificaciones.removeRange(_maxNotificaciones, _notificaciones.length);
+          final String id = notif["id"] ?? "";
+          if (id.isNotEmpty) {
+            _notificacionesIds.add(id);
+          }
         }
         
         debugPrint("📂 Cargadas ${_notificaciones.length} notificaciones guardadas");
       }
       
-      // ✅ Cargar IDs de notificaciones leídas
+      // Cargar IDs de notificaciones leídas
       final String? leidasData = prefs.getString(_leidasKey);
       if (leidasData != null && leidasData.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(leidasData);
@@ -75,16 +78,133 @@ class NotificacionService {
         debugPrint("📂 Cargados ${_notificacionesLeidas.length} IDs de notificaciones leídas");
       }
       
-      // ✅ Actualizar el estado "leida" en las notificaciones cargadas
+    } catch (e) {
+      debugPrint("❌ Error cargando notificaciones: $e");
+    }
+  }
+  
+  // ==============================================
+  // SINCRONIZAR CON BASE DE DATOS
+  // ==============================================
+  Future<void> _sincronizarConBaseDatos() async {
+    try {
+      // Actualizar estado de todas las notificaciones pendientes
       for (var notif in _notificaciones) {
         final String id = notif["id"] ?? "";
-        if (_notificacionesLeidas.contains(id)) {
-          notif["leida"] = true;
+        if (id.isEmpty) continue;
+        
+        // Verificar estado real en base de datos
+        final bool? estadoReal = await _verificarEstadoEnBaseDatos(id);
+        if (estadoReal != null) {
+          notif["leida"] = estadoReal;
+          if (estadoReal) {
+            _notificacionesLeidas.add(id);
+          }
+          _estadoCache[id] = estadoReal;
         }
       }
       
+      // Limpiar notificaciones duplicadas
+      _eliminarDuplicados();
+      
+      await _guardarNotificaciones();
+      debugPrint("✅ Sincronización completada: ${_notificaciones.length} notificaciones");
+      
     } catch (e) {
-      debugPrint("❌ Error cargando notificaciones: $e");
+      debugPrint("❌ Error sincronizando con base de datos: $e");
+    }
+  }
+  
+  // ==============================================
+  // ELIMINAR DUPLICADOS
+  // ==============================================
+  void _eliminarDuplicados() {
+    final Set<String> idsVistos = {};
+    final List<Map<String, dynamic>> unicas = [];
+    
+    for (var notif in _notificaciones) {
+      final String id = notif["id"] ?? "";
+      if (id.isNotEmpty && !idsVistos.contains(id)) {
+        idsVistos.add(id);
+        unicas.add(notif);
+      }
+    }
+    
+    if (unicas.length != _notificaciones.length) {
+      _notificaciones.clear();
+      _notificaciones.addAll(unicas);
+      debugPrint("🧹 Eliminados ${_notificaciones.length - unicas.length} duplicados");
+    }
+  }
+  
+  // ==============================================
+  // VERIFICAR ESTADO EN BASE DE DATOS
+  // ==============================================
+  Future<bool?> _verificarEstadoEnBaseDatos(String id) async {
+    try {
+      // Usar cache para evitar múltiples consultas
+      if (_estadoCache.containsKey(id)) {
+        return _estadoCache[id];
+      }
+      
+      final parts = id.split('_');
+      if (parts.length < 2) return null;
+      
+      final String tipo = parts[0];
+      final int? idReal = int.tryParse(parts[1]);
+      if (idReal == null) return null;
+      
+      bool? estado;
+      
+      switch (tipo) {
+        case 'alerta':
+          final alerta = await _alertaService.getAlerta(idReal);
+          estado = alerta?["leida"] == true || alerta?["estado"] == "ATENDIDA";
+          break;
+        case 'cita':
+          final cita = await _citaService.getCita(idReal);
+          estado = cita?["leida"] == true;
+          break;
+        case 'recomendacion':
+          final rec = await _recomendacionService.getRecomendacion(idReal);
+          estado = rec?["leida"] == true;
+          break;
+        case 'signo':
+          // Los signos siempre se consideran leídos después de 1 hora
+          final signo = await _signosService.getSigno(idReal);
+          if (signo != null) {
+            final fecha = DateTime.tryParse(signo["fechaRegistro"] ?? "");
+            if (fecha != null) {
+              estado = DateTime.now().difference(fecha).inHours >= 1;
+            }
+          }
+          break;
+        case 'sintoma':
+          // Los síntomas siempre se consideran leídos después de 2 horas
+          final sintoma = await _sintomaService.getSintoma(idReal);
+          if (sintoma != null) {
+            final fecha = DateTime.tryParse(sintoma["fecha"] ?? "");
+            if (fecha != null) {
+              estado = DateTime.now().difference(fecha).inHours >= 2;
+            }
+          }
+          break;
+        default:
+          estado = null;
+      }
+      
+      if (estado != null) {
+        _estadoCache[id] = estado;
+        if (estado) {
+          _notificacionesLeidas.add(id);
+        }
+      }
+      
+      return estado;
+      
+    } catch (e) {
+      debugPrint("❌ Error verificando estado en DB para $id: $e");
+      return null;
     }
   }
   
@@ -99,7 +219,7 @@ class NotificacionService {
       final String data = jsonEncode(_notificaciones);
       await prefs.setString(_storageKey, data);
       
-      // ✅ Guardar IDs de notificaciones leídas
+      // Guardar IDs de notificaciones leídas
       final String leidasData = jsonEncode(_notificacionesLeidas.toList());
       await prefs.setString(_leidasKey, leidasData);
       
@@ -180,7 +300,7 @@ class NotificacionService {
   }
   
   // ==============================================
-  // VERIFICAR RECOMENDACIONES PARA PACIENTE
+  // VERIFICAR RECOMENDACIONES
   // ==============================================
   Future<void> _verificarRecomendaciones(int idUsuario, Function(Map<String, dynamic>) onNuevaNotificacion) async {
     try {
@@ -192,19 +312,35 @@ class NotificacionService {
         final String id = "recomendacion_${rec["idRecomendacion"]}";
         final bool leida = rec["leida"] == true;
         
-        // ✅ Verificar si ya existe y si está leída
-        if (!_notificacionesIds.contains(id) && !_notificacionesLeidas.contains(id)) {
-          final DateTime? fecha = DateTime.tryParse(rec["fecha"] ?? "");
-          
-          if (fecha != null && fecha.isAfter(DateTime.now().subtract(const Duration(days: 7)))) {
-            _notificacionesIds.add(id);
-            _crearNotificacion(
-              id: id,
-              tipo: "recomendacion",
-              mensaje: "📋 Nueva recomendación médica: ${rec["descripcion"]}",
-              onNuevaNotificacion: onNuevaNotificacion,
-            );
+        if (leida) {
+          _notificacionesLeidas.add(id);
+          _estadoCache[id] = true;
+          continue;
+        }
+        
+        // Verificar si ya existe
+        if (_notificacionesIds.contains(id)) {
+          // Actualizar estado si cambió
+          final index = _notificaciones.indexWhere((n) => n["id"] == id);
+          if (index != -1 && _notificaciones[index]["leida"] != leida) {
+            _notificaciones[index]["leida"] = leida;
+            if (leida) {
+              _notificacionesLeidas.add(id);
+            }
+            await _guardarNotificaciones();
           }
+          continue;
+        }
+        
+        final DateTime? fecha = DateTime.tryParse(rec["fecha"] ?? "");
+        if (fecha != null && fecha.isAfter(DateTime.now().subtract(const Duration(days: 7)))) {
+          _notificacionesIds.add(id);
+          _crearNotificacion(
+            id: id,
+            tipo: "recomendacion",
+            mensaje: "📋 Nueva recomendación médica: ${rec["descripcion"]}",
+            onNuevaNotificacion: onNuevaNotificacion,
+          );
         }
       }
     } catch (e) {
@@ -213,7 +349,7 @@ class NotificacionService {
   }
   
   // ==============================================
-  // VERIFICAR ESTADO DE CITAS PARA PACIENTE
+  // VERIFICAR ESTADO DE CITAS
   // ==============================================
   Future<void> _verificarEstadoCitasPaciente(int idUsuario, Function(Map<String, dynamic>) onNuevaNotificacion) async {
     try {
@@ -224,25 +360,42 @@ class NotificacionService {
       for (var cita in citas) {
         final String id = "cita_estado_${cita["idCita"]}";
         final String estado = cita["estado"]?.toString().toLowerCase() ?? "";
+        final bool leida = cita["leida"] == true;
         
-        // ✅ Verificar si ya existe y si está leída
-        if (!_notificacionesIds.contains(id) && !_notificacionesLeidas.contains(id)) {
-          String mensaje = "";
-          if (estado == "aprobada") {
-            mensaje = "✅ ¡Tu cita ha sido aprobada! Motivo: ${cita["motivo"]}";
-          } else if (estado == "rechazada") {
-            mensaje = "❌ Tu cita ha sido rechazada. Motivo: ${cita["motivo"]}";
+        if (leida) {
+          _notificacionesLeidas.add(id);
+          _estadoCache[id] = true;
+          continue;
+        }
+        
+        // Verificar si ya existe
+        if (_notificacionesIds.contains(id)) {
+          final index = _notificaciones.indexWhere((n) => n["id"] == id);
+          if (index != -1 && _notificaciones[index]["leida"] != leida) {
+            _notificaciones[index]["leida"] = leida;
+            if (leida) {
+              _notificacionesLeidas.add(id);
+            }
+            await _guardarNotificaciones();
           }
-          
-          if (mensaje.isNotEmpty) {
-            _notificacionesIds.add(id);
-            _crearNotificacion(
-              id: id,
-              tipo: "cita",
-              mensaje: mensaje,
-              onNuevaNotificacion: onNuevaNotificacion,
-            );
-          }
+          continue;
+        }
+        
+        String mensaje = "";
+        if (estado == "aprobada") {
+          mensaje = "✅ ¡Tu cita ha sido aprobada! Motivo: ${cita["motivo"]}";
+        } else if (estado == "rechazada") {
+          mensaje = "❌ Tu cita ha sido rechazada. Motivo: ${cita["motivo"]}";
+        }
+        
+        if (mensaje.isNotEmpty) {
+          _notificacionesIds.add(id);
+          _crearNotificacion(
+            id: id,
+            tipo: "cita",
+            mensaje: mensaje,
+            onNuevaNotificacion: onNuevaNotificacion,
+          );
         }
       }
     } catch (e) {
@@ -260,22 +413,32 @@ class NotificacionService {
         final String id = "alerta_${alerta["idAlerta"]}";
         final bool leida = alerta["leida"] == true || alerta["estado"] == "ATENDIDA";
         
-        // Si ya está leída en la base de datos, agregar a la lista de leídas
         if (leida) {
           _notificacionesLeidas.add(id);
+          _estadoCache[id] = true;
           continue;
         }
         
-        // ✅ Verificar si ya existe y si está leída
-        if (!_notificacionesIds.contains(id) && !_notificacionesLeidas.contains(id)) {
-          _notificacionesIds.add(id);
-          _crearNotificacion(
-            id: id,
-            tipo: "alerta",
-            mensaje: "⚠️ Alerta de salud: ${alerta["descripcion"]}",
-            onNuevaNotificacion: onNuevaNotificacion,
-          );
+        // Verificar si ya existe
+        if (_notificacionesIds.contains(id)) {
+          final index = _notificaciones.indexWhere((n) => n["id"] == id);
+          if (index != -1 && _notificaciones[index]["leida"] != leida) {
+            _notificaciones[index]["leida"] = leida;
+            if (leida) {
+              _notificacionesLeidas.add(id);
+            }
+            await _guardarNotificaciones();
+          }
+          continue;
         }
+        
+        _notificacionesIds.add(id);
+        _crearNotificacion(
+          id: id,
+          tipo: "alerta",
+          mensaje: "⚠️ Alerta de salud: ${alerta["descripcion"]}",
+          onNuevaNotificacion: onNuevaNotificacion,
+        );
       }
     } catch (e) {
       debugPrint("Error verificando alertas paciente: $e");
@@ -292,24 +455,34 @@ class NotificacionService {
         final String id = "alerta_${alerta["idAlerta"]}";
         final bool leida = alerta["leida"] == true || alerta["estado"] == "ATENDIDA";
         
-        // Si ya está leída en la base de datos, agregar a la lista de leídas
         if (leida) {
           _notificacionesLeidas.add(id);
+          _estadoCache[id] = true;
           continue;
         }
         
-        // ✅ Verificar si ya existe y si está leída
-        if (!_notificacionesIds.contains(id) && !_notificacionesLeidas.contains(id)) {
-          _notificacionesIds.add(id);
-          _crearNotificacion(
-            id: id,
-            tipo: "alerta",
-            pacienteNombre: nombrePaciente,
-            idPaciente: idPaciente,
-            mensaje: alerta["descripcion"] ?? "Nueva alerta de salud",
-            onNuevaNotificacion: onNuevaNotificacion,
-          );
+        // Verificar si ya existe
+        if (_notificacionesIds.contains(id)) {
+          final index = _notificaciones.indexWhere((n) => n["id"] == id);
+          if (index != -1 && _notificaciones[index]["leida"] != leida) {
+            _notificaciones[index]["leida"] = leida;
+            if (leida) {
+              _notificacionesLeidas.add(id);
+            }
+            await _guardarNotificaciones();
+          }
+          continue;
         }
+        
+        _notificacionesIds.add(id);
+        _crearNotificacion(
+          id: id,
+          tipo: "alerta",
+          pacienteNombre: nombrePaciente,
+          idPaciente: idPaciente,
+          mensaje: alerta["descripcion"] ?? "Nueva alerta de salud",
+          onNuevaNotificacion: onNuevaNotificacion,
+        );
       }
     } catch (e) {
       debugPrint("Error verificando alertas: $e");
@@ -327,8 +500,25 @@ class NotificacionService {
       final ultimoSigno = signos.first;
       final String id = "signo_${ultimoSigno["idSigno"]}";
       
-      // ✅ Verificar si ya existe y si está leída
-      if (_notificacionesIds.contains(id) || _notificacionesLeidas.contains(id)) return;
+      // Verificar estado
+      final bool leida = await _verificarEstadoEnBaseDatos(id) ?? false;
+      if (leida) {
+        _notificacionesLeidas.add(id);
+        return;
+      }
+      
+      // Verificar si ya existe
+      if (_notificacionesIds.contains(id)) {
+        final index = _notificaciones.indexWhere((n) => n["id"] == id);
+        if (index != -1 && _notificaciones[index]["leida"] != leida) {
+          _notificaciones[index]["leida"] = leida;
+          if (leida) {
+            _notificacionesLeidas.add(id);
+          }
+          await _guardarNotificaciones();
+        }
+        return;
+      }
       
       final DateTime? fechaRegistro = DateTime.tryParse(ultimoSigno["fechaRegistro"] ?? "");
       if (fechaRegistro == null || 
@@ -383,8 +573,25 @@ class NotificacionService {
       final ultimoSintoma = sintomas.first;
       final String id = "sintoma_${ultimoSintoma["idSintoma"]}";
       
-      // ✅ Verificar si ya existe y si está leída
-      if (_notificacionesIds.contains(id) || _notificacionesLeidas.contains(id)) return;
+      // Verificar estado
+      final bool leida = await _verificarEstadoEnBaseDatos(id) ?? false;
+      if (leida) {
+        _notificacionesLeidas.add(id);
+        return;
+      }
+      
+      // Verificar si ya existe
+      if (_notificacionesIds.contains(id)) {
+        final index = _notificaciones.indexWhere((n) => n["id"] == id);
+        if (index != -1 && _notificaciones[index]["leida"] != leida) {
+          _notificaciones[index]["leida"] = leida;
+          if (leida) {
+            _notificacionesLeidas.add(id);
+          }
+          await _guardarNotificaciones();
+        }
+        return;
+      }
       
       final DateTime? fechaSintoma = DateTime.tryParse(ultimoSintoma["fecha"] ?? "");
       if (fechaSintoma == null ||
@@ -425,8 +632,25 @@ class NotificacionService {
       for (var cita in citas) {
         final String id = "cita_${cita["idCita"]}";
         
-        // ✅ Verificar si ya existe y si está leída
-        if (_notificacionesIds.contains(id) || _notificacionesLeidas.contains(id)) continue;
+        // Verificar estado
+        final bool leida = await _verificarEstadoEnBaseDatos(id) ?? false;
+        if (leida) {
+          _notificacionesLeidas.add(id);
+          continue;
+        }
+        
+        // Verificar si ya existe
+        if (_notificacionesIds.contains(id)) {
+          final index = _notificaciones.indexWhere((n) => n["id"] == id);
+          if (index != -1 && _notificaciones[index]["leida"] != leida) {
+            _notificaciones[index]["leida"] = leida;
+            if (leida) {
+              _notificacionesLeidas.add(id);
+            }
+            await _guardarNotificaciones();
+          }
+          continue;
+        }
         
         final String estado = cita["estado"]?.toString().toLowerCase() ?? "";
         
@@ -448,7 +672,7 @@ class NotificacionService {
   }
   
   // ==============================================
-  // CREAR NOTIFICACIÓN (MÉTODO UNIFICADO)
+  // CREAR NOTIFICACIÓN
   // ==============================================
   void _crearNotificacion({
     required String id,
@@ -458,17 +682,31 @@ class NotificacionService {
     required String mensaje,
     required Function(Map<String, dynamic>) onNuevaNotificacion,
   }) {
-    final now = DateTime.now();
-    // ✅ Verificar si ya está leída antes de crear
+    // Verificar si ya está leída
     final bool yaLeida = _notificacionesLeidas.contains(id);
+    if (yaLeida) {
+      // Actualizar estado en las notificaciones existentes
+      final index = _notificaciones.indexWhere((n) => n["id"] == id);
+      if (index != -1) {
+        _notificaciones[index]["leida"] = true;
+        _guardarNotificaciones();
+      }
+      return;
+    }
     
+    // Verificar si ya existe
+    if (_notificacionesIds.contains(id)) {
+      return;
+    }
+    
+    final now = DateTime.now();
     final notificacion = {
       "id": id,
       "tipo": tipo,
       "mensaje": mensaje,
       "fecha": now.toIso8601String(),
       "fechaFormateada": _formatFecha(now),
-      "leida": yaLeida, // ✅ Usar el estado guardado
+      "leida": false,
       if (pacienteNombre != null) "pacienteNombre": pacienteNombre,
       if (idPaciente != null) "idPaciente": idPaciente,
     };
@@ -498,13 +736,12 @@ class NotificacionService {
   // OBTENER NOTIFICACIONES
   // ==============================================
   Future<List<Map<String, dynamic>>> getNotificacionesMedico(int idMedico) async {
+    await _sincronizarConBaseDatos();
     return List.unmodifiable(_notificaciones);
   }
   
-  // ==============================================
-  // OBTENER NOTIFICACIONES PARA PACIENTE
-  // ==============================================
   Future<List<Map<String, dynamic>>> getNotificacionesPaciente(int idUsuario) async {
+    await _sincronizarConBaseDatos();
     return List.unmodifiable(_notificaciones);
   }
   
@@ -512,11 +749,56 @@ class NotificacionService {
   // MARCAR COMO LEÍDA
   // ==============================================
   Future<void> marcarComoLeida(String idNotificacion) async {
-    final index = _notificaciones.indexWhere((n) => n["id"] == idNotificacion);
-    if (index != -1) {
-      _notificaciones[index]["leida"] = true;
-      _notificacionesLeidas.add(idNotificacion); // ✅ Guardar ID como leída
-      await _guardarNotificaciones();
+    try {
+      // Marcar en la base de datos real
+      final parts = idNotificacion.split('_');
+      if (parts.length >= 2) {
+        final String tipo = parts[0];
+        final int? idReal = int.tryParse(parts[1]);
+        if (idReal != null) {
+          switch (tipo) {
+            case 'alerta':
+              await _alertaService.marcarComoLeida(idReal);
+              break;
+            case 'cita':
+              await _citaService.marcarComoLeida(idReal);
+              break;
+            case 'recomendacion':
+              await _recomendacionService.marcarComoLeida(idReal);
+              break;
+            case 'signo':
+              // Los signos no se marcan en la base de datos, solo local
+              break;
+            case 'sintoma':
+              // Los síntomas no se marcan en la base de datos, solo local
+              break;
+            default:
+              break;
+          }
+        }
+      }
+      
+      // Actualizar localmente
+      final index = _notificaciones.indexWhere((n) => n["id"] == idNotificacion);
+      if (index != -1) {
+        _notificaciones[index]["leida"] = true;
+        _notificacionesLeidas.add(idNotificacion);
+        _estadoCache[idNotificacion] = true;
+        await _guardarNotificaciones();
+      }
+      
+      debugPrint("✅ Notificación marcada como leída: $idNotificacion");
+      
+    } catch (e) {
+      debugPrint("❌ Error marcando como leída: $e");
+      // Intentar marcar al menos localmente
+      final index = _notificaciones.indexWhere((n) => n["id"] == idNotificacion);
+      if (index != -1) {
+        _notificaciones[index]["leida"] = true;
+        _notificacionesLeidas.add(idNotificacion);
+        _estadoCache[idNotificacion] = true;
+        await _guardarNotificaciones();
+      }
     }
   }
   
@@ -524,28 +806,78 @@ class NotificacionService {
   // MARCAR TODAS COMO LEÍDAS
   // ==============================================
   Future<void> marcarTodasComoLeidas(int userId) async {
-    for (var i = 0; i < _notificaciones.length; i++) {
-      final String id = _notificaciones[i]["id"] ?? "";
-      _notificaciones[i]["leida"] = true;
-      _notificacionesLeidas.add(id); // ✅ Guardar ID como leída
+    try {
+      // Marcar en la base de datos
+      for (var notif in _notificaciones) {
+        final String id = notif["id"] ?? "";
+        if (id.isEmpty || notif["leida"] == true) continue;
+        
+        final parts = id.split('_');
+        if (parts.length >= 2) {
+          final String tipo = parts[0];
+          final int? idReal = int.tryParse(parts[1]);
+          if (idReal != null) {
+            try {
+              switch (tipo) {
+                case 'alerta':
+                  await _alertaService.marcarComoLeida(idReal);
+                  break;
+                case 'cita':
+                  await _citaService.marcarComoLeida(idReal);
+                  break;
+                case 'recomendacion':
+                  await _recomendacionService.marcarComoLeida(idReal);
+                  break;
+                default:
+                  break;
+              }
+            } catch (e) {
+              debugPrint("Error marcando $tipo $idReal: $e");
+            }
+          }
+        }
+      }
+      
+      // Actualizar localmente
+      for (var i = 0; i < _notificaciones.length; i++) {
+        final String id = _notificaciones[i]["id"] ?? "";
+        _notificaciones[i]["leida"] = true;
+        if (id.isNotEmpty) {
+          _notificacionesLeidas.add(id);
+          _estadoCache[id] = true;
+        }
+      }
+      await _guardarNotificaciones();
+      
+      debugPrint("✅ Todas las notificaciones marcadas como leídas");
+      
+    } catch (e) {
+      debugPrint("❌ Error marcando todas como leídas: $e");
     }
-    await _guardarNotificaciones();
   }
   
   // ==============================================
   // LIMPIAR NOTIFICACIONES
   // ==============================================
-  void limpiarNotificaciones() {
+  Future<void> limpiarNotificaciones() async {
     _notificaciones.clear();
     _notificacionesIds.clear();
-    _notificacionesLeidas.clear(); // ✅ Limpiar también las leídas
-    _guardarNotificaciones();
+    _notificacionesLeidas.clear();
+    _estadoCache.clear();
+    await _guardarNotificaciones();
+    debugPrint("🧹 Notificaciones limpiadas");
   }
   
   // ==============================================
   // AGREGAR NOTIFICACIÓN
   // ==============================================
   void _agregarNotificacion(Map<String, dynamic> notificacion) {
+    final String id = notificacion["id"] ?? "";
+    if (id.isEmpty) return;
+    
+    // Eliminar duplicado si existe
+    _notificaciones.removeWhere((n) => n["id"] == id);
+    
     _notificaciones.insert(0, notificacion);
     if (_notificaciones.length > _maxNotificaciones) {
       _notificaciones.removeLast();

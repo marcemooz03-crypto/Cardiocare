@@ -836,7 +836,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     }
   }
 
-  void abrirCitas() => Navigator.push(context, MaterialPageRoute(builder: (_) => CitasScreen(citas: citas)));
+  void abrirCitas() => Navigator.push(context, MaterialPageRoute(builder: (_) => CitasScreen(citas: citas, esMedico: false, )));
   void abrirAgendar() => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => AgendarCitaScreen(idPaciente: widget.idPaciente, medicos: medicos)),
@@ -1433,7 +1433,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     lineTouchData: LineTouchData(
                       enabled: true,
                       touchTooltipData: LineTouchTooltipData(
-                        tooltipRoundedRadius: 8,
                         tooltipPadding: const EdgeInsets.all(8),
                         getTooltipItems: (touchedSpots) {
                           return touchedSpots.map((touchedSpot) {
