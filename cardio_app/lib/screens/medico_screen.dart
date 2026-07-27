@@ -290,17 +290,18 @@ class _MedicoDashboardState extends State<MedicoDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               child: Row(
                 children: [
-                  // ✅ Logo más grande
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.local_hospital, color: Colors.white, size: 28),
-                    ),
+                  // ✅ LOGO CARDIOCARE EN EL APP BAR
+                  AppTheme.buildSmallLogo(
+                    size: 44,
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("CardioCare - Panel del médico"),
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 14),
                   const Expanded(

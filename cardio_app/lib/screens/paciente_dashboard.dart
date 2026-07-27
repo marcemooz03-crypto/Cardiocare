@@ -544,16 +544,19 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.favorite, color: Colors.white, size: 24),
-                    ),
+                  // ✅ LOGO CARDIOCARE EN EL APP BAR
+                  AppTheme.buildSmallLogo(
+                    size: 40,
+                    onTap: () {
+                      // Puedes agregar una acción al presionar el logo
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("CardioCare - Tu salud en buenas manos"),
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 12),
                   const Expanded(

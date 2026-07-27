@@ -151,25 +151,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Center(
-                      child: Icon(Icons.admin_panel_settings, color: Colors.white, size: 24),
-                    ),
+                  // ✅ LOGO CARDIOCARE EN EL APP BAR
+                  AppTheme.buildSmallLogo(
+                    size: 40,
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text("CardioCare - Panel de Administración"),
+                          behavior: SnackBarBehavior.floating,
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("Panel Admin", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text("CardioCare", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                         SizedBox(height: 2),
-                        Text("Gestión clínica", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text("Panel Admin", style: TextStyle(color: Colors.white70, fontSize: 12)),
                       ],
                     ),
                   ),

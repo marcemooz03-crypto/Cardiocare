@@ -144,33 +144,94 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLogo() {
     return Column(
       children: [
+        // ✅ LOGO CUADRADO CON IMAGEN Cardiocare.png
         Container(
-          width: 80,
-          height: 80,
+          width: 130,
+          height: 130,
           decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
             gradient: _gradientPrimary,
-            borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
-                color: _primary.withOpacity(0.3),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
+                color: _primary.withOpacity(0.35),
+                blurRadius: 30,
+                spreadRadius: 4,
+                offset: const Offset(0, 10),
+              ),
+              BoxShadow(
+                color: _primary.withOpacity(0.15),
+                blurRadius: 60,
+                spreadRadius: 8,
+                offset: const Offset(0, 20),
               ),
             ],
           ),
-          child: const Icon(Icons.favorite, color: Colors.white, size: 40),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              color: Colors.white,
+              padding: const EdgeInsets.all(16),
+              child: Image.asset(
+                'assets/images/Cardiocare.png',
+                width: 130,
+                height: 130,
+                fit: BoxFit.contain,
+                errorBuilder: (context, error, stackTrace) {
+                  // ✅ Fallback mejorado si la imagen no se encuentra
+                  return Container(
+                    decoration: BoxDecoration(
+                      gradient: _gradientPrimary,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: const Center(
+                      child: Icon(
+                        Icons.favorite,
+                        color: Colors.white,
+                        size: 60,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
+        // Título con diseño mejorado
         Text(
           "CardioCare",
-          style: AppTheme.headline2.copyWith(
+          style: AppTheme.headline1.copyWith(
+            fontSize: 34,
+            fontWeight: FontWeight.bold,
             letterSpacing: -0.5,
+            foreground: Paint()
+              ..shader = const LinearGradient(
+                colors: [
+                  Color(0xFF2563EB),
+                  Color(0xFF1D4ED8),
+                ],
+              ).createShader(const Rect.fromLTWH(0, 0, 200, 50)),
           ),
         ),
         const SizedBox(height: 8),
         Text(
           "Monitoreo cardíaco inteligente",
-          style: AppTheme.body2.copyWith(color: _textSub),
+          style: AppTheme.body2.copyWith(
+            color: _textSub,
+            fontSize: 16,
+            letterSpacing: 0.3,
+          ),
+        ),
+        const SizedBox(height: 8),
+        // Línea decorativa
+        Container(
+          width: 60,
+          height: 4,
+          decoration: BoxDecoration(
+            gradient: _gradientPrimary,
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
       ],
     );

@@ -236,41 +236,102 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 10),
 
-              // ❤️ HEADER
+              // ❤️ HEADER CON LOGO CUADRADO
               Center(
                 child: Column(
                   children: [
+                    // ✅ LOGO CUADRADO CON IMAGEN Cardiocare.png
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      width: 120,
+                      height: 120,
                       decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(24),
                         gradient: _gradientPrimary,
-                        shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: _primary.withOpacity(0.3),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
+                            color: _primary.withOpacity(0.35),
+                            blurRadius: 30,
+                            spreadRadius: 4,
+                            offset: const Offset(0, 10),
+                          ),
+                          BoxShadow(
+                            color: _primary.withOpacity(0.15),
+                            blurRadius: 60,
+                            spreadRadius: 8,
+                            offset: const Offset(0, 20),
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.favorite, size: 55, color: Colors.white),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: Container(
+                          color: Colors.white,
+                          padding: const EdgeInsets.all(16),
+                          child: Image.asset(
+                            'assets/images/Cardiocare.png',
+                            width: 120,
+                            height: 120,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              // Fallback si la imagen no se encuentra
+                              return Container(
+                                decoration: BoxDecoration(
+                                  gradient: _gradientPrimary,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: const Icon(
+                                  Icons.favorite,
+                                  color: Colors.white,
+                                  size: 60,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 24),
+                    // Título con gradiente
                     Text(
-                      "Crear cuenta",
-                      style: AppTheme.headline2,
+                      "CardioCare",
+                      style: AppTheme.headline1.copyWith(
+                        fontSize: 30,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
+                        foreground: Paint()
+                          ..shader = const LinearGradient(
+                            colors: [
+                              Color(0xFF2563EB),
+                              Color(0xFF1D4ED8),
+                            ],
+                          ).createShader(const Rect.fromLTWH(0, 0, 180, 45)),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       "Únete a CardioCare y controla tu salud",
                       textAlign: TextAlign.center,
-                      style: AppTheme.body2.copyWith(color: _textSub),
+                      style: AppTheme.body2.copyWith(
+                        color: _textSub,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    // Línea decorativa
+                    Container(
+                      width: 50,
+                      height: 3,
+                      decoration: BoxDecoration(
+                        gradient: _gradientPrimary,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 35),
+              const SizedBox(height: 30),
 
               // 📝 FORM
               Container(
