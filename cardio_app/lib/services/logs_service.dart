@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class LogService {
-  final String baseUrl = "${ApiConfig.baseUrl}"; // ✅ Sin /api extra
+  final String baseUrl = "${ApiConfig.baseUrl}/api"; // ✅ Con /api extra
 
   // =========================
   // 📋 OBTENER TODOS LOS LOGS - CORREGIDO

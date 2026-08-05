@@ -39,6 +39,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
   static const _textSub = AppTheme.gray500;
   static const _gradientPrimary = AppTheme.primaryGradient;
 
+  // ==============================================
+  // 📱 UTILIDADES DE RESPONSIVE
+  // ==============================================
+  bool _isSmallScreen(BuildContext context) => MediaQuery.of(context).size.width < 360;
+  bool _isMediumScreen(BuildContext context) => 
+      MediaQuery.of(context).size.width >= 360 && MediaQuery.of(context).size.width < 600;
+
   @override
   void initState() {
     super.initState();
@@ -133,11 +140,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSmall = _isSmallScreen(context);
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(100),
+        preferredSize: Size.fromHeight(isSmall ? 80.0 : 100.0),
         child: Container(
           decoration: const BoxDecoration(
             gradient: AppTheme.primaryGradient,
@@ -148,12 +157,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           child: SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: EdgeInsets.symmetric(horizontal: isSmall ? 8.0 : 16.0, vertical: isSmall ? 8.0 : 12.0),
               child: Row(
                 children: [
-                  // ✅ LOGO CARDIOCARE EN EL APP BAR
                   AppTheme.buildSmallLogo(
-                    size: 40,
+                    size: isSmall ? 32.0 : 40.0,
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
@@ -164,52 +172,40 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       );
                     },
                   ),
-                  const SizedBox(width: 12),
-                  const Expanded(
+                  const SizedBox(width: 10),
+                  Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text("CardioCare", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 2),
-                        Text("Panel Admin", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text(
+                          "CardioCare",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isSmall ? 15.0 : 18.0,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          "Panel Admin",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: isSmall ? 10.0 : 12.0,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ],
                     ),
                   ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.edit_outlined, color: Colors.white, size: 24),
-                      onPressed: editarPerfil,
-                      tooltip: "Editar perfil",
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 24),
-                      onPressed: openConfiguracion,
-                      tooltip: "Configuración",
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.logout, color: Colors.white, size: 24),
-                      onPressed: logout,
-                      tooltip: "Cerrar sesión",
-                    ),
-                  ),
+                  _buildAppBarButton(Icons.edit_outlined, editarPerfil, isSmall: isSmall),
+                  const SizedBox(width: 4),
+                  _buildAppBarButton(Icons.settings_outlined, openConfiguracion, isSmall: isSmall),
+                  const SizedBox(width: 4),
+                  _buildAppBarButton(Icons.logout, logout, isSmall: isSmall),
                 ],
               ),
             ),
@@ -223,24 +219,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
               color: AppTheme.primary,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.only(bottom: 20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildHeader(),
                     Padding(
-                      padding: const EdgeInsets.all(16),
+                      padding: EdgeInsets.all(isSmall ? 12.0 : 16.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _buildInfoCard(),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           Text(
                             "Herramientas de Administración",
-                            style: AppTheme.title1,
+                            style: AppTheme.title1.copyWith(
+                              fontSize: isSmall ? 16.0 : 20.0,
+                            ),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
                           _buildAccionesGrid(),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 16),
                           _buildCTACard(),
                           const SizedBox(height: 20),
                         ],
@@ -253,36 +252,84 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  // ==============================================
+  // 🧩 WIDGET DE BOTÓN DE LA BARRA
+  // ==============================================
+  Widget _buildAppBarButton(IconData icon, VoidCallback onPressed, {required bool isSmall}) {
+    final size = isSmall ? 20.0 : 24.0;
+    final padding = isSmall ? 6.0 : 8.0;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: Colors.white, size: size),
+        onPressed: onPressed,
+        padding: EdgeInsets.all(padding),
+        constraints: BoxConstraints(
+          minWidth: isSmall ? 32.0 : 40.0,
+          minHeight: isSmall ? 32.0 : 40.0,
+        ),
+        tooltip: icon == Icons.edit_outlined ? "Editar perfil" : 
+                 icon == Icons.settings_outlined ? "Configuración" : "Cerrar sesión",
+      ),
+    );
+  }
+
+  // ==============================================
+  // 📋 HEADER
+  // ==============================================
   Widget _buildHeader() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+    final isSmall = _isSmallScreen(context);
+    final nombreCompleto = perfil?["nombre"]?.toString() ?? widget.nombre;
+    final inicial = nombreCompleto.isNotEmpty ? nombreCompleto[0].toUpperCase() : 'A';
+    final correo = perfil?["correo"] ?? "Administrador del sistema";
+
     return Container(
       width: double.infinity,
       color: isDark ? AppTheme.gray800 : AppTheme.white,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      padding: EdgeInsets.fromLTRB(
+        isSmall ? 14.0 : 20.0,
+        isSmall ? 14.0 : 20.0,
+        isSmall ? 14.0 : 20.0,
+        isSmall ? 14.0 : 20.0,
+      ),
       child: Row(
         children: [
           Container(
-            width: 70,
-            height: 70,
+            width: isSmall ? 56.0 : 70.0,
+            height: isSmall ? 56.0 : 70.0,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
-              boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+              boxShadow: [
+                BoxShadow(
+                  color: AppTheme.primary.withOpacity(0.3),
+                  blurRadius: isSmall ? 8.0 : 12.0,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: ClipOval(
               child: Image.asset(
                 "assets/images/admin.jpg",
-                width: 70,
-                height: 70,
+                width: isSmall ? 56.0 : 70.0,
+                height: isSmall ? 56.0 : 70.0,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
                     decoration: BoxDecoration(gradient: AppTheme.primaryGradient),
                     child: Center(
                       child: Text(
-                        (perfil?["nombre"] ?? widget.nombre)[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                        inicial,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: isSmall ? 24.0 : 32.0,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   );
@@ -290,37 +337,59 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Hola, ${perfil?["nombre"]?.toString().split(" ").first ?? widget.nombre}",
-                  style: AppTheme.title1,
+                  "Hola, ${nombreCompleto.split(" ").first}",
+                  style: AppTheme.title1.copyWith(
+                    fontSize: isSmall ? 16.0 : 20.0,
+                  ),
                   overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  perfil?["correo"] ?? "Administrador del sistema",
-                  style: AppTheme.body2.copyWith(color: AppTheme.gray500),
+                  correo,
+                  style: AppTheme.body2.copyWith(
+                    fontSize: isSmall ? 12.0 : 14.0,
+                    color: AppTheme.gray500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: EdgeInsets.symmetric(horizontal: isSmall ? 8.0 : 12.0, vertical: isSmall ? 4.0 : 6.0),
             decoration: BoxDecoration(
               color: AppTheme.success.withOpacity(0.1),
               border: Border.all(color: AppTheme.success.withOpacity(0.3)),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle)),
-                const SizedBox(width: 6),
-                const Text("Activo", style: TextStyle(color: AppTheme.success, fontSize: 12, fontWeight: FontWeight.w600)),
+                Container(
+                  width: isSmall ? 6.0 : 8.0,
+                  height: isSmall ? 6.0 : 8.0,
+                  decoration: const BoxDecoration(
+                    color: AppTheme.success,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  "Activo",
+                  style: TextStyle(
+                    color: AppTheme.success,
+                    fontSize: isSmall ? 10.0 : 12.0,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -329,18 +398,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  // ==============================================
+  // 📊 TARJETA DE INFORMACIÓN - CORREGIDA
+  // ==============================================
   Widget _buildInfoCard() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSmall = _isSmallScreen(context);
     
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isSmall ? 14.0 : 20.0),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.gray800 : AppTheme.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.subtleShadow,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: isDark ? null : AppTheme.subtleShadow,
       ),
       child: Column(
         children: [
+          // ✅ HEADER CORREGIDO - Sin overflow
           Row(
             children: [
               Container(
@@ -351,28 +425,38 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
                 child: const Icon(Icons.analytics_outlined, color: AppTheme.primary, size: 22),
               ),
-              const SizedBox(width: 12),
-              Text(
-                "Estadísticas del sistema",
-                style: AppTheme.title2,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  "Estadísticas del sistema",
+                  style: AppTheme.title2.copyWith(
+                    fontSize: isSmall ? 14.0 : 16.0,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-              const Spacer(),
+              // ✅ Badge más compacto
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppTheme.success.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  "✓ Sistema activo",
-                  style: TextStyle(fontSize: 11, color: AppTheme.success, fontWeight: FontWeight.w600),
+                child: Text(
+                  "✓ Activo",
+                  style: TextStyle(
+                    fontSize: isSmall ? 9.0 : 11.0,
+                    color: AppTheme.success,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           const Divider(height: 1, color: AppTheme.gray200),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -380,19 +464,21 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Icons.medical_services_outlined,
                   "Médicos",
                   "${medicos.length}",
+                  isSmall,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: _infoRow(
                   Icons.people_outlined,
                   "Pacientes",
                   "${pacientes.length}",
+                  isSmall,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
@@ -400,14 +486,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Icons.analytics_outlined,
                   "Total usuarios",
                   "${medicos.length + pacientes.length}",
+                  isSmall,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: _infoRow(
                   Icons.admin_panel_settings_outlined,
                   "Admin",
-                  perfil?["nombre"] ?? widget.nombre,
+                  perfil?["nombre"]?.toString().split(" ").first ?? widget.nombre,
+                  isSmall,
                 ),
               ),
             ],
@@ -417,24 +505,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
+  Widget _infoRow(IconData icon, String label, String value, bool isSmall) {
     return Row(
       children: [
-        Icon(icon, color: AppTheme.primary, size: 18),
-        const SizedBox(width: 10),
+        Icon(icon, color: AppTheme.primary, size: isSmall ? 16.0 : 18.0),
+        const SizedBox(width: 8),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 label,
-                style: AppTheme.caption,
+                style: AppTheme.caption.copyWith(
+                  fontSize: isSmall ? 10.0 : 12.0,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 2),
               Text(
                 value,
-                style: AppTheme.body2.copyWith(fontWeight: FontWeight.w600),
+                style: AppTheme.body2.copyWith(
+                  fontSize: isSmall ? 13.0 : 14.0,
+                  fontWeight: FontWeight.w600,
+                ),
                 overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ],
           ),
@@ -443,7 +539,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  // ==============================================
+  // 🔘 GRID DE ACCIONES
+  // ==============================================
   Widget _buildAccionesGrid() {
+    final isSmall = _isSmallScreen(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     final items = [
       _AccionItem(
         "Usuarios",
@@ -533,44 +635,57 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
     ];
 
+    final crossAxisCount = screenWidth > 500 ? 3 : 2;
+
     return GridView.count(
-      crossAxisCount: 3,
+      crossAxisCount: crossAxisCount,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.2,
-      children: items.map(_buildAccionCard).toList(),
+      crossAxisSpacing: isSmall ? 8.0 : 12.0,
+      mainAxisSpacing: isSmall ? 8.0 : 12.0,
+      childAspectRatio: isSmall ? 1.1 : 1.2,
+      children: items.map((item) => _buildAccionCard(item, isSmall)).toList(),
     );
   }
 
-  Widget _buildAccionCard(_AccionItem item) {
+  Widget _buildAccionCard(_AccionItem item, bool isSmall) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final iconSize = isSmall ? 24.0 : 28.0;
+    final fontSize = isSmall ? 12.0 : 14.0;
+    final padding = isSmall ? 10.0 : 14.0;
     
     return GestureDetector(
       onTap: item.onTap,
       child: Container(
         decoration: BoxDecoration(
           color: isDark ? AppTheme.gray800 : AppTheme.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: AppTheme.subtleShadow,
+          borderRadius: BorderRadius.circular(isSmall ? 12.0 : 16.0),
+          boxShadow: isDark ? null : AppTheme.subtleShadow,
+          border: Border.all(
+            color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+          ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(14),
+              padding: EdgeInsets.all(padding),
               decoration: BoxDecoration(
                 color: item.color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(isSmall ? 10.0 : 14.0),
               ),
-              child: Icon(item.icon, size: 28, color: item.color),
+              child: Icon(item.icon, size: iconSize, color: item.color),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10),
             Text(
               item.title,
               textAlign: TextAlign.center,
-              style: AppTheme.body2.copyWith(fontWeight: FontWeight.w600),
+              style: AppTheme.body2.copyWith(
+                fontSize: fontSize,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -578,16 +693,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
+  // ==============================================
+  // 💡 TARJETA CTA
+  // ==============================================
   Widget _buildCTACard() {
+    final isSmall = _isSmallScreen(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(isSmall ? 14.0 : 20.0),
       decoration: BoxDecoration(
         gradient: AppTheme.primaryGradient,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: AppTheme.primary.withOpacity(0.3),
-            blurRadius: 12,
+            blurRadius: isSmall ? 8.0 : 12.0,
             offset: const Offset(0, 4),
           ),
         ],
@@ -598,41 +719,60 @@ class _AdminDashboardState extends State<AdminDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   "¿Necesitas ayuda?",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: isSmall ? 14.0 : 16.0,
+                  ),
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  "Gestiona usuarios, asignaciones y más desde el panel",
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                const SizedBox(height: 4),
+                Text(
+                  "Gestiona usuarios, asignaciones y más",
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: isSmall ? 11.0 : 13.0,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
                 TextButton.icon(
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: AppTheme.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: isSmall ? 12.0 : 18.0,
+                      vertical: isSmall ? 8.0 : 10.0,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: editarPerfil,
-                  icon: const Icon(Icons.edit_outlined, size: 16),
-                  label: const Text(
+                  icon: Icon(Icons.edit_outlined, size: isSmall ? 14.0 : 16.0),
+                  label: Text(
                     "Editar perfil",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: isSmall ? 11.0 : 13.0,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          const Icon(
-            Icons.admin_panel_settings_outlined,
-            color: Colors.white24,
-            size: 55,
-          ),
+          if (screenWidth > 400)
+            const SizedBox(width: 10),
+          if (screenWidth > 400)
+            Icon(
+              Icons.admin_panel_settings_outlined,
+              color: Colors.white24,
+              size: isSmall ? 40.0 : 55.0,
+            ),
         ],
       ),
     );

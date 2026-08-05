@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class SignosService {
   // 🔧 Base URL
-  final String baseUrl = "${ApiConfig.baseUrl}";
+  final String baseUrl = "${ApiConfig.baseUrl}/api";
 
   // 🫀 REGISTRAR SIGNOS
   Future<bool> registrar(Map<String, dynamic> data) async {
@@ -274,6 +274,94 @@ class SignosService {
     } catch (e) {
       print("❌ ERROR VERIFICANDO SIGNOS ANORMALES: $e");
       return [];
+    }
+  }
+
+  // ⚠️ CREAR ALERTA DE SIGNOS - CORREGIDO
+  Future<bool> crearAlertaSignos({
+    required int idPaciente,
+    required String tipo,
+    required String nivel,
+    required String descripcion,
+    required String origen,
+    required String nombreOrigen,
+  }) async {
+    try {
+      // Validar que el idPaciente sea válido
+      if (idPaciente <= 0) {
+        print("❌ Error: idPaciente inválido: $idPaciente");
+        return false;
+      }
+
+      final Map<String, dynamic> alertaData = {
+        'idPaciente': idPaciente,
+        'tipo': tipo,
+        'nivel': nivel,
+        'descripcion': descripcion,
+        'origen': origen,
+        'nombre_origen': nombreOrigen,
+        'estado': 'PENDIENTE',
+      };
+
+      print("📤 Creando alerta con datos: $alertaData");
+
+      final res = await http.post(
+        Uri.parse("$baseUrl/alertas"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(alertaData),
+      );
+
+      print("⚠️ ALERTA STATUS: ${res.statusCode}");
+      print("⚠️ ALERTA BODY: ${res.body}");
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final response = jsonDecode(res.body);
+        return response["ok"] == true || response["success"] == true;
+      }
+
+      // Si el error es de llave foránea, intentar verificar el paciente
+      if (res.statusCode == 400 || res.statusCode == 500) {
+        final errorBody = jsonDecode(res.body);
+        final errorMsg = errorBody["message"]?.toString() ?? "";
+        
+        if (errorMsg.contains("foreign key") || errorMsg.contains("idPaciente")) {
+          print("❌ Error de llave foránea: El idPaciente $idPaciente no existe en la tabla paciente");
+          
+          // Intentar verificar si el paciente existe
+          final pacienteExiste = await _verificarPacienteExiste(idPaciente);
+          if (!pacienteExiste) {
+            print("❌ El paciente con id $idPaciente no existe en la base de datos");
+          }
+        }
+      }
+
+      return false;
+
+    } catch (e) {
+      print("❌ ERROR CREANDO ALERTA: $e");
+      return false;
+    }
+  }
+
+  // ✅ VERIFICAR SI EL PACIENTE EXISTE
+  Future<bool> _verificarPacienteExiste(int idPaciente) async {
+    try {
+      final res = await http.get(
+        Uri.parse("$baseUrl/pacientes/$idPaciente"),
+        headers: {"Content-Type": "application/json"},
+      );
+
+      print("🔍 VERIFICAR PACIENTE STATUS: ${res.statusCode}");
+      
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data["ok"] == true || data["success"] == true;
+      }
+      return false;
+
+    } catch (e) {
+      print("❌ ERROR VERIFICANDO PACIENTE: $e");
+      return false;
     }
   }
 

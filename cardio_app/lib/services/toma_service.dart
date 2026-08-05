@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 class TomaService {
 
-  static const baseUrl = "${ApiConfig.baseUrl}/tomas";
+  static const baseUrl = "${ApiConfig.baseUrl}/api/tomas";
 
   // ==========================
   // ✅ OBTENER TOMAS DE HOY

@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 class RecomendacionService {
   // ⚠️ CAMBIA ESTA IP POR LA DE TU PC
-  final String baseUrl = "${ApiConfig.baseUrl}/recomendaciones";
+  final String baseUrl = "${ApiConfig.baseUrl}/api/recomendaciones";
 
   // Codifica titulo+categoria dentro del campo descripcion
   // Formato guardado: "##TITULO##Reducir sal||##CATEGORIA##Alimentación||##DESC##texto..."

@@ -535,7 +535,7 @@ class NotificacionService {
   // ==============================================
   // LIMPIAR NOTIFICACIONES
   // ==============================================
-  void limpiarNotificaciones(int idUsuario) {
+  void limpiarNotificaciones() {
     _notificaciones.clear();
     _notificacionesIds.clear();
     _notificacionesLeidas.clear(); // ✅ Limpiar también las leídas

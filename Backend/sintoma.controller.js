@@ -2,56 +2,64 @@
 const db = require('./db');
 
 // ============================
-// 🚨 GENERAR ALERTA POR SÍNTOMA CON NOMBRE
+// 🚨 GENERAR ALERTA POR SÍNTOMA CON MÉDICO ASOCIADO
 // ============================
 function crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad, nombrePaciente) {
   const nivel = prioridad === "ALTA" ? "ALTO"
               : prioridad === "MEDIA" ? "MEDIO"
               : "BAJO";
 
-  if (!nombrePaciente || nombrePaciente === '') {
-    const sqlPaciente = `
-      SELECT u.nombre 
-      FROM paciente p
-      JOIN usuario u ON p.idUsuario = u.idUsuario
-      WHERE p.idPaciente = ?
-    `;
-    
-    db.query(sqlPaciente, [idPaciente], (err, paciente) => {
-      if (err) {
-        console.log('❌ ERROR al obtener paciente:', err);
-        insertarAlerta('Paciente');
-        return;
-      }
+  console.log(`🔍 Creando alerta de síntoma para paciente ${idPaciente} - ${nombrePaciente}`);
 
-      const nombre = paciente && paciente.length > 0 
-        ? paciente[0].nombre 
-        : 'Paciente';
+  // ✅ OBTENER LOS MÉDICOS DEL PACIENTE
+  const sqlMedicos = `
+    SELECT mp.idProfesional, p.idUsuario
+    FROM medicoPaciente mp
+    JOIN profesionalsalud p ON p.idProfesional = mp.idProfesional
+    WHERE mp.idPaciente = ?
+  `;
+
+  db.query(sqlMedicos, [idPaciente], (err, medicos) => {
+    if (err) {
+      console.log('❌ ERROR al obtener médicos:', err);
+      return;
+    }
+
+    if (!medicos || medicos.length === 0) {
+      console.log(`⚠️ No hay médicos asignados para el paciente ${idPaciente}`);
+      return;
+    }
+
+    console.log(`✅ Médicos encontrados: ${medicos.length}`);
+
+    // ✅ CREAR ALERTA PARA CADA MÉDICO
+    for (const medico of medicos) {
+      const descripcionCompleta = `${titulo}: ${descripcion}`;
       
-      console.log(`✅ Nombre obtenido de BD: ${nombre}`);
-      insertarAlerta(nombre);
-    });
-  } else {
-    insertarAlerta(nombrePaciente);
-  }
+      const sql = `
+        INSERT INTO alerta (
+          idPaciente,
+          tipo,
+          nivel,
+          descripcion,
+          origen,
+          nombre_origen,
+          estado,
+          fecha,
+          idMedico,
+          leida
+        ) VALUES (?, 'SÍNTOMA', ?, ?, 'SINTOMA', ?, 'PENDIENTE', NOW(), ?, 0)
+      `;
 
-  function insertarAlerta(nombre) {
-    const sql = `
-      INSERT INTO alerta 
-      (idPaciente, tipo, nivel, descripcion, origen, nombre_origen, estado, fecha)
-      VALUES (?, 'SINTOMA', ?, ?, 'SINTOMA', ?, 'PENDIENTE', NOW())
-    `;
-
-    const descripcionCompleta = `${titulo}: ${descripcion}`;
-
-    db.query(sql, [idPaciente, nivel, descripcionCompleta, nombre], (err) => {
-      if (err) {
-        console.log("❌ ERROR ALERTA SÍNTOMA:", err);
-      } else {
-        console.log(`✅ Alerta creada para ${nombre} (ID Paciente: ${idPaciente})`);
-      }
-    });
-  }
+      db.query(sql, [idPaciente, nivel, descripcionCompleta, nombrePaciente, medico.idUsuario], (err2) => {
+        if (err2) {
+          console.log(`❌ ERROR ALERTA SÍNTOMA para médico ${medico.idUsuario}:`, err2);
+        } else {
+          console.log(`✅ Alerta de síntoma creada para médico ${medico.idUsuario} (Paciente: ${nombrePaciente})`);
+        }
+      });
+    }
+  });
 }
 
 // ============================
@@ -96,6 +104,7 @@ exports.crearSintoma = (req, res) => {
 
     const idSintoma = result.insertId;
 
+    // ✅ OBTENER idPaciente
     const sqlPaciente = `
       SELECT p.idPaciente, u.nombre as nombre_usuario
       FROM paciente p
@@ -119,6 +128,7 @@ exports.crearSintoma = (req, res) => {
         ? nombrePaciente 
         : nombreUsuario;
 
+      // ✅ CREAR ALERTA CON MÉDICOS ASOCIADOS
       crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad || 'MEDIA', nombreFinal);
 
       res.status(201).json({

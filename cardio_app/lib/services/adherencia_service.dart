@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class AdherenciaService {
 
-  final String baseUrl = "${ApiConfig.baseUrl}/adherencia";
+  final String baseUrl = "${ApiConfig.baseUrl}/api/adherencia";
 
   Future<Map<String, dynamic>?> getAdherencia(
     int idPaciente,

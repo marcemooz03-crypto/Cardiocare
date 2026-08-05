@@ -14,13 +14,14 @@ class _CuidadoresScreenState extends State<CuidadoresScreen> {
   final service = AdminService();
   Map<String, dynamic>? cuidador;
   bool loading = true;
+  bool _creando = false;
 
-  static const _primary  = Color(0xFF1565C0);
-  static const _bgColor  = Color(0xFFF5F7FA);
-  static const _cardBg   = Color(0xFFFFFFFF);
+  static const _primary = Color(0xFF1565C0);
+  static const _bgColor = Color(0xFFF5F7FA);
+  static const _cardBg = Color(0xFFFFFFFF);
   static const _textMain = Color(0xFF1A1A2E);
-  static const _textSub  = Color(0xFF6B7280);
-  static const _border   = Color(0xFFE5E7EB);
+  static const _textSub = Color(0xFF6B7280);
+  static const _border = Color(0xFFE5E7EB);
 
   static const List<String> _relaciones = [
     "Familiar", "Cuidador", "Pareja", "Amigo", "Otro"
@@ -45,7 +46,6 @@ class _CuidadoresScreenState extends State<CuidadoresScreen> {
       
       if (!mounted) return;
       setState(() {
-        // ✅ Verificar si existe nombreCuidador
         if (data != null && data["nombreCuidador"] != null && data["nombreCuidador"].toString().isNotEmpty) {
           cuidador = data;
         } else {
@@ -72,12 +72,37 @@ class _CuidadoresScreenState extends State<CuidadoresScreen> {
     return cuidador!["relacionCuidador"] ?? "Sin relación";
   }
 
+  void _showSnack(String msg, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(msg)),
+          ],
+        ),
+        backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
   void agregar() {
     final nombre = TextEditingController();
     final correo = TextEditingController();
     final contrasena = TextEditingController();
     bool verContrasena = false;
     String relacionSel = _relaciones.first;
+    bool cargando = false;
 
     showModalBottomSheet(
       context: context,
@@ -99,6 +124,11 @@ class _CuidadoresScreenState extends State<CuidadoresScreen> {
                 "Agregar cuidador / familiar",
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
+              const SizedBox(height: 4),
+              Text(
+                "El cuidador podrá acceder a la información del paciente",
+                style: TextStyle(fontSize: 12, color: _textSub),
+              ),
               const SizedBox(height: 16),
               _campo(nombre, "Nombre completo", Icons.person_outline),
               const SizedBox(height: 10),
@@ -109,7 +139,7 @@ class _CuidadoresScreenState extends State<CuidadoresScreen> {
                 controller: contrasena,
                 obscureText: !verContrasena,
                 decoration: InputDecoration(
-                  hintText: "Contraseña de acceso",
+                  hintText: "Contraseña de acceso (mínimo 6 caracteres)",
                   prefixIcon: const Icon(Icons.lock_outline, size: 18, color: _textSub),
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -157,57 +187,87 @@ class _CuidadoresScreenState extends State<CuidadoresScreen> {
                 onChanged: (v) { if (v != null) setD(() => relacionSel = v); },
               ),
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8)),
+              if (cargando)
+                const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(),
                   ),
-                  onPressed: () async {
-                    if (nombre.text.trim().isEmpty ||
-                        correo.text.trim().isEmpty ||
-                        contrasena.text.trim().isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Todos los campos son obligatorios")),
-                      );
-                      return;
-                    }
-                    
-                    final ok = await service.crearCuidador(
-                      nombre:     nombre.text.trim(),
-                      correo:     correo.text.trim(),
-                      contrasena: contrasena.text.trim(),
-                      relacion:   relacionSel,
-                      idPaciente: widget.idPaciente,
-                    );
-                    
-                    if (!mounted) return;
-                    Navigator.pop(context);
-                    
-                    if (ok) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("✅ Cuidador registrado correctamente")),
-                      );
-                      cargar();
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("❌ Error: correo ya registrado")),
-                      );
-                    }
-                  },
-                  child: const Text("Guardar"),
+                )
+              else
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () async {
+                      // Validaciones
+                      if (nombre.text.trim().isEmpty) {
+                        _showSnack("Ingresa el nombre del cuidador", isError: true);
+                        return;
+                      }
+                      if (correo.text.trim().isEmpty) {
+                        _showSnack("Ingresa el correo electrónico", isError: true);
+                        return;
+                      }
+                      if (!_isValidEmail(correo.text.trim())) {
+                        _showSnack("Ingresa un correo válido", isError: true);
+                        return;
+                      }
+                      if (contrasena.text.trim().isEmpty) {
+                        _showSnack("Ingresa una contraseña", isError: true);
+                        return;
+                      }
+                      if (contrasena.text.trim().length < 6) {
+                        _showSnack("La contraseña debe tener al menos 6 caracteres", isError: true);
+                        return;
+                      }
+
+                      setD(() => cargando = true);
+
+                      try {
+                        final ok = await service.crearCuidador(
+                          nombre: nombre.text.trim(),
+                          correo: correo.text.trim(),
+                          contrasena: contrasena.text.trim(),
+                          relacion: relacionSel,
+                          idPaciente: widget.idPaciente,
+                        );
+                        
+                        if (!mounted) return;
+                        Navigator.pop(context);
+                        
+                        if (ok) {
+                          _showSnack("✅ Cuidador registrado correctamente");
+                          cargar();
+                        } else {
+                          _showSnack("❌ Error al registrar el cuidador", isError: true);
+                        }
+                      } catch (e) {
+                        if (!mounted) return;
+                        Navigator.pop(context);
+                        // Mostrar el mensaje de error específico del backend
+                        _showSnack("❌ ${e.toString()}", isError: true);
+                      }
+                    },
+                    child: const Text("Guardar"),
+                  ),
                 ),
-              ),
               const SizedBox(height: 16),
             ],
           ),
         ),
       ),
     );
+  }
+
+  bool _isValidEmail(String email) {
+    return RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email);
   }
 
   Widget _campo(TextEditingController ctrl, String hint, IconData icon,
@@ -358,17 +418,38 @@ class _CuidadoresScreenState extends State<CuidadoresScreen> {
                                   borderRadius: BorderRadius.circular(8)),
                             ),
                             onPressed: () async {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text("Eliminar cuidador"),
+                                  content: const Text(
+                                    "¿Estás seguro de que deseas eliminar este cuidador? Perderá acceso al seguimiento del paciente."
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, false),
+                                      child: const Text("Cancelar"),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, true),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                      ),
+                                      child: const Text("Eliminar"),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              
+                              if (confirm != true) return;
+                              
                               final ok = await service
                                   .eliminarCuidador(widget.idPaciente);
                               if (ok && mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("✅ Cuidador eliminado")),
-                                );
+                                _showSnack("✅ Cuidador eliminado");
                                 cargar();
                               } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(content: Text("❌ Error al eliminar cuidador")),
-                                );
+                                _showSnack("❌ Error al eliminar cuidador", isError: true);
                               }
                             },
                           ),

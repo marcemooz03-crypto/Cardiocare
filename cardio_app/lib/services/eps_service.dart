@@ -11,7 +11,7 @@ import 'package:http/http.dart' as http;
 class EpsService {
 
   final String baseUrl =
-      "${ApiConfig.baseUrl}/eps";
+      "${ApiConfig.baseUrl}/api/eps";
 
   Future<List<Map<String, dynamic>>> getEps() async {
 

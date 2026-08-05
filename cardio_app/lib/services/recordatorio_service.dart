@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class RecordatorioService {
-  static const baseUrl = "${ApiConfig.baseUrl}/recordatorios";
+  static const baseUrl = "${ApiConfig.baseUrl}/api/recordatorios";
 
   /// Obtiene recordatorios de un tratamiento específico
   Future<List<Map<String, dynamic>>> getByTratamiento(int idTratamiento) async {
@@ -169,22 +169,53 @@ class RecordatorioService {
     return List<Map<String, dynamic>>.from(data);
   }
 
+  // ==============================================
+  // 🔧 FUNCIONES DE UTILIDAD - CORREGIDAS
+  // ==============================================
+
+  /// Formatea una hora a formato HH:MM (24 horas)
+  /// 
+  /// Ejemplos:
+  /// - "14:30:00" → "14:30"
+  /// - "2:30" → "02:30"
+  /// - "14" → "14:00"
+  /// - "25:00" → "00:00" (hora inválida)
   String _formatearHora(String hora) {
     // Limpiar la hora de espacios
     hora = hora.trim();
     
-    // Si la hora ya está en formato HH:MM, la devolvemos
+    // Si la hora ya está en formato HH:MM exacto, la devolvemos
     if (RegExp(r'^\d{2}:\d{2}$').hasMatch(hora)) {
-      return hora;
+      // Validar que sea una hora válida
+      final partes = hora.split(':');
+      final h = int.tryParse(partes[0]) ?? 0;
+      final m = int.tryParse(partes[1]) ?? 0;
+      if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+        return hora;
+      }
+      return "00:00";
     }
     
-    // Si tiene segundos (HH:MM:SS), los removemos
+    // Si tiene formato HH:MM:SS, remover los segundos
+    if (RegExp(r'^\d{2}:\d{2}:\d{2}$').hasMatch(hora)) {
+      final partes = hora.split(':');
+      final h = int.tryParse(partes[0]) ?? 0;
+      final m = int.tryParse(partes[1]) ?? 0;
+      if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+        return "${partes[0].padLeft(2, '0')}:${partes[1].padLeft(2, '0')}";
+      }
+      return "00:00";
+    }
+    
+    // Si tiene formato H:MM o HH:M, formatear
     if (hora.contains(':')) {
       final partes = hora.split(':');
       if (partes.length >= 2) {
-        final h = partes[0].padLeft(2, '0');
-        final m = partes[1].padLeft(2, '0');
-        return "$h:$m";
+        final h = int.tryParse(partes[0]) ?? 0;
+        final m = int.tryParse(partes[1]) ?? 0;
+        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          return "${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}";
+        }
       }
     }
     
@@ -194,11 +225,33 @@ class RecordatorioService {
       if (horaInt >= 0 && horaInt <= 23) {
         return "${horaInt.toString().padLeft(2, '0')}:00";
       }
+      // Si es mayor a 23, podría ser un timestamp o formato diferente
+      if (horaInt > 23 && horaInt < 100) {
+        // Intentar interpretar como HHMM (ej: 1430 → 14:30)
+        final h = horaInt ~/ 100;
+        final m = horaInt % 100;
+        if (h >= 0 && h <= 23 && m >= 0 && m <= 59) {
+          return "${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}";
+        }
+      }
     } catch (_) {
-      // Si no se puede parsear, devolver 00:00
+      // Si no se puede parsear, continuar
     }
     
+    // Si todo falla, devolver 00:00
+    debugPrint("⚠️ Hora inválida: '$hora', usando 00:00");
     return "00:00";
+  }
+
+  /// Valida si una hora en formato HH:MM es válida
+  bool _esHoraValida(String hora) {
+    if (!RegExp(r'^\d{2}:\d{2}$').hasMatch(hora)) {
+      return false;
+    }
+    final partes = hora.split(':');
+    final h = int.tryParse(partes[0]) ?? -1;
+    final m = int.tryParse(partes[1]) ?? -1;
+    return h >= 0 && h <= 23 && m >= 0 && m <= 59;
   }
 
   void _check(http.Response res) {

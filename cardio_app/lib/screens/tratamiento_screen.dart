@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cardio_app/accesibility_provider.dart';
+import 'package:cardio_app/app.theme.dart';
 import '../services/tratamiento_service.dart';
 
 class CrearTratamientoScreen extends StatefulWidget {
@@ -45,24 +48,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   // Fechas seleccionadas
   DateTime? _fechaInicio;
   DateTime? _fechaFin;
-
-  // Colores profesionales
-  static const _primaryColor = Color(0xFF2563EB);
-  static const _successColor = Color(0xFF10B981);
-  static const _warningColor = Color(0xFFF59E0B);
-  static const _infoColor = Color(0xFF06B6D4);
-  static const _errorColor = Color(0xFFEF4444);
-  static const _textPrimary = Color(0xFF1F2937);
-  static const _textSecondary = Color(0xFF6B7280);
-  static const _textTertiary = Color(0xFF9CA3AF);
-  static const _borderColor = Color(0xFFE5E7EB);
-  static const _backgroundColor = Color(0xFFF9FAFB);
-  
-  static const _gradientPrimary = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [_primaryColor, Color(0xFF60A5FA)],
-  );
 
   @override
   void initState() {
@@ -120,10 +105,12 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     }
   }
 
-  // Validadores
+  // ==============================================
+  // ✅ VALIDADORES
+  // ==============================================
   String? _validateDescripcion(String? value) {
     if (value == null || value.trim().isEmpty) {
-      return 'La descripción es requerida';
+      return 'La descripción es obligatoria';
     }
     if (value.length < 5) {
       return 'Mínimo 5 caracteres';
@@ -137,7 +124,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   String? _validateDosis(String? value) {
     if (_medicamentoSeleccionadoId != null) {
       if (value == null || value.trim().isEmpty) {
-        return 'La dosis es requerida cuando seleccionas un medicamento';
+        return 'La dosis es obligatoria si selecciona un medicamento';
       }
       if (value.length > 50) {
         return 'Dosis demasiado larga';
@@ -149,7 +136,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   String? _validateFrecuencia(String? value) {
     if (_medicamentoSeleccionadoId != null) {
       if (value == null || value.trim().isEmpty) {
-        return 'La frecuencia es requerida cuando seleccionas un medicamento';
+        return 'La frecuencia es obligatoria si selecciona un medicamento';
       }
       if (value.length > 50) {
         return 'Frecuencia demasiado larga';
@@ -160,17 +147,20 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
 
   String? _validateFechas() {
     if (_fechaInicio == null) {
-      return 'Selecciona la fecha de inicio';
+      return 'Seleccione la fecha de inicio';
     }
     if (_fechaFin == null) {
-      return 'Selecciona la fecha de finalización';
+      return 'Seleccione la fecha de finalización';
     }
     if (_fechaFin!.isBefore(_fechaInicio!)) {
-      return 'La fecha final debe ser posterior a la fecha de inicio';
+      return 'La fecha final debe ser después de la fecha de inicio';
     }
     return null;
   }
 
+  // ==============================================
+  // 📅 SELECCIONAR FECHA
+  // ==============================================
   Future<void> _seleccionarFecha(TextEditingController controller, bool isInicio) async {
     final DateTime now = DateTime.now();
     final DateTime? picked = await showDatePicker(
@@ -181,7 +171,10 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: _primaryColor),
+            colorScheme: const ColorScheme.light(
+              primary: AppTheme.primary,
+              onPrimary: Colors.white,
+            ),
           ),
           child: child!,
         );
@@ -193,7 +186,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
         if (isInicio) {
           _fechaInicio = picked;
           controller.text = _formatFecha(picked);
-          // Si la fecha fin es anterior a la nueva fecha inicio, limpiarla
           if (_fechaFin != null && _fechaFin!.isBefore(picked)) {
             _fechaFin = null;
             _fechaFinController.clear();
@@ -215,6 +207,9 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     return "${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}";
   }
 
+  // ==============================================
+  // 📨 MENSAJES
+  // ==============================================
   void _mostrarMensaje(String mensaje, {bool esError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -229,7 +224,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
             Expanded(child: Text(mensaje)),
           ],
         ),
-        backgroundColor: esError ? _errorColor : _successColor,
+        backgroundColor: esError ? AppTheme.danger : AppTheme.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
@@ -240,11 +235,12 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
+  // ==============================================
+  // 💾 GUARDAR TRATAMIENTO
+  // ==============================================
   Future<void> _guardar() async {
-    // Validar formulario
     if (!_formKey.currentState!.validate()) return;
     
-    // Validar fechas
     final fechaError = _validateFechas();
     if (fechaError != null) {
       _mostrarMensaje(fechaError, esError: true);
@@ -252,7 +248,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     }
     
     if (_sintomaSeleccionadoId == null) {
-      _mostrarMensaje("Debes seleccionar un síntoma asociado", esError: true);
+      _mostrarMensaje("Debe seleccionar un síntoma asociado", esError: true);
       return;
     }
 
@@ -286,11 +282,11 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
       }
 
       if (isSuccess) {
-        _mostrarMensaje("✓ Tratamiento registrado correctamente");
+        _mostrarMensaje("Tratamiento registrado correctamente");
         Navigator.pop(context, true);
       } else {
         _mostrarMensaje(
-          response["message"] ?? "✗ Error al registrar el tratamiento",
+          response["message"] ?? "Error al registrar el tratamiento",
           esError: true,
         );
       }
@@ -301,14 +297,19 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     }
   }
 
+  // ==============================================
+  // 🏗 BUILD
+  // ==============================================
   @override
   Widget build(BuildContext context) {
+    final accessibility = Provider.of<AccessibilityProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final size = MediaQuery.of(context).size;
     final isTablet = size.width > 600;
 
     return Scaffold(
-      backgroundColor: _backgroundColor,
-      appBar: _buildAppBar(),
+      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
+      appBar: _buildAppBar(accessibility),
       body: _isLoadingData
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
@@ -324,17 +325,17 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
                       key: _formKey,
                       child: Column(
                         children: [
-                          _buildInfoCard(),
+                          _buildInfoCard(accessibility, isDark),
                           const SizedBox(height: 20),
-                          _buildInformacionTratamientoCard(),
+                          _buildInformacionTratamientoCard(accessibility, isDark),
                           const SizedBox(height: 16),
-                          _buildPeriodoCard(),
+                          _buildPeriodoCard(accessibility, isDark),
                           const SizedBox(height: 16),
-                          _buildObservacionesCard(),
+                          _buildObservacionesCard(accessibility, isDark),
                           const SizedBox(height: 16),
-                          _buildMedicamentoCard(),
+                          _buildMedicamentoCard(accessibility, isDark),
                           const SizedBox(height: 32),
-                          _buildSubmitButton(),
+                          _buildSubmitButton(accessibility),
                           const SizedBox(height: 20),
                         ],
                       ),
@@ -346,12 +347,15 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  // ==============================================
+  // 🧩 APP BAR
+  // ==============================================
+  PreferredSizeWidget _buildAppBar(AccessibilityProvider accessibility) {
     return PreferredSize(
       preferredSize: const Size.fromHeight(120),
       child: Container(
         decoration: const BoxDecoration(
-          gradient: _gradientPrimary,
+          gradient: AppTheme.primaryGradient,
           borderRadius: BorderRadius.only(
             bottomLeft: Radius.circular(24),
             bottomRight: Radius.circular(24),
@@ -375,24 +379,24 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
                     ),
                   ),
                 ),
-                const Center(
+                Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        "💊 Nuevo Tratamiento",
+                        "Nuevo Tratamiento",
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 20,
+                          fontSize: 20 * accessibility.fontScale,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      SizedBox(height: 4),
+                      const SizedBox(height: 4),
                       Text(
-                        "Registra un plan terapéutico",
+                        "Registre un plan de tratamiento",
                         style: TextStyle(
                           color: Colors.white70,
-                          fontSize: 12,
+                          fontSize: 14 * accessibility.fontScale,
                         ),
                       ),
                     ],
@@ -406,24 +410,27 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
-  Widget _buildInfoCard() {
+  // ==============================================
+  // ℹ️ TARJETA DE INFORMACIÓN
+  // ==============================================
+  Widget _buildInfoCard(AccessibilityProvider accessibility, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _primaryColor.withOpacity(0.1),
+        color: AppTheme.primary.withOpacity(0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _primaryColor.withOpacity(0.2)),
+        border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: _primaryColor),
+          Icon(Icons.info_outline, color: AppTheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              "Los campos marcados con * son obligatorios",
+              "Los campos con * son obligatorios",
               style: TextStyle(
-                fontSize: 13,
-                color: _primaryColor,
+                fontSize: 14 * accessibility.fontScale,
+                color: AppTheme.primary,
                 fontWeight: FontWeight.w500,
               ),
             ),
@@ -433,11 +440,16 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
-  Widget _buildInformacionTratamientoCard() {
+  // ==============================================
+  // 📝 TARJETA DE INFORMACIÓN DEL TRATAMIENTO
+  // ==============================================
+  Widget _buildInformacionTratamientoCard(AccessibilityProvider accessibility, bool isDark) {
     return _buildSectionCard(
       icon: Icons.medical_information,
       title: "Información del Tratamiento",
-      color: _primaryColor,
+      color: AppTheme.primary,
+      accessibility: accessibility,
+      isDark: isDark,
       children: [
         TextFormField(
           controller: _descripcionController,
@@ -445,10 +457,16 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
           textInputAction: TextInputAction.next,
           validator: _validateDescripcion,
           maxLines: 2,
+          style: TextStyle(
+            fontSize: 16 * accessibility.fontScale,
+            color: isDark ? Colors.white : AppTheme.gray700,
+          ),
           decoration: _buildInputDecoration(
-            label: "Descripción *",
-            hint: "Describe el tratamiento o diagnóstico",
+            label: "Descripción del tratamiento *",
+            hint: "Ej: Control de presión arterial",
             icon: Icons.description,
+            isDark: isDark,
+            accessibility: accessibility,
           ),
         ),
         const SizedBox(height: 16),
@@ -456,74 +474,103 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
           value: _sintomaSeleccionadoId,
           items: _sintomas,
           label: "Síntoma asociado *",
-          hint: "Selecciona un síntoma",
+          hint: "Seleccione un síntoma",
           icon: Icons.healing,
           displayField: "titulo",
           valueField: "idSintoma",
           onChanged: (v) => setState(() => _sintomaSeleccionadoId = v),
+          accessibility: accessibility,
+          isDark: isDark,
         ),
       ],
     );
   }
 
-  Widget _buildPeriodoCard() {
+  // ==============================================
+  // 📅 TARJETA DE PERÍODO
+  // ==============================================
+  Widget _buildPeriodoCard(AccessibilityProvider accessibility, bool isDark) {
     return _buildSectionCard(
       icon: Icons.calendar_today,
       title: "Período del Tratamiento",
-      color: _infoColor,
+      color: AppTheme.info,
+      accessibility: accessibility,
+      isDark: isDark,
       children: [
         _buildDateField(
           controller: _fechaInicioController,
           label: "Fecha de inicio *",
           onTap: () => _seleccionarFecha(_fechaInicioController, true),
+          accessibility: accessibility,
+          isDark: isDark,
         ),
         const SizedBox(height: 16),
         _buildDateField(
           controller: _fechaFinController,
           label: "Fecha de finalización *",
           onTap: () => _seleccionarFecha(_fechaFinController, false),
+          accessibility: accessibility,
+          isDark: isDark,
         ),
         const SizedBox(height: 16),
-        _buildEstadoField(),
+        _buildEstadoField(accessibility, isDark),
       ],
     );
   }
 
-  Widget _buildObservacionesCard() {
+  // ==============================================
+  // 📝 TARJETA DE OBSERVACIONES
+  // ==============================================
+  Widget _buildObservacionesCard(AccessibilityProvider accessibility, bool isDark) {
     return _buildSectionCard(
       icon: Icons.notes,
       title: "Observaciones",
-      color: _warningColor,
+      color: AppTheme.warning,
+      accessibility: accessibility,
+      isDark: isDark,
       children: [
         TextFormField(
           controller: _observacionesController,
           focusNode: _observacionesFocus,
           maxLines: 4,
+          style: TextStyle(
+            fontSize: 16 * accessibility.fontScale,
+            color: isDark ? Colors.white : AppTheme.gray700,
+          ),
           decoration: _buildInputDecoration(
             label: "Notas adicionales",
-            hint: "Instrucciones especiales, contraindicaciones, etc...",
+            hint: "Instrucciones especiales o contraindicaciones",
             icon: Icons.note_add,
+            isDark: isDark,
+            accessibility: accessibility,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildMedicamentoCard() {
+  // ==============================================
+  // 💊 TARJETA DE MEDICAMENTO
+  // ==============================================
+  Widget _buildMedicamentoCard(AccessibilityProvider accessibility, bool isDark) {
     return _buildSectionCard(
       icon: Icons.medication,
       title: "Medicamento (Opcional)",
-      color: _successColor,
+      color: AppTheme.success,
+      accessibility: accessibility,
+      isDark: isDark,
       children: [
         _buildDropdownField(
           value: _medicamentoSeleccionadoId,
           items: _medicamentos,
           label: "Medicamento",
-          hint: "Selecciona un medicamento (opcional)",
+          hint: "Seleccione un medicamento (opcional)",
           icon: Icons.medication,
           displayField: "nombre",
           valueField: "idMedicamento",
           onChanged: (v) => setState(() => _medicamentoSeleccionadoId = v),
+          accessibility: accessibility,
+          isDark: isDark,
         ),
         if (_medicamentoSeleccionadoId != null) ...[
           const SizedBox(height: 16),
@@ -532,10 +579,16 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
             focusNode: _dosisFocus,
             textInputAction: TextInputAction.next,
             validator: _validateDosis,
+            style: TextStyle(
+              fontSize: 16 * accessibility.fontScale,
+              color: isDark ? Colors.white : AppTheme.gray700,
+            ),
             decoration: _buildInputDecoration(
               label: "Dosis",
               hint: "Ej: 500mg, 1 tableta, 10ml",
               icon: Icons.science,
+              isDark: isDark,
+              accessibility: accessibility,
             ),
           ),
           const SizedBox(height: 16),
@@ -545,10 +598,16 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
             textInputAction: TextInputAction.done,
             validator: _validateFrecuencia,
             onFieldSubmitted: (_) => _guardar(),
+            style: TextStyle(
+              fontSize: 16 * accessibility.fontScale,
+              color: isDark ? Colors.white : AppTheme.gray700,
+            ),
             decoration: _buildInputDecoration(
               label: "Frecuencia",
               hint: "Ej: Cada 8 horas, 2 veces al día",
               icon: Icons.repeat,
+              isDark: isDark,
+              accessibility: accessibility,
             ),
           ),
         ],
@@ -556,20 +615,16 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
-  Widget _buildSubmitButton() {
+  // ==============================================
+  // 🚀 BOTÓN DE GUARDAR
+  // ==============================================
+  Widget _buildSubmitButton(AccessibilityProvider accessibility) {
     return SizedBox(
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
         onPressed: _isLoading ? null : _guardar,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _primaryColor,
-          foregroundColor: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
+        style: AppTheme.primaryButtonStyle,
         child: _isLoading
             ? const SizedBox(
                 width: 24,
@@ -579,15 +634,15 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
                   color: Colors.white,
                 ),
               )
-            : const Row(
+            : Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.save, size: 20),
-                  SizedBox(width: 8),
+                  const Icon(Icons.save, size: 20),
+                  const SizedBox(width: 8),
                   Text(
                     "Guardar Tratamiento",
                     style: TextStyle(
-                      fontSize: 16,
+                      fontSize: 16 * accessibility.fontScale,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -597,23 +652,26 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
+  // ==============================================
+  // 🧩 WIDGETS REUTILIZABLES
+  // ==============================================
+  
   Widget _buildSectionCard({
     required IconData icon,
     required String title,
     required Color color,
+    required AccessibilityProvider accessibility,
+    required bool isDark,
     required List<Widget> children,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: isDark ? AppTheme.gray800 : Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: isDark ? null : AppTheme.subtleShadow,
+        border: Border.all(
+          color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -623,8 +681,8 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
             decoration: BoxDecoration(
               color: color.withOpacity(0.08),
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(20),
-                topRight: Radius.circular(20),
+                topLeft: Radius.circular(19),
+                topRight: Radius.circular(19),
               ),
             ),
             child: Row(
@@ -641,10 +699,10 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
                 Expanded(
                   child: Text(
                     title,
-                    style: const TextStyle(
-                      fontSize: 16,
+                    style: TextStyle(
+                      fontSize: 16 * accessibility.fontScale,
                       fontWeight: FontWeight.bold,
-                      color: _textPrimary,
+                      color: isDark ? Colors.white : AppTheme.gray700,
                     ),
                   ),
                 ),
@@ -666,30 +724,38 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     required String label,
     required String hint,
     required IconData icon,
+    required bool isDark,
+    required AccessibilityProvider accessibility,
   }) {
     return InputDecoration(
       labelText: label,
       hintText: hint,
-      prefixIcon: Icon(icon, size: 20, color: _textSecondary),
+      labelStyle: TextStyle(
+        fontSize: 14 * accessibility.fontScale,
+        color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+      ),
+      hintStyle: TextStyle(
+        fontSize: 14 * accessibility.fontScale,
+        color: isDark ? AppTheme.gray500 : AppTheme.gray400,
+      ),
+      prefixIcon: Icon(icon, size: 20, color: isDark ? AppTheme.gray400 : AppTheme.gray500),
+      filled: true,
+      fillColor: isDark ? AppTheme.gray700 : AppTheme.gray50,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _borderColor),
+        borderSide: BorderSide(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: _borderColor),
+        borderSide: BorderSide(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _primaryColor, width: 1.5),
+        borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _errorColor),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _errorColor, width: 1.5),
+        borderSide: const BorderSide(color: AppTheme.danger),
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     );
@@ -699,44 +765,57 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     required TextEditingController controller,
     required String label,
     required VoidCallback onTap,
+    required AccessibilityProvider accessibility,
+    required bool isDark,
   }) {
     return TextFormField(
       controller: controller,
       readOnly: true,
       onTap: onTap,
       validator: (_) => _validateFechas(),
+      style: TextStyle(
+        fontSize: 16 * accessibility.fontScale,
+        color: isDark ? Colors.white : AppTheme.gray700,
+      ),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: const Icon(Icons.calendar_today, size: 20, color: _textSecondary),
-        suffixIcon: const Icon(Icons.arrow_drop_down, size: 20, color: _textSecondary),
+        labelStyle: TextStyle(
+          fontSize: 14 * accessibility.fontScale,
+          color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+        ),
+        prefixIcon: const Icon(Icons.calendar_today, size: 20, color: AppTheme.primary),
+        suffixIcon: const Icon(Icons.arrow_drop_down, size: 24, color: AppTheme.primary),
+        filled: true,
+        fillColor: isDark ? AppTheme.gray700 : AppTheme.gray50,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _borderColor),
+          borderSide: BorderSide(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _borderColor),
+          borderSide: BorderSide(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _primaryColor, width: 1.5),
+          borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }
 
-  Widget _buildEstadoField() {
+  Widget _buildEstadoField(AccessibilityProvider accessibility, bool isDark) {
     final estados = {
-      "Activo": {"icon": Icons.play_circle, "color": _successColor},
-      "Finalizado": {"icon": Icons.check_circle, "color": _infoColor},
-      "Suspendido": {"icon": Icons.pause_circle, "color": _warningColor},
+      "Activo": {"icon": Icons.play_circle, "color": AppTheme.success},
+      "Finalizado": {"icon": Icons.check_circle, "color": AppTheme.info},
+      "Suspendido": {"icon": Icons.pause_circle, "color": AppTheme.warning},
     };
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: _borderColor),
+        color: isDark ? AppTheme.gray700 : AppTheme.gray50,
+        border: Border.all(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
@@ -744,17 +823,26 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
           value: _estado,
           decoration: const InputDecoration(
             border: InputBorder.none,
-            labelText: "Estado",
-            prefixIcon: Icon(Icons.flag, size: 20, color: _textSecondary),
+            labelText: "Estado del tratamiento",
+            prefixIcon: Icon(Icons.flag, size: 20, color: AppTheme.primary),
+          ),
+          style: TextStyle(
+            fontSize: 16 * accessibility.fontScale,
+            color: isDark ? Colors.white : AppTheme.gray700,
           ),
           items: estados.entries.map((entry) {
             return DropdownMenuItem(
               value: entry.key,
               child: Row(
                 children: [
-                  Icon(entry.value["icon"] as IconData?, size: 18, color: entry.value["color"]as Color?),
-                  const SizedBox(width: 8),
-                  Text(entry.key),
+                  Icon(entry.value["icon"] as IconData?, size: 20, color: entry.value["color"]as Color?),
+                  const SizedBox(width: 10),
+                  Text(
+                    entry.key,
+                    style: TextStyle(
+                      fontSize: 16 * accessibility.fontScale,
+                    ),
+                  ),
                 ],
               ),
             );
@@ -774,22 +862,39 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     required String displayField,
     required String valueField,
     required void Function(int?) onChanged,
+    required AccessibilityProvider accessibility,
+    required bool isDark,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: _borderColor),
+        color: isDark ? AppTheme.gray700 : AppTheme.gray50,
+        border: Border.all(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButtonFormField<int>(
           value: value,
-          hint: Text(hint),
+          hint: Text(
+            hint,
+            style: TextStyle(
+              fontSize: 16 * accessibility.fontScale,
+              color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+            ),
+          ),
           isExpanded: true,
           decoration: InputDecoration(
             labelText: label,
+            labelStyle: TextStyle(
+              fontSize: 14 * accessibility.fontScale,
+              color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+            ),
             border: InputBorder.none,
-            prefixIcon: Icon(icon, size: 20, color: _textSecondary),
+            prefixIcon: Icon(icon, size: 20, color: AppTheme.primary),
+          ),
+          style: TextStyle(
+            fontSize: 16 * accessibility.fontScale,
+            color: isDark ? Colors.white : AppTheme.gray700,
           ),
           items: items.map((item) {
             final id = item[valueField];
@@ -798,13 +903,16 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
               value: id,
               child: Text(
                 nombre,
+                style: TextStyle(
+                  fontSize: 16 * accessibility.fontScale,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             );
           }).toList(),
           onChanged: onChanged,
           validator: label.contains("*") && value == null
-              ? (_) => "Este campo es requerido"
+              ? (_) => "Este campo es obligatorio"
               : null,
         ),
       ),

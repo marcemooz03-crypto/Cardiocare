@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class LoginService {
 
-  final String baseUrl = "${ApiConfig.baseUrl}/auth/login";
+  final String baseUrl = "${ApiConfig.baseUrl}/api/auth/login";
 
   Future<Map?> login(String correo, String pass) async {
 

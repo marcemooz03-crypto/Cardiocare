@@ -4,7 +4,7 @@ import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class SintomaService {
-  final String baseUrl = "${ApiConfig.baseUrl}/sintoma";
+  final String baseUrl = "${ApiConfig.baseUrl}/api/sintoma";
 
   // ==========================
   // 📋 OBTENER SÍNTOMAS POR USUARIO

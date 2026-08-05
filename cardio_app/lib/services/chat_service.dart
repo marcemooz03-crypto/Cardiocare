@@ -6,23 +6,39 @@ import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 
 class ChatService {
-  static const baseUrl = "${ApiConfig.baseUrl}/chat";
+  static const baseUrl = "${ApiConfig.baseUrl}/api/chat";
 
   // ────────────────────────────────────────────────────────────────────────────
-  // CONVERSACIÓN
+  // CONVERSACIÓN - CORREGIDO
   // ────────────────────────────────────────────────────────────────────────────
 
   Future<int?> getOrCreateConversacion(int idPaciente, int idMedico) async {
     try {
+      // Validar que los IDs sean válidos
+      if (idPaciente <= 0 || idMedico <= 0) {
+        print("❌ IDs inválidos: idPaciente=$idPaciente, idMedico=$idMedico");
+        return null;
+      }
+
+      print("🔍 Buscando conversación entre $idPaciente y $idMedico");
+
+      // Primero intentar obtener conversación existente
       final getUri = Uri.parse("$baseUrl/conversacion/$idPaciente/$idMedico");
       final getRes = await http.get(getUri);
+
+      print("📡 GET conversación status: ${getRes.statusCode}");
 
       if (getRes.statusCode == 200) {
         final data = jsonDecode(getRes.body);
         final id = int.tryParse(data["idConversacion"]?.toString() ?? "");
-        if (id != null) return id;
+        if (id != null) {
+          print("✅ Conversación existente encontrada: $id");
+          return id;
+        }
       }
 
+      // Si no existe, crear una nueva
+      print("🆕 Creando nueva conversación...");
       final postUri = Uri.parse("$baseUrl/conversacion");
       final postRes = await http.post(
         postUri,
@@ -33,14 +49,30 @@ class ChatService {
         }),
       );
 
+      print("📡 POST conversación status: ${postRes.statusCode}");
+      print("📡 POST conversación body: ${postRes.body}");
+
       if (postRes.statusCode == 200 || postRes.statusCode == 201) {
         final data = jsonDecode(postRes.body);
-        return int.tryParse(data["idConversacion"]?.toString() ?? "");
+        final id = int.tryParse(data["idConversacion"]?.toString() ?? "");
+        if (id != null) {
+          print("✅ Conversación creada exitosamente: $id");
+          return id;
+        }
       }
+
+      // Si falla, mostrar el error
+      if (postRes.statusCode == 404) {
+        print("❌ Usuario o médico no encontrado");
+      } else if (postRes.statusCode == 500) {
+        print("❌ Error interno del servidor");
+      }
+
+      return null;
     } catch (e) {
-      debugLog("getOrCreateConversacion", e);
+      print("❌ getOrCreateConversacion: $e");
+      return null;
     }
-    return null;
   }
 
   // ────────────────────────────────────────────────────────────────────────────
@@ -59,7 +91,7 @@ class ChatService {
         }
       }
     } catch (e) {
-      debugLog("getMensajes", e);
+      print("❌ getMensajes: $e");
     }
     return [];
   }
@@ -70,6 +102,8 @@ class ChatService {
     required String contenido,
   }) async {
     try {
+      if (contenido.trim().isEmpty) return false;
+
       final uri = Uri.parse("$baseUrl/mensaje");
       final res = await http.post(
         uri,
@@ -77,36 +111,42 @@ class ChatService {
         body: jsonEncode({
           "idConversacion": idConversacion,
           "idRemitente": idRemitente,
-          "contenido": contenido,
+          "contenido": contenido.trim(),
         }),
       );
+
+      print("📡 Enviar mensaje status: ${res.statusCode}");
+
+      if (res.statusCode == 404) {
+        print("❌ Conversación no encontrada");
+        return false;
+      }
+
       return res.statusCode == 200 || res.statusCode == 201;
     } catch (e) {
-      debugLog("enviarMensaje", e);
+      print("❌ enviarMensaje: $e");
     }
     return false;
   }
 
-  /// ✅ ELIMINAR TODOS LOS MENSAJES DE UNA CONVERSACIÓN
   Future<bool> eliminarMensajes(int idConversacion) async {
     try {
       final uri = Uri.parse("$baseUrl/mensajes/$idConversacion");
       final res = await http.delete(uri);
       return res.statusCode == 200;
     } catch (e) {
-      debugLog("eliminarMensajes", e);
+      print("❌ eliminarMensajes: $e");
     }
     return false;
   }
 
-  /// ✅ ELIMINAR UN MENSAJE INDIVIDUAL
   Future<bool> eliminarMensaje(int idMensaje) async {
     try {
       final uri = Uri.parse("$baseUrl/mensaje/$idMensaje");
       final res = await http.delete(uri);
       return res.statusCode == 200;
     } catch (e) {
-      debugLog("eliminarMensaje", e);
+      print("❌ eliminarMensaje: $e");
     }
     return false;
   }
@@ -125,7 +165,7 @@ class ChatService {
         return int.tryParse(data["total"]?.toString() ?? "0") ?? 0;
       }
     } catch (e) {
-      debugLog("getMensajesNoLeidos", e);
+      print("❌ getMensajesNoLeidos: $e");
     }
     return 0;
   }
@@ -139,12 +179,7 @@ class ChatService {
         body: jsonEncode({"idUsuario": idUsuario}),
       );
     } catch (e) {
-      debugLog("marcarLeidos", e);
+      print("❌ marcarLeidos: $e");
     }
-  }
-
-  void debugLog(String method, Object error) {
-    // ignore: avoid_print
-    print("❌ ChatService.$method => $error");
   }
 }

@@ -4,7 +4,7 @@ import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class AdminService {
-  final String baseUrl = "${ApiConfig.baseUrl}/admin";
+  final String baseUrl = "${ApiConfig.baseUrl}/api/admin";
 
   // =========================
   // 📋 OBTENER LOGS
@@ -138,7 +138,6 @@ class AdminService {
       print("📦 UPDATE CONFIG: ${res.statusCode}");
       print("📦 BODY: ${res.body}");
       
-      // Registrar en logs la acción
       await _registrarLog(
         accion: "Configuración actualizada",
         descripcion: "$clave = $valor",
@@ -238,24 +237,69 @@ class AdminService {
   }
 
   // =========================
-  // 👤 OBTENER PACIENTE POR USUARIO
+  // 👤 OBTENER PACIENTE POR USUARIO (SOPORTA PACIENTES Y CUIDADORES)
   // =========================
   Future<Map<String, dynamic>?> getPacientePorUsuario(int idUsuario) async {
     try {
+      print("🔍 [AdminService] Buscando paciente para usuario ID: $idUsuario");
+      
       final res = await http.get(
         Uri.parse("$baseUrl/paciente/usuario/$idUsuario"),
         headers: {"Content-Type": "application/json"},
       );
       
       print("📦 PACIENTE POR USUARIO RESPONSE: ${res.statusCode}");
+      print("📦 BODY: ${res.body}");
       
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        return Map<String, dynamic>.from(data);
+        if (data != null && data.isNotEmpty) {
+          print("✅ Paciente encontrado: ${data['nombre']}");
+          return Map<String, dynamic>.from(data);
+        }
       }
+      
+      if (res.statusCode == 404) {
+        print("ℹ️ No se encontró paciente para el usuario ID: $idUsuario");
+      }
+      
       return null;
     } catch (e) {
       print("❌ ERROR getPacientePorUsuario: $e");
+      return null;
+    }
+  }
+
+  // =========================
+  // 👤 OBTENER PACIENTE POR CUIDADOR (NUEVO)
+  // =========================
+  Future<Map<String, dynamic>?> getPacientePorCuidador(int idCuidador) async {
+    try {
+      print("🔍 [AdminService] Buscando paciente para cuidador ID: $idCuidador");
+      
+      final res = await http.get(
+        Uri.parse("$baseUrl/paciente/cuidador/$idCuidador"),
+        headers: {"Content-Type": "application/json"},
+      );
+      
+      print("📦 PACIENTE POR CUIDADOR RESPONSE: ${res.statusCode}");
+      print("📦 BODY: ${res.body}");
+      
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data != null && data.isNotEmpty) {
+          print("✅ Paciente encontrado para cuidador: ${data['nombre']}");
+          return Map<String, dynamic>.from(data);
+        }
+      }
+      
+      if (res.statusCode == 404) {
+        print("ℹ️ No se encontró paciente para el cuidador ID: $idCuidador");
+      }
+      
+      return null;
+    } catch (e) {
+      print("❌ ERROR getPacientePorCuidador: $e");
       return null;
     }
   }
@@ -340,6 +384,9 @@ class AdminService {
     required int idPaciente,
   }) async {
     try {
+      print("📝 [AdminService] Creando cuidador para paciente: $idPaciente");
+      print("📝 Datos: nombre=$nombre, correo=$correo, relacion=$relacion");
+      
       final res = await http.post(
         Uri.parse("$baseUrl/cuidadores"),
         headers: {"Content-Type": "application/json"},
@@ -352,20 +399,41 @@ class AdminService {
         }),
       );
       
-      if (res.statusCode == 200) {
-        await _registrarLog(
-          accion: "Cuidador creado",
-          descripcion: "$nombre - $relacion",
-          usuario: "admin",
-          modulo: "usuario",
-          nivel: "info",
-        );
-        return true;
+      print("📦 Crear cuidador response: ${res.statusCode}");
+      print("📦 Body: ${res.body}");
+      
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = jsonDecode(res.body);
+        if (data["ok"] == true || data["success"] == true) {
+          await _registrarLog(
+            accion: "Cuidador creado",
+            descripcion: "$nombre - $relacion (Paciente ID: $idPaciente)",
+            usuario: "admin",
+            modulo: "usuario",
+            nivel: "info",
+          );
+          return true;
+        }
+        return false;
       }
+      
+      // Manejar códigos de error específicos del backend
+      if (res.statusCode == 409) {
+        final data = jsonDecode(res.body);
+        final mensaje = data["msg"] ?? "El paciente ya tiene un cuidador asignado";
+        throw Exception(mensaje);
+      }
+      
+      if (res.statusCode == 400) {
+        final data = jsonDecode(res.body);
+        final mensaje = data["msg"] ?? data["error"] ?? "Datos inválidos";
+        throw Exception(mensaje);
+      }
+      
       return false;
     } catch (e) {
       print("❌ ERROR crearCuidador: $e");
-      return false;
+      rethrow;
     }
   }
 
@@ -374,17 +442,23 @@ class AdminService {
   // =========================
   Future<Map<String, dynamic>?> getCuidador(int idPaciente) async {
     try {
+      print("📝 [AdminService] Obteniendo cuidador para paciente: $idPaciente");
+      
       final res = await http.get(
         Uri.parse("$baseUrl/cuidadores/paciente/$idPaciente"),
         headers: {"Content-Type": "application/json"},
       );
       
+      print("📦 getCuidador response: ${res.statusCode}");
+      
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data is Map && data.isNotEmpty) {
+        if (data != null && data is Map && data.isNotEmpty) {
+          print("✅ Cuidador encontrado: ${data['nombreCuidador']}");
           return Map<String, dynamic>.from(data);
         }
       }
+      print("ℹ️ No hay cuidador para este paciente");
       return null;
     } catch (e) {
       print("❌ ERROR getCuidador: $e");
@@ -397,11 +471,29 @@ class AdminService {
   // =========================
   Future<bool> eliminarCuidador(int idPaciente) async {
     try {
+      print("📝 [AdminService] Eliminando cuidador para paciente: $idPaciente");
+      
       final res = await http.delete(
         Uri.parse("$baseUrl/cuidadores/paciente/$idPaciente"),
         headers: {"Content-Type": "application/json"},
       );
-      return res.statusCode == 200;
+      
+      print("📦 eliminarCuidador response: ${res.statusCode}");
+      
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data["ok"] == true || data["success"] == true) {
+          await _registrarLog(
+            accion: "Cuidador eliminado",
+            descripcion: "Paciente ID: $idPaciente",
+            usuario: "admin",
+            modulo: "usuario",
+            nivel: "warning",
+          );
+          return true;
+        }
+      }
+      return false;
     } catch (e) {
       print("❌ ERROR eliminarCuidador: $e");
       return false;

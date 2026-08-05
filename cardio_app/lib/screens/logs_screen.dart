@@ -1,4 +1,5 @@
 // lib/screens/logs_screen.dart
+import 'package:cardio_app/screens/login_screen.dart';
 import 'package:cardio_app/services/logs_service.dart';
 import 'package:flutter/material.dart';
 import 'package:cardio_app/app.theme.dart';

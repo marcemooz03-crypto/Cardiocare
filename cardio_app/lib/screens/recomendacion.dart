@@ -260,7 +260,7 @@ class VerRecomendacionScreen extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Row(
+                              Row(
                                 children: [
                                   Icon(Icons.description, size: 18, color: _info),
                                   SizedBox(width: 8),

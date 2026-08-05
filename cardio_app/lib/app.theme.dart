@@ -83,7 +83,112 @@ class AppTheme {
   ];
   
   // ==============================================
-  // ESTILOS DE TEXTO
+  // 📱 FUNCIONES RESPONSIVAS (NUEVO)
+  // ==============================================
+  
+  /// Obtiene el tamaño de fuente según el dispositivo
+  static double getResponsiveFontSize(BuildContext context, double baseSize) {
+    final width = MediaQuery.of(context).size.width;
+    
+    if (width < 360) {
+      return baseSize * 0.85; // Móvil pequeño
+    } else if (width < 600) {
+      return baseSize; // Móvil normal
+    } else if (width < 900) {
+      return baseSize * 1.15; // Tablet
+    } else {
+      return baseSize * 1.25; // Web / Pantalla grande
+    }
+  }
+  
+  /// Obtiene el espaciado según el dispositivo
+  static double getResponsiveSpacing(BuildContext context, double baseSize) {
+    final width = MediaQuery.of(context).size.width;
+    
+    if (width < 360) {
+      return baseSize * 0.8;
+    } else if (width < 600) {
+      return baseSize;
+    } else if (width < 900) {
+      return baseSize * 1.2;
+    } else {
+      return baseSize * 1.5;
+    }
+  }
+  
+  /// Obtiene el padding según el dispositivo
+  static EdgeInsets getResponsivePadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    
+    if (width < 360) {
+      return const EdgeInsets.all(12);
+    } else if (width < 600) {
+      return const EdgeInsets.all(16);
+    } else if (width < 900) {
+      return const EdgeInsets.all(24);
+    } else {
+      return const EdgeInsets.all(32);
+    }
+  }
+  
+  /// Obtiene el padding horizontal según el dispositivo
+  static EdgeInsets getResponsiveHorizontalPadding(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    
+    if (width < 600) {
+      return const EdgeInsets.symmetric(horizontal: 16);
+    } else if (width < 900) {
+      return const EdgeInsets.symmetric(horizontal: 32);
+    } else {
+      return const EdgeInsets.symmetric(horizontal: 48);
+    }
+  }
+  
+  /// Obtiene el ancho máximo de contenido
+  static double getMaxContentWidth(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    
+    if (width < 600) {
+      return double.infinity;
+    } else if (width < 900) {
+      return 600;
+    } else {
+      return 800;
+    }
+  }
+  
+  /// Obtiene el número de columnas para grids según el dispositivo
+  static int getResponsiveGridColumns(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    
+    if (width < 400) {
+      return 2;
+    } else if (width < 600) {
+      return 3;
+    } else if (width < 900) {
+      return 4;
+    } else {
+      return 6;
+    }
+  }
+  
+  /// Obtiene el tamaño del logo según el dispositivo
+  static double getResponsiveLogoSize(BuildContext context, double baseSize) {
+    final width = MediaQuery.of(context).size.width;
+    
+    if (width < 360) {
+      return baseSize * 0.8;
+    } else if (width < 600) {
+      return baseSize;
+    } else if (width < 900) {
+      return baseSize * 1.2;
+    } else {
+      return baseSize * 1.4;
+    }
+  }
+  
+  // ==============================================
+  // ESTILOS DE TEXTO (ORIGINALES - SIN CAMBIOS)
   // ==============================================
   static const TextStyle headline1 = TextStyle(
     fontSize: 32,
@@ -138,6 +243,63 @@ class AppTheme {
     fontWeight: FontWeight.w600,
     color: white,
   );
+  
+  // ==============================================
+  // ESTILOS DE TEXTO RESPONSIVOS (NUEVO)
+  // ==============================================
+  static TextStyle getResponsiveHeadline1(BuildContext context) {
+    return headline1.copyWith(
+      fontSize: getResponsiveFontSize(context, 32),
+    );
+  }
+  
+  static TextStyle getResponsiveHeadline2(BuildContext context) {
+    return headline2.copyWith(
+      fontSize: getResponsiveFontSize(context, 24),
+    );
+  }
+  
+  static TextStyle getResponsiveHeadline3(BuildContext context) {
+    return headline3.copyWith(
+      fontSize: getResponsiveFontSize(context, 20),
+    );
+  }
+  
+  static TextStyle getResponsiveTitle1(BuildContext context) {
+    return title1.copyWith(
+      fontSize: getResponsiveFontSize(context, 18),
+    );
+  }
+  
+  static TextStyle getResponsiveTitle2(BuildContext context) {
+    return title2.copyWith(
+      fontSize: getResponsiveFontSize(context, 16),
+    );
+  }
+  
+  static TextStyle getResponsiveBody1(BuildContext context) {
+    return body1.copyWith(
+      fontSize: getResponsiveFontSize(context, 16),
+    );
+  }
+  
+  static TextStyle getResponsiveBody2(BuildContext context) {
+    return body2.copyWith(
+      fontSize: getResponsiveFontSize(context, 14),
+    );
+  }
+  
+  static TextStyle getResponsiveCaption(BuildContext context) {
+    return caption.copyWith(
+      fontSize: getResponsiveFontSize(context, 12),
+    );
+  }
+  
+  static TextStyle getResponsiveButton(BuildContext context) {
+    return button.copyWith(
+      fontSize: getResponsiveFontSize(context, 14),
+    );
+  }
   
   // ==============================================
   // 🏷️ LOGO CARDIOCARE - COMPONENTE REUTILIZABLE
@@ -255,7 +417,7 @@ class AppTheme {
   }
   
   // ==============================================
-  // 🏷️ LOGO PEQUEÑO PARA APP BAR
+  // 🏷️ LOGO PEQUEÑO PARA APP BAR (RESPONSIVE)
   // ==============================================
   static Widget buildSmallLogo({
     double size = 40,
@@ -300,6 +462,21 @@ class AppTheme {
           ),
         ),
       ),
+    );
+  }
+  
+  // ==============================================
+  // 🏷️ LOGO PEQUEÑO RESPONSIVO (NUEVO)
+  // ==============================================
+  static Widget buildSmallLogoResponsive({
+    required BuildContext context,
+    double size = 40,
+    VoidCallback? onTap,
+  }) {
+    final responsiveSize = getResponsiveLogoSize(context, size);
+    return buildSmallLogo(
+      size: responsiveSize,
+      onTap: onTap,
     );
   }
   
@@ -360,7 +537,7 @@ class AppTheme {
   }
   
   // ==============================================
-  // ESTILOS DE BOTONES
+  // ESTILOS DE BOTONES (ORIGINALES)
   // ==============================================
   static final ButtonStyle primaryButtonStyle = ElevatedButton.styleFrom(
     backgroundColor: primary,
@@ -427,6 +604,53 @@ class AppTheme {
   );
   
   // ==============================================
+  // ESTILOS DE BOTONES RESPONSIVOS (NUEVO)
+  // ==============================================
+  static ButtonStyle primaryButtonStyleResponsive(BuildContext context) {
+    return primaryButtonStyle.copyWith(
+      padding: WidgetStateProperty.all(
+        EdgeInsets.symmetric(
+          vertical: getResponsiveSpacing(context, 14),
+          horizontal: getResponsiveSpacing(context, 24),
+        ),
+      ),
+    );
+  }
+  
+  static ButtonStyle secondaryButtonStyleResponsive(BuildContext context) {
+    return secondaryButtonStyle.copyWith(
+      padding: WidgetStateProperty.all(
+        EdgeInsets.symmetric(
+          vertical: getResponsiveSpacing(context, 14),
+          horizontal: getResponsiveSpacing(context, 24),
+        ),
+      ),
+    );
+  }
+  
+  static ButtonStyle dangerButtonStyleResponsive(BuildContext context) {
+    return dangerButtonStyle.copyWith(
+      padding: WidgetStateProperty.all(
+        EdgeInsets.symmetric(
+          vertical: getResponsiveSpacing(context, 14),
+          horizontal: getResponsiveSpacing(context, 24),
+        ),
+      ),
+    );
+  }
+  
+  static ButtonStyle successButtonStyleResponsive(BuildContext context) {
+    return successButtonStyle.copyWith(
+      padding: WidgetStateProperty.all(
+        EdgeInsets.symmetric(
+          vertical: getResponsiveSpacing(context, 14),
+          horizontal: getResponsiveSpacing(context, 24),
+        ),
+      ),
+    );
+  }
+  
+  // ==============================================
   // ESTILOS DE CHIP
   // ==============================================
   static ChipThemeData get chipTheme => ChipThemeData(
@@ -465,4 +689,75 @@ class AppTheme {
     "error": danger,
     "info": info,
   };
+  
+  // ==============================================
+  // 📱 WIDGETS RESPONSIVOS (NUEVO)
+  // ==============================================
+  
+  /// Contenedor que centra y limita el ancho del contenido
+  static Widget responsiveContainer({
+    required BuildContext context,
+    required Widget child,
+    EdgeInsets? padding,
+  }) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: getMaxContentWidth(context),
+        ),
+        child: Padding(
+          padding: padding ?? getResponsivePadding(context),
+          child: child,
+        ),
+      ),
+    );
+  }
+  
+  /// Grid responsivo con columnas automáticas
+  static Widget responsiveGrid({
+    required BuildContext context,
+    required List<Widget> children,
+    double spacing = 12,
+    double runSpacing = 12,
+  }) {
+    final crossAxisCount = getResponsiveGridColumns(context);
+    
+    return GridView.count(
+      crossAxisCount: crossAxisCount,
+      crossAxisSpacing: spacing,
+      mainAxisSpacing: runSpacing,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      childAspectRatio: 1.0,
+      children: children,
+    );
+  }
+  
+  /// Tarjeta responsiva con soporte para modo oscuro
+  static Widget responsiveCard({
+    required BuildContext context,
+    required Widget child,
+    Color? color,
+    EdgeInsets? padding,
+    VoidCallback? onTap,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Card(
+      color: color ?? (isDark ? gray800 : white),
+      elevation: isDark ? 0 : 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: isDark ? BorderSide(color: gray600, width: 1) : BorderSide.none,
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Padding(
+          padding: padding ?? getResponsivePadding(context),
+          child: child,
+        ),
+      ),
+    );
+  }
 }

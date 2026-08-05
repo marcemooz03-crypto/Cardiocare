@@ -1,4 +1,3 @@
-// routes/admin.js
 const express = require('express');
 const router = express.Router();
 const db = require('./db');
@@ -268,9 +267,10 @@ router.post('/config', (req, res) => {
 // ==============================================
 router.get('/medicos', (req, res) => {
   const sql = `
-    SELECT ps.idProfesional, u.nombre, u.correo, ps.especialidad
+    SELECT ps.idProfesional, u.idUsuario, u.nombre, u.correo, ps.especialidad, ps.telefono
     FROM profesionalsalud ps
     JOIN usuario u ON ps.idUsuario = u.idUsuario
+    ORDER BY u.nombre ASC
   `;
   
   db.query(sql, (err, results) => {
@@ -283,14 +283,75 @@ router.get('/medicos', (req, res) => {
 });
 
 // ==============================================
+// 👨‍⚕️ OBTENER MÉDICOS CON FILTROS
+// ==============================================
+router.get('/medicos/filtro', (req, res) => {
+  const { especialidad, nombre, eps } = req.query;
+  
+  let sql = `
+    SELECT 
+      ps.idProfesional,
+      u.idUsuario,
+      u.nombre,
+      u.correo,
+      ps.especialidad,
+      ps.telefono,
+      eps.nombre as eps_nombre
+    FROM profesionalsalud ps
+    JOIN usuario u ON ps.idUsuario = u.idUsuario
+    LEFT JOIN eps ON ps.idEps = eps.idEps
+    WHERE 1=1
+  `;
+  
+  const params = [];
+  
+  if (especialidad) {
+    sql += ` AND ps.especialidad LIKE ?`;
+    params.push(`%${especialidad}%`);
+  }
+  
+  if (nombre) {
+    sql += ` AND u.nombre LIKE ?`;
+    params.push(`%${nombre}%`);
+  }
+  
+  if (eps) {
+    sql += ` AND eps.nombre = ?`;
+    params.push(eps);
+  }
+  
+  sql += ` ORDER BY u.nombre ASC`;
+  
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      console.error('❌ Error al obtener médicos con filtro:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results);
+  });
+});
+
+// ==============================================
 // 👤 OBTENER PACIENTES
 // ==============================================
 router.get('/pacientes', (req, res) => {
   const sql = `
-    SELECT p.idPaciente, u.nombre, u.correo, p.genero, p.tipoHipertension, e.nombre as eps
+    SELECT 
+      p.idPaciente,
+      u.idUsuario,
+      u.nombre,
+      u.correo,
+      p.genero,
+      p.fechaNacimiento,
+      p.tipoHipertension,
+      e.nombre as eps,
+      p.idCuidador,
+      p.nombreCuidador,
+      p.relacionCuidador
     FROM paciente p
     JOIN usuario u ON p.idUsuario = u.idUsuario
     LEFT JOIN eps e ON p.idEps = e.idEps
+    ORDER BY u.nombre ASC
   `;
   
   db.query(sql, (err, results) => {
@@ -299,6 +360,262 @@ router.get('/pacientes', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     res.json(results);
+  });
+});
+
+// ==============================================
+// 👤 OBTENER PACIENTE POR USUARIO (SOPORTA CUIDADORES)
+// ==============================================
+router.get('/paciente/usuario/:idUsuario', (req, res) => {
+  const { idUsuario } = req.params;
+  console.log("🔍 Buscando paciente para usuario ID:", idUsuario);
+
+  // PRIMERO: Buscar si el usuario es un paciente
+  const sqlPaciente = `
+    SELECT 
+      p.idPaciente,
+      u.idUsuario,
+      u.nombre,
+      u.correo,
+      p.genero,
+      p.fechaNacimiento,
+      p.tipoHipertension,
+      e.nombre as eps,
+      e.idEps,
+      p.idCuidador,
+      p.nombreCuidador,
+      p.relacionCuidador
+    FROM paciente p
+    JOIN usuario u ON p.idUsuario = u.idUsuario
+    LEFT JOIN eps e ON p.idEps = e.idEps
+    WHERE u.idUsuario = ?
+    LIMIT 1
+  `;
+
+  db.query(sqlPaciente, [idUsuario], (err, results) => {
+    if (err) {
+      console.error('❌ ERROR obtener paciente por usuario:', err);
+      return res.status(500).json({ error: err.message });
+    }
+
+    // Si el usuario es un paciente, devolverlo
+    if (results.length > 0) {
+      console.log("✅ Paciente encontrado para usuario:", results[0].nombre);
+      return res.json(results[0]);
+    }
+
+    // SI NO ES PACIENTE: Verificar si es un cuidador
+    console.log("ℹ️ Usuario no es paciente, verificando si es cuidador...");
+    
+    const sqlCuidador = `
+      SELECT 
+        p.idPaciente,
+        u.nombre as paciente_nombre,
+        u.idUsuario as paciente_idUsuario,
+        u.correo as paciente_correo,
+        p.idCuidador,
+        p.nombreCuidador,
+        p.relacionCuidador,
+        p.genero,
+        p.fechaNacimiento,
+        p.tipoHipertension,
+        e.nombre as eps,
+        e.idEps
+      FROM paciente p
+      JOIN usuario u ON p.idUsuario = u.idUsuario
+      LEFT JOIN eps e ON p.idEps = e.idEps
+      WHERE p.idCuidador = ?
+      LIMIT 1
+    `;
+
+    db.query(sqlCuidador, [idUsuario], (err2, cuidadorResults) => {
+      if (err2) {
+        console.error('❌ ERROR verificar cuidador:', err2);
+        return res.status(500).json({ error: err2.message });
+      }
+
+      if (cuidadorResults.length === 0) {
+        console.log("❌ No se encontró paciente para el usuario:", idUsuario);
+        return res.status(404).json({ message: "Paciente no encontrado" });
+      }
+
+      // Si el usuario es un cuidador, devolver los datos del paciente
+      console.log("✅ Paciente encontrado para cuidador:", cuidadorResults[0].paciente_nombre);
+      
+      // Mapear los datos para que coincidan con la estructura esperada
+      const pacienteData = {
+        idPaciente: cuidadorResults[0].idPaciente,
+        idUsuario: cuidadorResults[0].paciente_idUsuario,
+        nombre: cuidadorResults[0].paciente_nombre,
+        correo: cuidadorResults[0].paciente_correo,
+        genero: cuidadorResults[0].genero,
+        fechaNacimiento: cuidadorResults[0].fechaNacimiento,
+        tipoHipertension: cuidadorResults[0].tipoHipertension,
+        eps: cuidadorResults[0].eps,
+        idEps: cuidadorResults[0].idEps,
+        idCuidador: cuidadorResults[0].idCuidador,
+        nombreCuidador: cuidadorResults[0].nombreCuidador,
+        relacionCuidador: cuidadorResults[0].relacionCuidador,
+      };
+
+      res.json(pacienteData);
+    });
+  });
+});
+
+// ==============================================
+// 👤 OBTENER PACIENTE POR CUIDADOR (NUEVO ENDPOINT)
+// ==============================================
+router.get('/paciente/cuidador/:idCuidador', (req, res) => {
+  const { idCuidador } = req.params;
+  console.log("🔍 Buscando paciente para cuidador ID:", idCuidador);
+
+  const sql = `
+    SELECT 
+      p.idPaciente,
+      u.idUsuario,
+      u.nombre,
+      u.correo,
+      p.genero,
+      p.fechaNacimiento,
+      p.tipoHipertension,
+      e.nombre as eps,
+      e.idEps,
+      p.idCuidador,
+      p.nombreCuidador,
+      p.relacionCuidador
+    FROM paciente p
+    JOIN usuario u ON p.idUsuario = u.idUsuario
+    LEFT JOIN eps e ON p.idEps = e.idEps
+    WHERE p.idCuidador = ?
+    LIMIT 1
+  `;
+
+  db.query(sql, [idCuidador], (err, results) => {
+    if (err) {
+      console.error('❌ ERROR obtener paciente por cuidador:', err);
+      return res.status(500).json({ error: err.message });
+    }
+
+    if (results.length === 0) {
+      console.log("❌ No se encontró paciente para el cuidador:", idCuidador);
+      return res.status(404).json({ message: "Paciente no encontrado para este cuidador" });
+    }
+
+    console.log("✅ Paciente encontrado para cuidador:", results[0].nombre);
+    res.json(results[0]);
+  });
+});
+
+// ==============================================
+// 👤 OBTENER PACIENTES POR MÉDICO
+// ==============================================
+router.get('/medico/:idMedico/pacientes', (req, res) => {
+  const { idMedico } = req.params;
+  
+  const sql = `
+    SELECT 
+      p.idPaciente,
+      u.idUsuario,
+      u.nombre,
+      u.correo,
+      p.genero,
+      p.fechaNacimiento,
+      p.tipoHipertension,
+      e.nombre as eps,
+      p.idCuidador,
+      p.nombreCuidador,
+      p.relacionCuidador
+    FROM paciente p
+    JOIN usuario u ON p.idUsuario = u.idUsuario
+    LEFT JOIN eps e ON p.idEps = e.idEps
+    JOIN medicopaciente mp ON p.idPaciente = mp.idPaciente
+    WHERE mp.idProfesional = (
+      SELECT idProfesional FROM profesionalsalud WHERE idUsuario = ?
+    )
+    ORDER BY u.nombre ASC
+  `;
+  
+  db.query(sql, [idMedico], (err, results) => {
+    if (err) {
+      console.error('❌ Error al obtener pacientes del médico:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results);
+  });
+});
+
+// ==============================================
+// ✏️ ACTUALIZAR PACIENTE
+// ==============================================
+router.put('/paciente/:idPaciente', (req, res) => {
+  const { idPaciente } = req.params;
+  const { 
+    nombre, 
+    correo, 
+    genero, 
+    fechaNacimiento, 
+    tipoHipertension, 
+    idEps,
+    idCuidador,
+    nombreCuidador,
+    relacionCuidador
+  } = req.body;
+  
+  const sqlUser = `
+    UPDATE usuario u
+    JOIN paciente p ON u.idUsuario = p.idUsuario
+    SET u.nombre = ?, u.correo = ?
+    WHERE p.idPaciente = ?
+  `;
+  
+  db.query(sqlUser, [nombre, correo, idPaciente], (err) => {
+    if (err) {
+      console.error('❌ Error al actualizar usuario:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    const sqlPaciente = `
+      UPDATE paciente 
+      SET 
+        genero = ?,
+        fechaNacimiento = ?,
+        tipoHipertension = ?,
+        idEps = ?,
+        idCuidador = ?,
+        nombreCuidador = ?,
+        relacionCuidador = ?
+      WHERE idPaciente = ?
+    `;
+    
+    db.query(sqlPaciente, [
+      genero,
+      fechaNacimiento,
+      tipoHipertension,
+      idEps,
+      idCuidador || null,
+      nombreCuidador || null,
+      relacionCuidador || null,
+      idPaciente
+    ], (err2) => {
+      if (err2) {
+        console.error('❌ Error al actualizar paciente:', err2);
+        return res.status(500).json({ error: err2.message });
+      }
+      
+      const logSql = `
+        INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
+        VALUES (?, ?, ?, ?, NOW())
+      `;
+      db.query(logSql, [
+        'Paciente actualizado',
+        `ID Paciente: ${idPaciente}`,
+        'pacientes',
+        'info'
+      ]);
+      
+      res.json({ success: true });
+    });
   });
 });
 
@@ -431,7 +748,7 @@ router.get('/perfil/:idUsuario', (req, res) => {
 });
 
 // ==============================================
-// 👤 GESTIÓN DE CUIDADORES (DESDE TABLA PACIENTE)
+// 👤 GESTIÓN DE CUIDADORES
 // ==============================================
 
 // 👤 OBTENER CUIDADOR POR PACIENTE
@@ -462,7 +779,6 @@ router.get('/cuidadores/paciente/:idPaciente', (req, res) => {
       return res.status(200).json(null);
     }
 
-    // ✅ Devolver los datos del cuidador
     res.json({
       idCuidador: result[0].idCuidador,
       nombreCuidador: result[0].nombreCuidador,
@@ -472,86 +788,154 @@ router.get('/cuidadores/paciente/:idPaciente', (req, res) => {
   });
 });
 
-// ==============================================
-// ➕ CREAR CUIDADOR (ACTUALIZAR PACIENTE)
-// ==============================================
+// ➕ CREAR CUIDADOR - CORREGIDO (Permite mismo correo que el paciente)
 router.post('/cuidadores', (req, res) => {
   const { nombre, correo, contrasena, relacion, idPaciente } = req.body;
   
   console.log("📝 Creando cuidador para paciente:", idPaciente);
+  console.log("📝 Datos recibidos:", { nombre, correo, relacion, idPaciente });
 
-  // ✅ Verificar si el correo ya existe
-  const checkSql = "SELECT idUsuario FROM usuario WHERE correo = ?";
-  db.query(checkSql, [correo], (err, checkResult) => {
+  // 🔥 PRIMERO verificar si el paciente existe
+  const sqlPaciente = `
+    SELECT idPaciente, idUsuario FROM paciente WHERE idPaciente = ?
+  `;
+  
+  db.query(sqlPaciente, [idPaciente], (err, pacienteResult) => {
     if (err) {
-      console.error('❌ ERROR verificar correo:', err);
+      console.error('❌ ERROR verificar paciente:', err);
       return res.status(500).json({ ok: false, error: err.message });
     }
 
-    if (checkResult.length > 0) {
-      return res.status(409).json({ ok: false, msg: "El correo ya está registrado" });
+    if (pacienteResult.length === 0) {
+      return res.status(404).json({ ok: false, msg: "Paciente no encontrado" });
     }
 
-    // ✅ Crear usuario tipo cuidador (idRol = 4)
-    const hash = bcrypt.hashSync(contrasena, 10);
-    
-    const sqlUser = `
-      INSERT INTO usuario (nombre, correo, contrasena, idRol)
-      VALUES (?, ?, ?, 4)
-    `;
+    const idUsuarioPaciente = pacienteResult[0].idUsuario;
 
-    db.query(sqlUser, [nombre, correo, hash], (err2, userResult) => {
+    // 🔥 Verificar si el cuidador ya existe para este paciente
+    const sqlCheckCuidador = `
+      SELECT idCuidador FROM paciente WHERE idPaciente = ? AND idCuidador IS NOT NULL
+    `;
+    
+    db.query(sqlCheckCuidador, [idPaciente], (err2, cuidadorResult) => {
       if (err2) {
-        console.error('❌ ERROR crear usuario cuidador:', err2);
+        console.error('❌ ERROR verificar cuidador existente:', err2);
         return res.status(500).json({ ok: false, error: err2.message });
       }
 
-      const idUsuario = userResult.insertId;
+      if (cuidadorResult.length > 0) {
+        return res.status(409).json({ 
+          ok: false, 
+          msg: "Este paciente ya tiene un cuidador asignado" 
+        });
+      }
 
-      // ✅ ACTUALIZAR el paciente con el cuidador
-      const sqlUpdatePaciente = `
-        UPDATE paciente 
-        SET nombreCuidador = ?, relacionCuidador = ?, idCuidador = ?
-        WHERE idPaciente = ?
-      `;
-
-      db.query(sqlUpdatePaciente, [nombre, relacion, idUsuario, idPaciente], (err3) => {
+      // 🔥 VERIFICAR si el correo ya existe
+      const sqlCheckCorreo = "SELECT idUsuario FROM usuario WHERE correo = ?";
+      
+      db.query(sqlCheckCorreo, [correo], (err3, checkResult) => {
         if (err3) {
-          console.error('❌ ERROR actualizar paciente:', err3);
+          console.error('❌ ERROR verificar correo:', err3);
           return res.status(500).json({ ok: false, error: err3.message });
         }
 
-        // Registrar en logs
-        const logSql = `
-          INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
-          VALUES (?, ?, ?, ?, NOW())
-        `;
-        db.query(logSql, [
-          'Cuidador creado',
-          `Nombre: ${nombre}, Paciente ID: ${idPaciente}`,
-          'usuario',
-          'info'
-        ]);
+        // Si el correo ya existe, verificamos si es el mismo paciente
+        if (checkResult.length > 0) {
+          const idUsuarioExistente = checkResult[0].idUsuario;
+          console.log("📝 Correo existe, usuario ID:", idUsuarioExistente);
+          
+          // Verificar si este usuario es el paciente
+          const sqlVerificarPaciente = `
+            SELECT idPaciente FROM paciente WHERE idUsuario = ?
+          `;
+          
+          db.query(sqlVerificarPaciente, [idUsuarioExistente], (err4, pacienteCheck) => {
+            if (err4) {
+              console.error('❌ ERROR verificar paciente:', err4);
+              return res.status(500).json({ ok: false, error: err4.message });
+            }
 
-        res.status(201).json({ 
-          ok: true, 
-          msg: "Cuidador creado correctamente",
-          idUsuario: idUsuario
-        });
+            // Si el correo pertenece al paciente, permitimos usar el mismo correo
+            if (pacienteCheck.length > 0 && pacienteCheck[0].idPaciente == idPaciente) {
+              console.log("✅ El correo pertenece al paciente, permitiendo mismo correo");
+              // El correo es del paciente, podemos usarlo para el cuidador
+              _crearCuidadorConIdUsuario(nombre, correo, contrasena, relacion, idPaciente, res);
+            } else {
+              // El correo pertenece a otro usuario
+              console.log("❌ El correo pertenece a otro usuario");
+              return res.status(409).json({ 
+                ok: false, 
+                msg: "El correo ya está registrado por otro usuario" 
+              });
+            }
+          });
+        } else {
+          // Correo no existe, crear nuevo usuario
+          console.log("✅ Correo libre, creando nuevo usuario");
+          _crearCuidadorConIdUsuario(nombre, correo, contrasena, relacion, idPaciente, res);
+        }
       });
     });
   });
 });
 
-// ==============================================
-// 🗑️ ELIMINAR CUIDADOR (LIMPIAR PACIENTE)
-// ==============================================
+// 🔧 Función auxiliar para crear el cuidador
+function _crearCuidadorConIdUsuario(nombre, correo, contrasena, relacion, idPaciente, res) {
+  const hash = bcrypt.hashSync(contrasena, 10);
+  
+  const sqlUser = `
+    INSERT INTO usuario (nombre, correo, contrasena, idRol)
+    VALUES (?, ?, ?, 4)
+  `;
+
+  db.query(sqlUser, [nombre, correo, hash], (err, userResult) => {
+    if (err) {
+      console.error('❌ ERROR crear usuario cuidador:', err);
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+
+    const idUsuario = userResult.insertId;
+    console.log("✅ Usuario cuidador creado ID:", idUsuario);
+
+    const sqlUpdatePaciente = `
+      UPDATE paciente 
+      SET nombreCuidador = ?, relacionCuidador = ?, idCuidador = ?
+      WHERE idPaciente = ?
+    `;
+
+    db.query(sqlUpdatePaciente, [nombre, relacion, idUsuario, idPaciente], (err2) => {
+      if (err2) {
+        console.error('❌ ERROR actualizar paciente:', err2);
+        return res.status(500).json({ ok: false, error: err2.message });
+      }
+
+      const logSql = `
+        INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
+        VALUES (?, ?, ?, ?, NOW())
+      `;
+      db.query(logSql, [
+        'Cuidador creado',
+        `Nombre: ${nombre}, Paciente ID: ${idPaciente}`,
+        'usuario',
+        'info'
+      ]);
+
+      console.log("✅ Cuidador creado exitosamente");
+      res.status(201).json({ 
+        ok: true, 
+        msg: "Cuidador creado correctamente",
+        idUsuario: idUsuario
+      });
+    });
+  });
+}
+
+// 🗑️ ELIMINAR CUIDADOR
 router.delete('/cuidadores/paciente/:idPaciente', (req, res) => {
   const { idPaciente } = req.params;
   
   console.log("🗑️ Eliminando cuidador para paciente:", idPaciente);
 
-  // ✅ Verificar si el paciente tiene cuidador
   const sqlCheck = "SELECT nombreCuidador, idCuidador FROM paciente WHERE idPaciente = ?";
   db.query(sqlCheck, [idPaciente], (err, result) => {
     if (err) {
@@ -565,7 +949,6 @@ router.delete('/cuidadores/paciente/:idPaciente', (req, res) => {
 
     const idCuidador = result[0].idCuidador;
 
-    // ✅ Limpiar los campos del cuidador en paciente
     const sqlUpdate = `
       UPDATE paciente 
       SET nombreCuidador = NULL, relacionCuidador = NULL, idCuidador = NULL
@@ -578,15 +961,15 @@ router.delete('/cuidadores/paciente/:idPaciente', (req, res) => {
         return res.status(500).json({ ok: false, error: err2.message });
       }
 
-      // ✅ Eliminar el usuario cuidador (opcional)
       if (idCuidador) {
         const sqlDeleteUser = "DELETE FROM usuario WHERE idUsuario = ?";
-        db.query(sqlDeleteUser, [idCuidador], () => {
-          // No importa si falla, ya limpiamos el paciente
+        db.query(sqlDeleteUser, [idCuidador], (err3) => {
+          if (err3) {
+            console.error('❌ ERROR eliminar usuario cuidador:', err3);
+          }
         });
       }
 
-      // Registrar en logs
       const logSql = `
         INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
         VALUES (?, ?, ?, ?, NOW())
@@ -603,9 +986,7 @@ router.delete('/cuidadores/paciente/:idPaciente', (req, res) => {
   });
 });
 
-// ==============================================
-// 👤 OBTENER TODOS LOS CUIDADORES (OPCIONAL)
-// ==============================================
+// 👤 OBTENER TODOS LOS CUIDADORES
 router.get('/cuidadores', (req, res) => {
   const sql = `
     SELECT 
@@ -625,6 +1006,64 @@ router.get('/cuidadores', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     res.json(results);
+  });
+});
+
+// ==============================================
+// 📅 CITAS DEL PACIENTE
+// ==============================================
+router.get('/citas/paciente/:idPaciente', (req, res) => {
+  const { idPaciente } = req.params;
+  
+  const sql = `
+    SELECT 
+      c.idCita,
+      c.idPaciente,
+      c.idProfesional,
+      c.motivo,
+      c.fecha,
+      c.estado,
+      c.nota,
+      u.nombre as medico_nombre,
+      ps.especialidad
+    FROM citamedica c
+    JOIN profesionalsalud ps ON c.idProfesional = ps.idProfesional
+    JOIN usuario u ON ps.idUsuario = u.idUsuario
+    WHERE c.idPaciente = ?
+    ORDER BY c.fecha DESC
+  `;
+  
+  db.query(sql, [idPaciente], (err, results) => {
+    if (err) {
+      console.error('❌ Error al obtener citas:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results);
+  });
+});
+
+// ==============================================
+// 📊 ESTADÍSTICAS DEL DASHBOARD
+// ==============================================
+router.get('/dashboard/estadisticas', (req, res) => {
+  const sql = `
+    SELECT 
+      (SELECT COUNT(*) FROM usuario WHERE idRol = 3) as total_pacientes,
+      (SELECT COUNT(*) FROM usuario WHERE idRol = 2) as total_medicos,
+      (SELECT COUNT(*) FROM paciente WHERE idCuidador IS NOT NULL) as total_cuidadores,
+      (SELECT COUNT(*) FROM usuario WHERE idRol = 4) as total_usuarios_cuidadores,
+      (SELECT COUNT(*) FROM alerta WHERE estado = 'PENDIENTE') as alertas_pendientes,
+      (SELECT COUNT(*) FROM alerta WHERE estado = 'ATENDIDA') as alertas_atendidas,
+      (SELECT COUNT(*) FROM citamedica WHERE estado = 'pendiente') as citas_pendientes,
+      (SELECT COUNT(*) FROM citamedica WHERE estado = 'aprobada') as citas_aprobadas
+  `;
+  
+  db.query(sql, (err, results) => {
+    if (err) {
+      console.error('❌ Error al obtener estadísticas:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    res.json(results[0]);
   });
 });
 
@@ -734,7 +1173,7 @@ router.get('/ips-bloqueadas/verificar/:ip', (req, res) => {
   });
 });
 
-// Limpiar IPs bloqueadas antiguas (más de X días)
+// Limpiar IPs bloqueadas antiguas
 router.delete('/ips-bloqueadas/limpiar', (req, res) => {
   const { dias } = req.body;
   
@@ -750,31 +1189,6 @@ router.delete('/ips-bloqueadas/limpiar', (req, res) => {
     }
     
     res.json({ success: true, eliminadas: result.affectedRows });
-  });
-});
-
-// ==============================================
-// 👤 OBTENER PACIENTE POR USUARIO
-// ==============================================
-router.get('/paciente/usuario/:idUsuario', (req, res) => {
-  const { idUsuario } = req.params;
-  
-  const sql = `
-    SELECT p.idPaciente, u.nombre, u.correo, p.genero, p.tipoHipertension
-    FROM paciente p
-    JOIN usuario u ON p.idUsuario = u.idUsuario
-    WHERE u.idUsuario = ?
-  `;
-  
-  db.query(sql, [idUsuario], (err, results) => {
-    if (err) {
-      console.error('❌ Error al obtener paciente por usuario:', err);
-      return res.status(500).json({ error: err.message });
-    }
-    if (results.length === 0) {
-      return res.status(404).json({ error: 'Paciente no encontrado' });
-    }
-    res.json(results[0]);
   });
 });
 

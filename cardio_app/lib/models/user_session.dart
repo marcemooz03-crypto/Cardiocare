@@ -1,58 +1,59 @@
+// lib/models/user_session.dart
+
 class UserSession {
   final int idUsuario;
   final String nombre;
+  final String correo;
   final String rol;
   final int? idPaciente;
   final int? idUsuarioPaciente;
+  final String? token;
 
   UserSession({
     required this.idUsuario,
     required this.nombre,
+    required this.correo,
     required this.rol,
     this.idPaciente,
     this.idUsuarioPaciente,
+    this.token,
   });
 
+  // =========================
+  // 📥 FROM JSON
+  // =========================
   factory UserSession.fromJson(Map<String, dynamic> json) {
     return UserSession(
-      idUsuario: json["idUsuario"] ?? 0,
-      nombre: json["nombre"] ?? "",
-      rol: json["rol"] ?? "",
-      idPaciente: json["idPaciente"],
-      idUsuarioPaciente: json["idUsuarioPaciente"],
+      idUsuario: json['idUsuario'] ?? json['id'] ?? 0,
+      nombre: json['nombre'] ?? 'Usuario',
+      correo: json['correo'] ?? '',
+      rol: json['rol']?.toString() ?? 'paciente',
+      idPaciente: json['idPaciente'],
+      idUsuarioPaciente: json['idUsuarioPaciente'],
+      token: json['token'],
     );
   }
 
-  // ✅ CONVERTIR A JSON PARA GUARDAR
+  // =========================
+  // 📤 TO JSON
+  // =========================
   Map<String, dynamic> toJson() {
     return {
-      "idUsuario": idUsuario,
-      "nombre": nombre,
-      "rol": rol,
-      "idPaciente": idPaciente,
-      "idUsuarioPaciente": idUsuarioPaciente,
+      'idUsuario': idUsuario,
+      'nombre': nombre,
+      'correo': correo,
+      'rol': rol,
+      'idPaciente': idPaciente,
+      'idUsuarioPaciente': idUsuarioPaciente,
+      'token': token,
     };
   }
 
-  // ✅ MÉTODO PARA COPIAR CON CAMBIOS
-  UserSession copyWith({
-    int? idUsuario,
-    String? nombre,
-    String? rol,
-    int? idPaciente,
-    int? idUsuarioPaciente,
-  }) {
-    return UserSession(
-      idUsuario: idUsuario ?? this.idUsuario,
-      nombre: nombre ?? this.nombre,
-      rol: rol ?? this.rol,
-      idPaciente: idPaciente ?? this.idPaciente,
-      idUsuarioPaciente: idUsuarioPaciente ?? this.idUsuarioPaciente,
-    );
-  }
-
+  // =========================
+  // 📝 PARA DEBUG
+  // =========================
   @override
   String toString() {
-    return 'UserSession(idUsuario: $idUsuario, nombre: $nombre, rol: $rol, idPaciente: $idPaciente, idUsuarioPaciente: $idUsuarioPaciente)';
+    return 'UserSession(idUsuario: $idUsuario, nombre: $nombre, rol: $rol)';
   }
 }

@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 
 class TratamientoService {
 
-  final String baseUrl = "${ApiConfig.baseUrl}";
+  final String baseUrl = "${ApiConfig.baseUrl}/api";
 
   // OBTENER TRATAMIENTOS POR PACIENTE
   Future<List<Map<String, dynamic>>> getByPaciente(int idPaciente) async {

@@ -3,7 +3,7 @@ import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class CitaService {
-  final String baseUrl = "${ApiConfig.baseUrl}/cita";
+  final String baseUrl = "${ApiConfig.baseUrl}/api/cita";
 
   // ==============================
   // 🔥 MAPA DE ESTADOS NORMALIZADOS

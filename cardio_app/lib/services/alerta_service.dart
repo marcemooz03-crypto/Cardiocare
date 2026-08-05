@@ -1,349 +1,162 @@
+// lib/services/alerta_service.dart
 import 'dart:convert';
 import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class AlertaService {
-  final String baseUrl = "${ApiConfig.baseUrl}/alerta";
+  final String baseUrl = "${ApiConfig.baseUrl}/api/admin";
 
   // ==========================
-  // 🔴 OBTENER ALERTAS
+  // 📋 OBTENER TODAS LAS ALERTAS (DESDE ADMIN)
   // ==========================
-  Future<List<Map<String, dynamic>>> getAlertas(
-    int idPaciente,
-  ) async {
+  Future<List<Map<String, dynamic>>> getTodasAlertas() async {
     try {
+      print("🔍 [getTodasAlertas] Buscando todas las alertas");
+      
       final res = await http.get(
-        Uri.parse("$baseUrl/paciente/$idPaciente"),
+        Uri.parse("$baseUrl/alertas"),
+        headers: {"Content-Type": "application/json"},
       );
 
       print("📦 ALERTAS RESPONSE: ${res.statusCode}");
+      print("📦 BODY: ${res.body}");
 
       if (res.statusCode == 200) {
-        List<Map<String, dynamic>> alertas = 
-            List<Map<String, dynamic>>.from(jsonDecode(res.body));
+        final data = jsonDecode(res.body);
+        List<Map<String, dynamic>> alertas = [];
         
-        print("📦 ALERTAS RECIBIDAS: ${alertas.length}");
+        if (data is List) {
+          alertas = data.map((item) {
+            if (item is Map) {
+              return Map<String, dynamic>.from(item);
+            }
+            return <String, dynamic>{};
+          }).where((item) => item.isNotEmpty).toList();
+        } else if (data is Map && data.containsKey("data")) {
+          final lista = data["data"] as List;
+          alertas = lista.map((item) {
+            if (item is Map) {
+              return Map<String, dynamic>.from(item);
+            }
+            return <String, dynamic>{};
+          }).where((item) => item.isNotEmpty).toList();
+        }
         
-        // ✅ Enriquecer con información del origen
-        return _enriquecerAlertas(alertas);
+        print("✅ Alertas encontradas: ${alertas.length}");
+        return alertas;
       }
+      return [];
     } catch (e) {
-      print("ERROR ALERTAS => $e");
+      print("❌ Error getTodasAlertas: $e");
+      return [];
     }
-    return [];
   }
 
   // ==========================
-  // 🔴 OBTENER ALERTA POR ID
+  // 📋 OBTENER ALERTAS DEL MÉDICO (FILTRADAS POR SUS PACIENTES)
   // ==========================
-  Future<Map<String, dynamic>?> getAlerta(int idAlerta) async {
+  Future<List<Map<String, dynamic>>> getAlertasMedico(int idUsuario) async {
+    try {
+      print("🔍 [getAlertasMedico] Buscando alertas para médico ID: $idUsuario");
+      
+      // Obtener todas las alertas
+      final todas = await getTodasAlertas();
+      
+      // Obtener los pacientes del médico para filtrar
+      final pacientes = await _getPacientesMedico(idUsuario);
+      final idsPacientes = pacientes.map((p) => p["idPaciente"]?.toString()).toSet();
+      
+      print("📋 Pacientes del médico: ${idsPacientes.length}");
+      
+      // Filtrar alertas que pertenecen a los pacientes del médico
+      final filtradas = todas.where((a) {
+        final idPacienteAlerta = a["idPaciente"]?.toString();
+        if (idPacienteAlerta == null) return false;
+        return idsPacientes.contains(idPacienteAlerta);
+      }).toList();
+      
+      print("✅ Alertas filtradas para médico: ${filtradas.length}");
+      return filtradas;
+      
+    } catch (e) {
+      print("❌ Error getAlertasMedico: $e");
+      return [];
+    }
+  }
+
+  // ==========================
+  // 👤 OBTENER PACIENTES DEL MÉDICO (AUXILIAR)
+  // ==========================
+  Future<List<Map<String, dynamic>>> _getPacientesMedico(int idUsuario) async {
     try {
       final res = await http.get(
-        Uri.parse("$baseUrl/$idAlerta"),
-      );
-
-      print("📦 ALERTA RESPONSE: ${res.statusCode}");
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        // Si la respuesta es un objeto con datos
-        if (data is Map<String, dynamic>) {
-          // Si tiene un campo 'data' o 'alerta'
-          if (data.containsKey('data')) {
-            return _enriquecerAlerta(data['data']);
-          } else if (data.containsKey('alerta')) {
-            return _enriquecerAlerta(data['alerta']);
-          }
-          return _enriquecerAlerta(data);
-        }
-        // Si es una lista, tomar el primero
-        if (data is List && data.isNotEmpty) {
-          return _enriquecerAlerta(data.first);
-        }
-      }
-    } catch (e) {
-      print("ERROR GET ALERTA => $e");
-    }
-    return null;
-  }
-
-  // ==========================
-  // 🏷️ ENRIQUECER UNA SOLA ALERTA
-  // ==========================
-  Map<String, dynamic> _enriquecerAlerta(Map<String, dynamic> alerta) {
-    // Obtener el origen
-    final origen = alerta['origen']?.toString()?.toLowerCase() ?? 'sistema';
-    
-    // Obtener nombre_origen
-    final nombreOrigen = alerta['nombre_origen']?.toString() ?? 
-                         alerta['nombrePaciente']?.toString() ?? 
-                         'Desconocido';
-    
-    // Definir datos visuales según el origen
-    String label = '';
-    String icon = '';
-    String color = '';
-    
-    switch (origen) {
-      case 'paciente':
-        label = 'Paciente';
-        icon = '👤';
-        color = '#10B981';
-        break;
-      case 'medico':
-      case 'médico':
-        label = 'Médico';
-        icon = '⚕️';
-        color = '#3B82F6';
-        break;
-      case 'admin':
-      case 'administrador':
-        label = 'Admin';
-        icon = '👑';
-        color = '#4F46E5';
-        break;
-      case 'signo':
-      case 'signos':
-        label = 'Signos Vitales';
-        icon = '❤️';
-        color = '#EF4444';
-        break;
-      case 'sistema':
-      default:
-        label = 'Sistema';
-        icon = '💻';
-        color = '#6B7280';
-        break;
-    }
-    
-    // Agregar datos enriquecidos
-    alerta['origen_label'] = label;
-    alerta['origen_icon'] = icon;
-    alerta['origen_color'] = color;
-    alerta['nombre_origen'] = nombreOrigen;
-    alerta['origen_detalle'] = '$label: $nombreOrigen';
-    
-    // ✅ Asegurar que el campo 'leida' existe
-    if (!alerta.containsKey('leida')) {
-      alerta['leida'] = alerta['estado'] == 'ATENDIDA';
-    }
-    
-    return alerta;
-  }
-
-  // ==========================
-  // 🏷️ ENRIQUECER LISTA DE ALERTAS
-  // ==========================
-  List<Map<String, dynamic>> _enriquecerAlertas(
-      List<Map<String, dynamic>> alertas,
-  ) {
-    return alertas.map((alerta) => _enriquecerAlerta(alerta)).toList();
-  }
-
-  // ==========================
-  // 🟢 CREAR ALERTA (Genérico)
-  // ==========================
-  Future<bool> crearAlerta({
-    required int idPaciente,
-    required String tipo,
-    required String nivel,
-    required String descripcion,
-    required String origen,
-    String? nombreOrigen,
-  }) async {
-    try {
-      final Map<String, dynamic> body = {
-        "idPaciente": idPaciente,
-        "tipo": tipo,
-        "nivel": nivel,
-        "descripcion": descripcion,
-        "origen": origen,
-        "estado": "PENDIENTE",
-      };
-
-      // ✅ Siempre enviar nombre_origen si existe
-      if (nombreOrigen != null && nombreOrigen.isNotEmpty) {
-        body["nombre_origen"] = nombreOrigen;
-      }
-
-      print("📝 CREAR ALERTA:");
-      print("📦 Body: ${jsonEncode(body)}");
-
-      final res = await http.post(
-        Uri.parse(baseUrl),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
-
-      print("📝 Response: ${res.statusCode} - ${res.body}");
-
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        final data = jsonDecode(res.body);
-        return data["ok"] == true || data["success"] == true || data["idAlerta"] != null;
-      }
-      return false;
-    } catch (e) {
-      print("ERROR CREAR ALERTA => $e");
-      return false;
-    }
-  }
-
-  // ==========================
-  // 🟢 CREAR ALERTA (Paciente)
-  // ==========================
-  Future<bool> crearAlertaPaciente({
-    required int idPaciente,
-    required String tipo,
-    required String nivel,
-    required String descripcion,
-    String? nombrePaciente,
-  }) async {
-    return crearAlerta(
-      idPaciente: idPaciente,
-      tipo: tipo,
-      nivel: nivel,
-      descripcion: descripcion,
-      origen: 'paciente',
-      nombreOrigen: nombrePaciente,
-    );
-  }
-
-  // ==========================
-  // 🟢 CREAR ALERTA (Médico)
-  // ==========================
-  Future<bool> crearAlertaMedico({
-    required int idPaciente,
-    required String tipo,
-    required String nivel,
-    required String descripcion,
-    String? nombreMedico,
-  }) async {
-    return crearAlerta(
-      idPaciente: idPaciente,
-      tipo: tipo,
-      nivel: nivel,
-      descripcion: descripcion,
-      origen: 'medico',
-      nombreOrigen: nombreMedico,
-    );
-  }
-
-  // ==========================
-  // 🟢 CREAR ALERTA (Admin)
-  // ==========================
-  Future<bool> crearAlertaAdmin({
-    required int idPaciente,
-    required String tipo,
-    required String nivel,
-    required String descripcion,
-    String? nombreAdmin,
-  }) async {
-    return crearAlerta(
-      idPaciente: idPaciente,
-      tipo: tipo,
-      nivel: nivel,
-      descripcion: descripcion,
-      origen: 'admin',
-      nombreOrigen: nombreAdmin,
-    );
-  }
-
-  // ==========================
-  // 🟢 CREAR ALERTA (Sistema)
-  // ==========================
-  Future<bool> crearAlertaSistema({
-    required int idPaciente,
-    required String tipo,
-    required String nivel,
-    required String descripcion,
-  }) async {
-    return crearAlerta(
-      idPaciente: idPaciente,
-      tipo: tipo,
-      nivel: nivel,
-      descripcion: descripcion,
-      origen: 'sistema',
-      nombreOrigen: 'Sistema',
-    );
-  }
-
-  // ==========================
-  // 🟡 MARCAR ATENDIDA
-  // ==========================
-  Future<bool> marcarAtendida(int idAlerta) async {
-    try {
-      final res = await http.put(
-        Uri.parse("$baseUrl/$idAlerta/atendida"),
+        Uri.parse("${ApiConfig.baseUrl}/api/medico/pacientes/$idUsuario"),
         headers: {"Content-Type": "application/json"},
       );
       
-      print("📝 MARCAR ATENDIDA: ${res.statusCode}");
-      
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        return data["ok"] == true || data["success"] == true;
+        if (data is List) {
+          return List<Map<String, dynamic>>.from(data);
+        }
       }
-      return false;
+      return [];
     } catch (e) {
-      print("ERROR MARCAR ATENDIDA => $e");
-      return false;
+      print("❌ Error _getPacientesMedico: $e");
+      return [];
     }
   }
 
   // ==========================
-  // 🟡 MARCAR ALERTA COMO LEÍDA
+  // 📋 OBTENER ALERTAS DEL PACIENTE
+  // ==========================
+  Future<List<Map<String, dynamic>>> getAlertas(int idPaciente) async {
+    try {
+      print("🔍 [getAlertas] Buscando alertas para paciente ID: $idPaciente");
+      
+      // Obtener todas las alertas y filtrar por paciente
+      final todas = await getTodasAlertas();
+      
+      final filtradas = todas.where((a) {
+        final pacienteId = a["idPaciente"] ?? 
+                           a["paciente_id"] ?? 
+                           a["pacienteId"];
+        if (pacienteId != null) {
+          return pacienteId.toString() == idPaciente.toString();
+        }
+        return false;
+      }).toList();
+      
+      print("✅ Alertas encontradas para paciente $idPaciente: ${filtradas.length}");
+      return filtradas;
+      
+    } catch (e) {
+      print("❌ Error getAlertas: $e");
+      return [];
+    }
+  }
+
+  // ==========================
+  // ✅ MARCAR ALERTA COMO ATENDIDA
   // ==========================
   Future<bool> marcarComoLeida(int idAlerta) async {
     try {
-      // Intentar marcar como atendida primero
-      final resultado = await marcarAtendida(idAlerta);
+      print("🔍 Marcando alerta $idAlerta como atendida");
       
-      if (resultado) {
-        print("✅ Alerta $idAlerta marcada como leída/atendida");
-        return true;
-      }
-      
-      // Si falla, intentar con endpoint específico de leída
-      try {
-        final res = await http.put(
-          Uri.parse("$baseUrl/$idAlerta/leida"),
-          headers: {"Content-Type": "application/json"},
-        );
-        print("📝 MARCAR LEÍDA: ${res.statusCode}");
-        if (res.statusCode == 200) {
-          final data = jsonDecode(res.body);
-          return data["ok"] == true || data["success"] == true;
-        }
-        return false;
-      } catch (e) {
-        print("ERROR MARCAR LEÍDA => $e");
-        return false;
-      }
-    } catch (e) {
-      print("ERROR MARCAR COMO LEÍDA => $e");
-      return false;
-    }
-  }
+      final res = await http.put(
+        Uri.parse("$baseUrl/alertas/$idAlerta/atender"),
+        headers: {"Content-Type": "application/json"},
+      );
 
-  // ==========================
-  // 🟡 MARCAR TODAS COMO ATENDIDAS
-  // ==========================
-  Future<bool> marcarTodasAtendidas(int idPaciente) async {
-    try {
-      final alertas = await getAlertasPendientes(idPaciente);
-      bool todasExitosas = true;
-      
-      for (var alerta in alertas) {
-        final id = alerta['idAlerta'] ?? alerta['id'];
-        if (id != null) {
-          final exito = await marcarAtendida(id);
-          if (!exito) todasExitosas = false;
-        }
+      print("📦 MARCAR ALERTA RESPONSE: ${res.statusCode}");
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        return data["success"] == true;
       }
-      
-      return todasExitosas;
+      return false;
     } catch (e) {
-      print("ERROR MARCAR TODAS ATENDIDAS => $e");
+      print("❌ Error marcarComoLeida: $e");
       return false;
     }
   }
@@ -354,227 +167,65 @@ class AlertaService {
   Future<bool> eliminarAlerta(int idAlerta) async {
     try {
       final res = await http.delete(
-        Uri.parse("$baseUrl/$idAlerta"),
+        Uri.parse("$baseUrl/alertas/$idAlerta"),
         headers: {"Content-Type": "application/json"},
       );
       return res.statusCode == 200;
     } catch (e) {
-      print("ERROR ELIMINAR ALERTA => $e");
+      print("❌ Error eliminarAlerta: $e");
       return false;
     }
   }
 
   // ==========================
-  // 🗑️ ELIMINAR TODAS LAS ALERTAS
+  // 📊 CONTAR ALERTAS NO LEÍDAS DEL MÉDICO
   // ==========================
-  Future<bool> eliminarTodasAlertas(int idPaciente) async {
+  Future<int> contarAlertasNoLeidasMedico(int idUsuario) async {
     try {
-      final alertas = await getAlertas(idPaciente);
-      bool todasExitosas = true;
-      
-      for (var alerta in alertas) {
-        final id = alerta['idAlerta'] ?? alerta['id'];
-        if (id != null) {
-          final exito = await eliminarAlerta(id);
-          if (!exito) todasExitosas = false;
-        }
-      }
-      
-      return todasExitosas;
+      final alertas = await getAlertasMedico(idUsuario);
+      final pendientes = alertas.where((a) => 
+        a["estado"]?.toString().toUpperCase() != "ATENDIDA"
+      ).length;
+      return pendientes;
     } catch (e) {
-      print("ERROR ELIMINAR TODAS ALERTAS => $e");
-      return false;
+      print("❌ Error contarAlertasNoLeidasMedico: $e");
+      return 0;
     }
   }
 
   // ==========================
-  // 📊 OBTENER ESTADÍSTICAS POR ORIGEN
-  // ==========================
-  Future<Map<String, int>> getEstadisticasPorOrigen(int idPaciente) async {
-    final alertas = await getAlertas(idPaciente);
-    final Map<String, int> estadisticas = {};
-    
-    for (var alerta in alertas) {
-      final origen = alerta['origen_label'] ?? 'Desconocido';
-      estadisticas[origen] = (estadisticas[origen] ?? 0) + 1;
-    }
-    
-    return estadisticas;
-  }
-
-  // ==========================
-  // 📊 OBTENER ESTADÍSTICAS POR NIVEL
-  // ==========================
-  Future<Map<String, int>> getEstadisticasPorNivel(int idPaciente) async {
-    final alertas = await getAlertas(idPaciente);
-    final Map<String, int> estadisticas = {};
-    
-    for (var alerta in alertas) {
-      final nivel = alerta['nivel']?.toString() ?? 'Desconocido';
-      estadisticas[nivel] = (estadisticas[nivel] ?? 0) + 1;
-    }
-    
-    return estadisticas;
-  }
-
-  // ==========================
-  // 📊 OBTENER ESTADÍSTICAS DETALLADAS
+  // 📊 ESTADÍSTICAS DE ALERTAS
   // ==========================
   Future<Map<String, dynamic>> getEstadisticasDetalladas(int idPaciente) async {
-    final alertas = await getAlertas(idPaciente);
-    
-    final Map<String, dynamic> estadisticas = {
-      'total': alertas.length,
-      'por_origen': <String, int>{},
-      'por_nivel': <String, int>{},
-      'por_estado': <String, int>{},
-      'pendientes': 0,
-      'atendidas': 0,
-    };
-    
-    for (var alerta in alertas) {
-      final origen = alerta['origen_label'] ?? 'Desconocido';
-      final nivel = alerta['nivel']?.toString() ?? 'Desconocido';
-      final estado = alerta['estado']?.toString()?.toUpperCase() ?? 'PENDIENTE';
-      
-      estadisticas['por_origen'][origen] = (estadisticas['por_origen'][origen] ?? 0) + 1;
-      estadisticas['por_nivel'][nivel] = (estadisticas['por_nivel'][nivel] ?? 0) + 1;
-      estadisticas['por_estado'][estado] = (estadisticas['por_estado'][estado] ?? 0) + 1;
-      
-      if (estado == 'PENDIENTE') {
-        estadisticas['pendientes'] = (estadisticas['pendientes'] ?? 0) + 1;
-      } else if (estado == 'ATENDIDA') {
-        estadisticas['atendidas'] = (estadisticas['atendidas'] ?? 0) + 1;
-      }
-    }
-    
-    return estadisticas;
-  }
-
-  // ==========================
-  // 🔍 OBTENER ALERTAS PENDIENTES
-  // ==========================
-  Future<List<Map<String, dynamic>>> getAlertasPendientes(int idPaciente) async {
-    final alertas = await getAlertas(idPaciente);
-    return alertas.where((a) => 
-      a['estado']?.toString()?.toUpperCase() != 'ATENDIDA'
-    ).toList();
-  }
-
-  // ==========================
-  // 🔍 OBTENER ALERTAS ATENDIDAS
-  // ==========================
-  Future<List<Map<String, dynamic>>> getAlertasAtendidas(int idPaciente) async {
-    final alertas = await getAlertas(idPaciente);
-    return alertas.where((a) => 
-      a['estado']?.toString()?.toUpperCase() == 'ATENDIDA'
-    ).toList();
-  }
-
-  // ==========================
-  // 🔍 OBTENER ALERTAS NO LEÍDAS
-  // ==========================
-  Future<List<Map<String, dynamic>>> getAlertasNoLeidas(int idPaciente) async {
-    final alertas = await getAlertas(idPaciente);
-    return alertas.where((a) => 
-      a['leida'] != true && a['estado']?.toString()?.toUpperCase() != 'ATENDIDA'
-    ).toList();
-  }
-
-  // ==========================
-  // 📊 CONTAR ALERTAS NO LEÍDAS
-  // ==========================
-  Future<int> contarAlertasNoLeidas(int idPaciente) async {
-    final noLeidas = await getAlertasNoLeidas(idPaciente);
-    return noLeidas.length;
-  }
-
-  // ==========================
-  // 📊 CONTAR ALERTAS POR NIVEL
-  // ==========================
-  Future<Map<String, int>> contarAlertasPorNivel(int idPaciente) async {
-    final alertas = await getAlertas(idPaciente);
-    final Map<String, int> conteo = {};
-    
-    for (var alerta in alertas) {
-      final nivel = alerta['nivel']?.toString() ?? 'Desconocido';
-      conteo[nivel] = (conteo[nivel] ?? 0) + 1;
-    }
-    
-    return conteo;
-  }
-
-  // ==========================
-  // 📊 OBTENER ALERTAS POR RANGO DE FECHAS
-  // ==========================
-  Future<List<Map<String, dynamic>>> getAlertasByFecha(
-    int idPaciente,
-    String fechaInicio,
-    String fechaFin,
-  ) async {
-    try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/paciente/$idPaciente/rango?inicio=$fechaInicio&fin=$fechaFin"),
-        headers: {"Content-Type": "application/json"},
-      );
-
-      print("📊 ALERTAS RANGO RESPONSE: ${res.statusCode}");
-
-      if (res.statusCode == 200) {
-        List<Map<String, dynamic>> alertas = 
-            List<Map<String, dynamic>>.from(jsonDecode(res.body));
-        return _enriquecerAlertas(alertas);
-      }
-      return [];
-    } catch (e) {
-      print("ERROR ALERTAS RANGO => $e");
-      return [];
-    }
-  }
-
-  // ==========================
-  // 📊 OBTENER ÚLTIMAS ALERTAS
-  // ==========================
-  Future<List<Map<String, dynamic>>> getUltimasAlertas(
-    int idPaciente, {
-    int limit = 10,
-  }) async {
     try {
       final alertas = await getAlertas(idPaciente);
       
-      // Ordenar por fecha descendente
-      alertas.sort((a, b) {
-        try {
-          final fa = DateTime.parse(a['fecha'].toString());
-          final fb = DateTime.parse(b['fecha'].toString());
-          return fb.compareTo(fa);
-        } catch (_) {
-          return 0;
-        }
-      });
+      int total = alertas.length;
+      int atendidas = alertas.where((a) => 
+        (a["estado"]?.toString().toUpperCase() ?? "") == "ATENDIDA"
+      ).length;
+      int pendientes = total - atendidas;
       
-      return alertas.take(limit).toList();
+      Map<String, int> porNivel = {};
+      for (var a in alertas) {
+        String nivel = (a["nivel"]?.toString() ?? "Bajo").toLowerCase();
+        porNivel[nivel] = (porNivel[nivel] ?? 0) + 1;
+      }
+      
+      return {
+        "total": total,
+        "atendidas": atendidas,
+        "pendientes": pendientes,
+        "por_nivel": porNivel,
+      };
     } catch (e) {
-      print("ERROR OBTENER ÚLTIMAS ALERTAS => $e");
-      return [];
-    }
-  }
-
-  // ==========================
-  // 📊 OBTENER ALERTAS POR ORIGEN
-  // ==========================
-  Future<List<Map<String, dynamic>>> getAlertasByOrigen(
-    int idPaciente,
-    String origen,
-  ) async {
-    try {
-      final alertas = await getAlertas(idPaciente);
-      return alertas.where((a) =>
-        a['origen']?.toString().toLowerCase() == origen.toLowerCase()
-      ).toList();
-    } catch (e) {
-      print("ERROR ALERTAS POR ORIGEN => $e");
-      return [];
+      print("❌ Error getEstadisticasDetalladas: $e");
+      return {
+        "total": 0,
+        "atendidas": 0,
+        "pendientes": 0,
+        "por_nivel": {},
+      };
     }
   }
 }

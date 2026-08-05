@@ -1,8 +1,11 @@
+import 'package:cardio_app/accesibility_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:cardio_app/app.theme.dart';
 import 'package:cardio_app/services/notificacion_service.dart';
+import 'package:provider/provider.dart';
 
 import '../services/profile_service.dart';
+import '../services/admin_service.dart';
 import 'login_screen.dart';
 import 'perfil_detalle.dart';
 import 'configuracion_screen.dart';
@@ -23,16 +26,60 @@ class PacienteDashboard extends StatefulWidget {
 
 class _PacienteDashboardState extends State<PacienteDashboard> {
   final profile = ProfileService();
+  final adminService = AdminService();
   late NotificacionService notificacionService;
 
   Map<String, dynamic>? paciente;
   int? idPaciente;
   bool loading = true;
   
-  // 🔥 NOTIFICACIONES - IGUAL QUE MEDICO
+  // 🔥 NOTIFICACIONES
   List<Map<String, dynamic>> notificaciones = [];
   int notificacionesNoLeidas = 0;
   bool _cargandoNotificaciones = false;
+
+  // 🎯 TUTORIAL
+  bool _mostrarTutorial = true;
+  int _pasoTutorial = 0;
+  
+  final List<Map<String, dynamic>> _pasosTutorial = [
+    {
+      'icono': Icons.favorite,
+      'titulo': '👋 Bienvenido a CardioCare',
+      'descripcion': 'Esta es tu aplicación de salud. Aquí encontrarás toda tu información médica en un solo lugar, fácil de entender.',
+      'color': AppTheme.primary,
+    },
+    {
+      'icono': Icons.person,
+      'titulo': '👤 Tus datos personales',
+      'descripcion': 'Aquí ves tu nombre, tu EPS y el médico que te atiende. Siempre tienes tu información a la mano.',
+      'color': AppTheme.info,
+    },
+    {
+      'icono': Icons.folder_shared,
+      'titulo': '📁 Tu perfil clínico',
+      'descripcion': 'Toca el botón "Perfil clínico" para ver todos tus datos médicos: signos vitales, tratamientos y más.',
+      'color': AppTheme.primary,
+    },
+    {
+      'icono': Icons.notifications,
+      'titulo': '🔔 Tus notificaciones',
+      'descripcion': 'Aquí recibes avisos importantes de tu médico: recordatorios, citas y recomendaciones.',
+      'color': AppTheme.warning,
+    },
+    {
+      'icono': Icons.settings,
+      'titulo': '⚙️ Configuración',
+      'descripcion': 'Aquí puedes ajustar el tamaño de letra y otras opciones para que la aplicación sea más fácil de usar.',
+      'color': AppTheme.info,
+    },
+    {
+      'icono': Icons.chat,
+      'titulo': '💬 Habla con tu médico',
+      'descripcion': '¿Tienes alguna duda? Toca "Ir al chat" para enviar un mensaje a tu médico.',
+      'color': AppTheme.success,
+    },
+  ];
 
   @override
   void initState() {
@@ -54,7 +101,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   // ==============================
-  // 🔥 CARGAR NOTIFICACIONES - IGUAL QUE MEDICO
+  // 🔥 CARGAR NOTIFICACIONES
   // ==============================
   Future<void> _cargarNotificaciones() async {
     setState(() => _cargandoNotificaciones = true);
@@ -66,7 +113,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         notificacionesNoLeidas = notificaciones.where((n) => n["leida"] != true).length;
         _cargandoNotificaciones = false;
       });
-      debugPrint("📋 Notificaciones cargadas: ${notificaciones.length}");
+      print("📬 Notificaciones cargadas: ${notificaciones.length}");
     } catch (e) {
       debugPrint("❌ Error cargando notificaciones: $e");
       setState(() {
@@ -78,14 +125,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   // ==============================
-  // 🔥 INICIAR ESCUCHA - IGUAL QUE MEDICO
+  // 🔥 INICIAR ESCUCHA
   // ==============================
   void _iniciarEscuchaNotificaciones() {
     notificacionService.escucharNotificacionesPaciente(
       widget.idUsuario,
       onNuevaNotificacion: (notificacion) {
         if (!mounted) return;
-        debugPrint("📨 NUEVA NOTIFICACIÓN: ${notificacion['mensaje']}");
+        print("🔔 Nueva notificación recibida: ${notificacion['mensaje']}");
         setState(() {
           notificaciones.insert(0, notificacion);
           if (!(notificacion["leida"] ?? false)) {
@@ -95,11 +142,10 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         _mostrarSnackbarNotificacion(notificacion);
       },
     );
-    debugPrint("🔔 Escucha de notificaciones iniciada");
   }
 
   // ==============================
-  // 🔥 MOSTRAR SNACKBAR - IGUAL QUE MEDICO
+  // 🔥 MOSTRAR SNACKBAR
   // ==============================
   void _mostrarSnackbarNotificacion(Map<String, dynamic> notificacion) {
     final mensaje = notificacion['mensaje'] ?? 'Nueva notificación';
@@ -141,7 +187,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             Expanded(
               child: Text(
                 mensaje,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
               ),
             ),
           ],
@@ -149,7 +195,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 4),
+        duration: const Duration(seconds: 5),
         margin: const EdgeInsets.all(16),
         elevation: 6,
       ),
@@ -157,7 +203,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   // ==============================
-  // 🔥 MARCAR NOTIFICACIÓN COMO LEÍDA - IGUAL QUE MEDICO
+  // 🔥 MARCAR NOTIFICACIÓN COMO LEÍDA
   // ==============================
   Future<void> _marcarNotificacionComoLeida(String idNotificacion) async {
     await notificacionService.marcarComoLeida(idNotificacion);
@@ -171,7 +217,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   // ==============================
-  // 🔥 MARCAR TODAS COMO LEÍDAS - IGUAL QUE MEDICO
+  // 🔥 MARCAR TODAS COMO LEÍDAS
   // ==============================
   Future<void> _marcarTodasComoLeidas() async {
     await notificacionService.marcarTodasComoLeidas(widget.idUsuario);
@@ -181,24 +227,22 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       }
       notificacionesNoLeidas = 0;
     });
-    debugPrint("✅ Todas las notificaciones marcadas como leídas");
   }
 
   // ==============================
-  // 🔥 LIMPIAR TODAS - IGUAL QUE MEDICO
+  // 🔥 LIMPIAR TODAS
   // ==============================
   Future<void> _limpiarTodasLasNotificaciones() async {
     try {
-      notificacionService.limpiarNotificaciones(widget.idUsuario);
+      notificacionService.limpiarNotificaciones();
       setState(() {
         notificaciones.clear();
         notificacionesNoLeidas = 0;
       });
-      debugPrint("✅ Notificaciones limpiadas");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text("🧹 Notificaciones limpiadas"),
+            content: Text("Notificaciones limpiadas"),
             backgroundColor: Colors.green,
             behavior: SnackBarBehavior.floating,
             duration: Duration(seconds: 2),
@@ -211,101 +255,24 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   // ==============================
-  // 🔥 ABRIR DETALLE DE NOTIFICACIÓN - IGUAL QUE MEDICO
+  // 🔥 ABRIR DETALLE DE NOTIFICACIÓN
   // ==============================
   void _abrirDetalleNotificacion(Map<String, dynamic> notificacion) {
-    // Si la notificación tiene idPaciente, abrir el perfil
     final idPacienteNotif = notificacion["idPaciente"];
     if (idPacienteNotif != null && idPacienteNotif == idPaciente) {
-      // Ya estamos en el dashboard del paciente, podemos abrir el perfil
       openPerfil();
     }
   }
 
-  Future<void> loadProfile() async {
-    setState(() => loading = true);
-    try {
-      final data = await profile.getPaciente(widget.idUsuario);
-      if (!mounted) return;
-      setState(() {
-        paciente = data;
-        idPaciente = data["idPaciente"] != null
-            ? int.tryParse(data["idPaciente"].toString())
-            : null;
-        loading = false;
-      });
-    } catch (e) {
-      debugPrint("❌ Error cargando perfil: $e");
-      setState(() => loading = false);
-    }
-  }
-
-  void logout() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.logout, color: AppTheme.danger, size: 28),
-            const SizedBox(width: 12),
-            Text("Cerrar sesión", style: AppTheme.title2),
-          ],
-        ),
-        content: Text("¿Estás seguro de que deseas cerrar sesión?", style: AppTheme.body2),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              notificacionService.detenerEscucha();
-              Navigator.pushAndRemoveUntil(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                (route) => false,
-              );
-            },
-            style: AppTheme.dangerButtonStyle,
-            child: const Text("Cerrar sesión"),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void openPerfil() {
-    if (idPaciente == null) return;
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PerfilDetalleScreen(
-          idUsuario: widget.idUsuario,
-          idPaciente: idPaciente!,
-          nombre: widget.nombre,
-        ),
-      ),
-    );
-  }
-
-  void openConfiguracion() {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => ConfiguracionScreen(
-          idUsuario: widget.idUsuario,
-          tipoUsuario: "paciente",
-        ),
-      ),
-    ).then((_) => loadProfile());
-  }
-
   // ==============================
-  // 🔥 PANEL DE NOTIFICACIONES - IGUAL QUE MEDICO
+  // 🔥 PANEL DE NOTIFICACIONES
   // ==============================
   void _mostrarPanelNotificaciones() {
     if (notificacionesNoLeidas > 0) {
       _marcarTodasComoLeidas();
     }
+    
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     showModalBottomSheet(
       context: context,
@@ -313,7 +280,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      backgroundColor: AppTheme.white,
+      backgroundColor: isDark ? AppTheme.gray800 : AppTheme.white,
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.8,
         minChildSize: 0.5,
@@ -335,10 +302,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   children: [
                     const Icon(Icons.notifications, color: AppTheme.primary, size: 32),
                     const SizedBox(width: 14),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         "Notificaciones",
-                        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? AppTheme.white : AppTheme.gray700,
+                        ),
                       ),
                     ),
                     if (notificaciones.isNotEmpty)
@@ -353,7 +324,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                         ),
                       ),
                     IconButton(
-                      icon: const Icon(Icons.close, size: 30),
+                      icon: Icon(Icons.close, size: 30, color: isDark ? AppTheme.white : AppTheme.gray700),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -368,14 +339,20 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                           children: [
                             Icon(Icons.notifications_none, size: 72, color: AppTheme.gray300),
                             const SizedBox(height: 20),
-                            const Text(
+                            Text(
                               "No hay notificaciones",
-                              style: TextStyle(fontSize: 18, color: AppTheme.gray500),
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+                              ),
                             ),
                             const SizedBox(height: 10),
-                            const Text(
+                            Text(
                               "Las notificaciones aparecerán aquí",
-                              style: TextStyle(fontSize: 15, color: AppTheme.gray400),
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: isDark ? AppTheme.gray500 : AppTheme.gray400,
+                              ),
                             ),
                           ],
                         ),
@@ -410,10 +387,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: leida ? AppTheme.white : color.withOpacity(0.06),
+                                color: leida 
+                                    ? (isDark ? AppTheme.gray700 : AppTheme.white) 
+                                    : color.withOpacity(0.06),
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(
-                                  color: leida ? AppTheme.gray200 : color.withOpacity(0.3),
+                                  color: leida 
+                                      ? (isDark ? AppTheme.gray600 : AppTheme.gray200) 
+                                      : color.withOpacity(0.3),
                                   width: 1.5,
                                 ),
                               ),
@@ -437,7 +418,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 17,
-                                            color: color,
+                                            color: isDark ? AppTheme.white : AppTheme.gray700,
                                           ),
                                         ),
                                         const SizedBox(height: 6),
@@ -445,7 +426,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                           n["mensaje"] ?? "",
                                           style: TextStyle(
                                             fontSize: 15,
-                                            color: AppTheme.gray500,
+                                            color: isDark ? AppTheme.gray300 : AppTheme.gray500,
                                           ),
                                         ),
                                         const SizedBox(height: 6),
@@ -453,7 +434,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                           _formatFecha(n["fecha"]),
                                           style: TextStyle(
                                             fontSize: 13,
-                                            color: AppTheme.gray400,
+                                            color: isDark ? AppTheme.gray500 : AppTheme.gray400,
                                           ),
                                         ),
                                       ],
@@ -523,9 +504,164 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     }
   }
 
+  // ==============================
+  // 📥 CARGAR PERFIL - CORREGIDO PARA CUIDADORES
+  // ==============================
+  Future<void> loadProfile() async {
+    setState(() => loading = true);
+    try {
+      print("🔍 Cargando perfil para usuario: ${widget.idUsuario}");
+      
+      Map<String, dynamic>? data;
+      
+      // 🔥 PRIMERO: Intentar obtener como paciente (ignorar 404)
+      try {
+        data = await adminService.getPacientePorUsuario(widget.idUsuario);
+        if (data != null) {
+          print("✅ Paciente encontrado como usuario: ${data['nombre']}");
+        }
+      } catch (e) {
+        // Ignorar error, continuar con cuidador
+        print("ℹ️ No es paciente, intentando como cuidador...");
+      }
+      
+      // 🔥 SI NO ES PACIENTE, intentar como cuidador
+      if (data == null) {
+        print("🔍 Intentando como cuidador...");
+        data = await adminService.getPacientePorCuidador(widget.idUsuario);
+        if (data != null) {
+          print("✅ Paciente encontrado como cuidador: ${data['nombre']}");
+        }
+      }
+      
+      print("📦 Datos finales del paciente: $data");
+      
+      if (!mounted) return;
+      
+      if (data != null && data["idPaciente"] != null) {
+        setState(() {
+          paciente = data;
+          idPaciente = data!["idPaciente"] != null
+              ? int.tryParse(data["idPaciente"].toString())
+              : null;
+          loading = false;
+        });
+        print("✅ Perfil cargado exitosamente: ${data['nombre']}");
+      } else {
+        print("⚠️ No se encontró paciente para el usuario ${widget.idUsuario}");
+        setState(() {
+          paciente = null;
+          idPaciente = null;
+          loading = false;
+        });
+        _mostrarSnackbarPersonalizado("No se encontró un paciente asociado a tu cuenta", isError: true);
+      }
+    } catch (e) {
+      debugPrint("❌ Error cargando perfil: $e");
+      setState(() => loading = false);
+      _mostrarSnackbarPersonalizado("Error al cargar el perfil", isError: true);
+    }
+  }
+
+  void _mostrarSnackbarPersonalizado(String mensaje, {bool isError = false}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(mensaje)),
+          ],
+        ),
+        backgroundColor: isError ? AppTheme.danger : AppTheme.success,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  // ==============================
+  // 🚪 LOGOUT
+  // ==============================
+  void logout() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(Icons.logout, color: AppTheme.danger, size: 28),
+            const SizedBox(width: 12),
+            Text("Cerrar sesión", style: AppTheme.title2),
+          ],
+        ),
+        content: Text("¿Estás seguro de que deseas cerrar sesión?", style: AppTheme.body2),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              notificacionService.detenerEscucha();
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+                (route) => false,
+              );
+            },
+            style: AppTheme.dangerButtonStyle,
+            child: const Text("Cerrar sesión"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==============================
+  // 🧭 NAVEGACIÓN
+  // ==============================
+  void openPerfil() {
+    if (idPaciente == null) {
+      _mostrarSnackbarPersonalizado("No se encontró el paciente", isError: true);
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PerfilDetalleScreen(
+          idUsuario: widget.idUsuario,
+          idPaciente: idPaciente!,
+          nombre: widget.nombre,
+        ),
+      ),
+    );
+  }
+
+  void openConfiguracion() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ConfiguracionScreen(
+          idUsuario: widget.idUsuario,
+          tipoUsuario: "paciente",
+        ),
+      ),
+    ).then((_) => loadProfile());
+  }
+
+  // ==============================
+  // 🏗 BUILD
+  // ==============================
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accessibility = Provider.of<AccessibilityProvider>(context);
 
     return Scaffold(
       backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
@@ -544,19 +680,16 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  // ✅ LOGO CARDIOCARE EN EL APP BAR
-                  AppTheme.buildSmallLogo(
-                    size: 40,
-                    onTap: () {
-                      // Puedes agregar una acción al presionar el logo
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text("CardioCare - Tu salud en buenas manos"),
-                          behavior: SnackBarBehavior.floating,
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-                    },
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.favorite, color: Colors.white, size: 24),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   const Expanded(
@@ -569,7 +702,6 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                       ],
                     ),
                   ),
-                  // 🔥 BOTÓN DE NOTIFICACIONES CON CONTADOR - IGUAL QUE MEDICO
                   _buildAppBarButton(
                     Icons.notifications_outlined,
                     _mostrarPanelNotificaciones,
@@ -587,45 +719,220 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () async {
-                await loadProfile();
-                await _cargarNotificaciones();
-              },
-              color: AppTheme.primary,
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildHeader(),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildInfoCard(),
-                          const SizedBox(height: 20),
-                          Text(
-                            "Acceso clínico",
-                            style: AppTheme.title1,
+          : Stack(
+              children: [
+                RefreshIndicator(
+                  onRefresh: () async {
+                    await loadProfile();
+                    await _cargarNotificaciones();
+                  },
+                  color: AppTheme.primary,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildHeader(accessibility, isDark),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildInfoCard(accessibility, isDark),
+                              const SizedBox(height: 20),
+                              Text(
+                                "Acceso clínico",
+                                style: AppTheme.title1.copyWith(
+                                  fontSize: 18 * accessibility.fontScale,
+                                  color: isDark ? AppTheme.white : AppTheme.gray700,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              _buildAccionesGrid(accessibility, isDark),
+                              const SizedBox(height: 20),
+                              _buildCTACard(accessibility),
+                              const SizedBox(height: 20),
+                            ],
                           ),
-                          const SizedBox(height: 12),
-                          _buildAccionesGrid(),
-                          const SizedBox(height: 20),
-                          _buildCTACard(),
-                          const SizedBox(height: 20),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                // 🎯 Tutorial flotante
+                if (_mostrarTutorial) _buildTutorial(accessibility),
+              ],
             ),
     );
   }
 
-  // ✅ BOTÓN DE APP BAR - IGUAL QUE MEDICO
+  // ==============================
+  // 🎯 TUTORIAL PASO A PASO
+  // ==============================
+  Widget _buildTutorial(AccessibilityProvider accessibility) {
+    final paso = _pasosTutorial[_pasoTutorial];
+    final color = paso['color'] as Color;
+    
+    return Positioned(
+      bottom: 20,
+      left: 16,
+      right: 16,
+      child: Material(
+        elevation: 12,
+        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: color.withOpacity(0.3), width: 2),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 🎯 Indicador de progreso
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(_pasosTutorial.length, (index) {
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _pasoTutorial == index 
+                          ? color 
+                          : AppTheme.gray300,
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 16),
+              
+              // 🎯 Icono y contenido
+              Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [color, color.withOpacity(0.7)],
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      paso['icono'] as IconData,
+                      color: Colors.white,
+                      size: 32,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          paso['titulo'] as String,
+                          style: TextStyle(
+                            fontSize: 18 * accessibility.fontScale,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.gray700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          paso['descripcion'] as String,
+                          style: TextStyle(
+                            fontSize: 15 * accessibility.fontScale,
+                            color: AppTheme.gray500,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              // 🎯 Botones de navegación
+              Row(
+                children: [
+                  if (_pasoTutorial > 0)
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => setState(() => _pasoTutorial--),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppTheme.gray500,
+                          side: BorderSide(color: AppTheme.gray300),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          "Anterior",
+                          style: TextStyle(
+                            fontSize: 14 * accessibility.fontScale,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (_pasoTutorial > 0) const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (_pasoTutorial < _pasosTutorial.length - 1) {
+                          setState(() => _pasoTutorial++);
+                        } else {
+                          setState(() => _mostrarTutorial = false);
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: color,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        _pasoTutorial < _pasosTutorial.length - 1
+                            ? "Siguiente ➜"
+                            : "✓ ¡Entendido!",
+                        style: TextStyle(
+                          fontSize: 15 * accessibility.fontScale,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: () => setState(() => _mostrarTutorial = false),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppTheme.gray500,
+                    ),
+                    child: Text(
+                      "Saltar",
+                      style: TextStyle(
+                        fontSize: 14 * accessibility.fontScale,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==============================
+  // 🧩 APP BAR BUTTON
+  // ==============================
   Widget _buildAppBarButton(IconData icon, VoidCallback onPressed, {int? badge}) {
     return Container(
       decoration: BoxDecoration(
@@ -664,9 +971,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     );
   }
 
-  Widget _buildHeader() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+  // ==============================
+  // 📋 HEADER
+  // ==============================
+  Widget _buildHeader(AccessibilityProvider accessibility, bool isDark) {
+    final nombreCompleto = paciente?["nombre"]?.toString() ?? widget.nombre;
+    final nombreInicial = nombreCompleto.isNotEmpty ? nombreCompleto[0].toUpperCase() : 'U';
+    final eps = paciente?["eps"] ?? "-";
+
     return Container(
       width: double.infinity,
       color: isDark ? AppTheme.gray800 : AppTheme.white,
@@ -692,8 +1004,12 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                     decoration: BoxDecoration(gradient: AppTheme.primaryGradient),
                     child: Center(
                       child: Text(
-                        (paciente?["nombre"] ?? widget.nombre)[0].toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                        nombreInicial,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   );
@@ -707,14 +1023,20 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  "Hola, ${paciente?["nombre"]?.toString().split(" ").first ?? widget.nombre}",
-                  style: AppTheme.title1,
+                  "Hola, ${nombreCompleto.split(" ").first}",
+                  style: AppTheme.title1.copyWith(
+                    fontSize: 18 * accessibility.fontScale,
+                    color: isDark ? AppTheme.white : AppTheme.gray700,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "EPS: ${paciente?["eps"] ?? "-"}",
-                  style: AppTheme.body2.copyWith(color: AppTheme.gray500),
+                  "EPS: $eps",
+                  style: AppTheme.body2.copyWith(
+                    fontSize: 14 * accessibility.fontScale,
+                    color: AppTheme.gray500,
+                  ),
                 ),
               ],
             ),
@@ -731,7 +1053,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               children: [
                 Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle)),
                 const SizedBox(width: 6),
-                const Text("Activo", style: TextStyle(color: AppTheme.success, fontSize: 12, fontWeight: FontWeight.w600)),
+                Text(
+                  "Activo",
+                  style: TextStyle(
+                    color: AppTheme.success,
+                    fontSize: 12 * accessibility.fontScale,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ],
             ),
           ),
@@ -740,15 +1069,16 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     );
   }
 
-  Widget _buildInfoCard() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+  // ==============================
+  // 📊 TARJETA DE INFORMACIÓN
+  // ==============================
+  Widget _buildInfoCard(AccessibilityProvider accessibility, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.gray800 : AppTheme.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: AppTheme.subtleShadow,
+        boxShadow: isDark ? null : AppTheme.subtleShadow,
       ),
       child: Column(
         children: [
@@ -765,7 +1095,10 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               const SizedBox(width: 12),
               Text(
                 "Estado de salud",
-                style: AppTheme.title2,
+                style: AppTheme.title2.copyWith(
+                  fontSize: 16 * accessibility.fontScale,
+                  color: isDark ? AppTheme.white : AppTheme.gray700,
+                ),
               ),
               const Spacer(),
               Container(
@@ -774,9 +1107,13 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   color: AppTheme.success.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
+                child: Text(
                   "✓ Monitoreo activo",
-                  style: TextStyle(fontSize: 11, color: AppTheme.success, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 11 * accessibility.fontScale,
+                    color: AppTheme.success,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -791,6 +1128,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   Icons.badge_outlined,
                   "ID Paciente",
                   "${idPaciente ?? "-"}",
+                  accessibility,
+                  isDark,
                 ),
               ),
               const SizedBox(width: 12),
@@ -799,6 +1138,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   Icons.email_outlined,
                   "Correo",
                   paciente?["correo"] ?? "-",
+                  accessibility,
+                  isDark,
                 ),
               ),
             ],
@@ -808,7 +1149,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
+  Widget _infoRow(IconData icon, String label, String value, AccessibilityProvider accessibility, bool isDark) {
     return Row(
       children: [
         Icon(icon, color: AppTheme.primary, size: 18),
@@ -819,12 +1160,18 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             children: [
               Text(
                 label,
-                style: AppTheme.caption,
+                style: AppTheme.caption.copyWith(
+                  fontSize: 12 * accessibility.fontScale,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 value,
-                style: AppTheme.body2.copyWith(fontWeight: FontWeight.w600),
+                style: AppTheme.body2.copyWith(
+                  fontSize: 14 * accessibility.fontScale,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppTheme.white : AppTheme.gray700,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ],
@@ -834,7 +1181,10 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     );
   }
 
-  Widget _buildAccionesGrid() {
+  // ==============================
+  // 🔘 GRID DE ACCIONES
+  // ==============================
+  Widget _buildAccionesGrid(AccessibilityProvider accessibility, bool isDark) {
     final items = [
       _AccionItem(
         "Perfil clínico",
@@ -857,20 +1207,21 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
       childAspectRatio: 1.2,
-      children: items.map(_buildAccionCard).toList(),
+      children: items.map((item) => _buildAccionCard(item, accessibility, isDark)).toList(),
     );
   }
 
-  Widget _buildAccionCard(_AccionItem item) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+  Widget _buildAccionCard(_AccionItem item, AccessibilityProvider accessibility, bool isDark) {
     return GestureDetector(
       onTap: item.onTap,
       child: Container(
         decoration: BoxDecoration(
           color: isDark ? AppTheme.gray800 : AppTheme.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: AppTheme.subtleShadow,
+          boxShadow: isDark ? null : AppTheme.subtleShadow,
+          border: Border.all(
+            color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+          ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -887,7 +1238,11 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             Text(
               item.title,
               textAlign: TextAlign.center,
-              style: AppTheme.body2.copyWith(fontWeight: FontWeight.w600),
+              style: AppTheme.body2.copyWith(
+                fontSize: 14 * accessibility.fontScale,
+                fontWeight: FontWeight.w600,
+                color: isDark ? AppTheme.white : AppTheme.gray700,
+              ),
             ),
           ],
         ),
@@ -895,7 +1250,10 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     );
   }
 
-  Widget _buildCTACard() {
+  // ==============================
+  // 💡 TARJETA CTA
+  // ==============================
+  Widget _buildCTACard(AccessibilityProvider accessibility) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -915,14 +1273,21 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   "¿Tienes alguna duda?",
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16 * accessibility.fontScale,
+                  ),
                 ),
                 const SizedBox(height: 6),
-                const Text(
+                Text(
                   "Contacta a tu médico desde tu perfil clínico",
-                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13 * accessibility.fontScale,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 TextButton.icon(
@@ -936,9 +1301,12 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   ),
                   onPressed: openPerfil,
                   icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                  label: const Text(
+                  label: Text(
                     "Ir al chat",
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13 * accessibility.fontScale,
+                    ),
                   ),
                 ),
               ],
@@ -956,6 +1324,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 }
 
+// ==============================
+// 📦 MODELO DE ACCIÓN
+// ==============================
 class _AccionItem {
   final String title;
   final IconData icon;
