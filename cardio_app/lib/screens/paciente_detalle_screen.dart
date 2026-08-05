@@ -1,6 +1,4 @@
 
-import 'dart:math' as MainAxisSize;
-
 import 'package:cardio_app/Screens/tratamiento_screen.dart';
 import 'package:cardio_app/app.theme.dart';
 import 'package:cardio_app/services/adherencia_service.dart';
@@ -10,7 +8,6 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import 'package:cardio_app/accesibility_provider.dart';
 import 'dart:io';
-import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:open_file/open_file.dart';
 import '../screens/crear_signos_screen.dart';

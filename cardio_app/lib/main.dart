@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
+import 'package:flutter/cupertino.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -287,7 +288,7 @@ class CardioCareApp extends StatelessWidget {
         color: AppTheme.primary,
       ),
       
-      // Page Transitions
+      // Page Transitions (CORREGIDO)
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),
@@ -448,7 +449,7 @@ class CardioCareApp extends StatelessWidget {
         indicatorSize: TabBarIndicatorSize.label,
       ),
       
-      // Page Transitions
+      // Page Transitions (CORREGIDO)
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),
@@ -612,6 +613,7 @@ class CardioCareApp extends StatelessWidget {
         indicatorSize: TabBarIndicatorSize.label,
       ),
       
+      // Page Transitions (CORREGIDO)
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),
