@@ -38,8 +38,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   int notificacionesNoLeidas = 0;
   bool _cargandoNotificaciones = false;
 
-  // 🎯 TUTORIAL
-  bool _mostrarTutorial = true;
+  // 🎯 TUTORIAL (AHORA DESACTIVADO POR DEFECTO)
+  bool _mostrarTutorial = false; 
   int _pasoTutorial = 0;
   
   final List<Map<String, dynamic>> _pasosTutorial = [
@@ -139,66 +139,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             notificacionesNoLeidas++;
           }
         });
-        _mostrarSnackbarNotificacion(notificacion);
       },
-    );
-  }
-
-  // ==============================
-  // 🔥 MOSTRAR SNACKBAR
-  // ==============================
-  void _mostrarSnackbarNotificacion(Map<String, dynamic> notificacion) {
-    final mensaje = notificacion['mensaje'] ?? 'Nueva notificación';
-    final tipo = notificacion['tipo']?.toString() ?? 'info';
-    
-    Color color;
-    IconData icono;
-    
-    switch (tipo) {
-      case 'signo':
-        color = AppTheme.danger;
-        icono = Icons.monitor_heart;
-        break;
-      case 'sintoma':
-        color = AppTheme.warning;
-        icono = Icons.healing;
-        break;
-      case 'cita':
-        color = AppTheme.info;
-        icono = Icons.event;
-        break;
-      case 'recomendacion':
-        color = AppTheme.primary;
-        icono = Icons.lightbulb_outline;
-        break;
-      default:
-        color = AppTheme.primary;
-        icono = Icons.notifications;
-    }
-    
-    if (!mounted) return;
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(icono, color: Colors.white, size: 24),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                mensaje,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        duration: const Duration(seconds: 5),
-        margin: const EdgeInsets.all(16),
-        elevation: 6,
-      ),
     );
   }
 
@@ -655,6 +596,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     ).then((_) => loadProfile());
   }
 
+  // 🎯 FUNCIÓN PARA ABRIR EL TUTORIAL MANUALMENTE
+  void _abrirTutorial() {
+    setState(() {
+      _mostrarTutorial = true;
+      _pasoTutorial = 0;
+    });
+  }
+
   // ==============================
   // 🏗 BUILD
   // ==============================
@@ -680,6 +629,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
+                  // ✅ LOGO REAL DE CARDIO CARE
                   Container(
                     width: 40,
                     height: 40,
@@ -687,21 +637,50 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Center(
-                      child: Icon(Icons.favorite, color: Colors.white, size: 24),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6.0),
+                      child: Image.asset(
+                        'assets/images/Cardiocare.png',
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(Icons.favorite, color: Colors.white, size: 24);
+                        },
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  const Expanded(
+                  Expanded(
                     child: Column(
+                      mainAxisSize: MainAxisSize.min, // ✅ EVITA EL OVERFLOW DE 29px
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text("CardioCare", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                        SizedBox(height: 2),
-                        Text("Tu salud en buenas manos", style: TextStyle(color: Colors.white70, fontSize: 12)),
+                        Text(
+                          "CardioCare",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis, // ✅ CORTA EL TEXTO SI ES LARGO
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          "Tu salud en buenas manos",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                          overflow: TextOverflow.ellipsis, // ✅ CORTA EL TEXTO SI ES LARGO
+                        ),
                       ],
                     ),
                   ),
+                  // ❓ NUEVO BOTÓN DE AYUDA (TUTORIAL)
+                  _buildAppBarButton(
+                    Icons.help_outline,
+                    _abrirTutorial,
+                  ),
+                  const SizedBox(width: 6),
                   _buildAppBarButton(
                     Icons.notifications_outlined,
                     _mostrarPanelNotificaciones,
@@ -759,7 +738,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                     ),
                   ),
                 ),
-                // 🎯 Tutorial flotante
+                // 🎯 Tutorial flotante (Solo si el usuario lo pide)
                 if (_mostrarTutorial) _buildTutorial(accessibility),
               ],
             ),
@@ -909,15 +888,24 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  TextButton(
-                    onPressed: () => setState(() => _mostrarTutorial = false),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppTheme.gray500,
-                    ),
-                    child: Text(
-                      "Saltar",
-                      style: TextStyle(
-                        fontSize: 14 * accessibility.fontScale,
+                  // ✅ BOTÓN GRANDE DE "SALTAR TUTORIAL"
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: () => setState(() => _mostrarTutorial = false),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        "Saltar tutorial",
+                        style: TextStyle(
+                          fontSize: 14 * accessibility.fontScale,
+                          color: AppTheme.gray500,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),

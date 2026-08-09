@@ -1,4 +1,3 @@
-
 import 'package:cardio_app/Screens/tratamiento_screen.dart';
 import 'package:cardio_app/app.theme.dart';
 import 'package:cardio_app/services/adherencia_service.dart';
@@ -67,6 +66,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   List<Map<String, dynamic>> tratamientos = [];
   List<Map<String, dynamic>> citas = [];
   List<Map<String, dynamic>> recomendaciones = [];
+  List<Map<String, dynamic>> _recomendacionesAdherencia = [];
   Map<String, dynamic> metricas = {};
 
   int mensajesNoLeidos = 0;
@@ -75,6 +75,20 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   bool _cargandoAlertas = false;
   bool _exportando = false;
   bool _cargandoMetricas = false;
+  bool _cargandoAdherencia = false;
+
+  // ==============================================
+  // 🧭 TUTORIAL (Onboarding)
+  // ==============================================
+  bool _mostrarTutorial = false;
+  int _pasoTutorial = 0;
+  final List<String> _pasosTutorial = [
+    "Bienvenido a tu panel de control. Aquí verás toda tu información médica.",
+    "En la pestaña 'Signos' puedes registrar tu presión, frecuencia cardíaca y oxígeno.",
+    "En 'Citas' puedes gestionar tus citas médicas con tu especialista.",
+    "En 'Alertas' recibirás notificaciones importantes sobre tu salud o cuidados.",
+    "Usa el ícono de chat en la parte superior para hablar con tu médico."
+  ];
 
   static const List<String> _estadosCita = [
     "pendiente",
@@ -117,11 +131,11 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       SnackBar(
         content: Row(
           children: [
-            Icon(isError ? Icons.error_outline : Icons.check_circle, 
+            Icon(isError ? Icons.error_outline : Icons.check_circle,
                 color: Colors.white, size: 28),
             const SizedBox(width: 16),
             Expanded(
-              child: Text(msg, 
+              child: Text(msg,
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
             ),
           ],
@@ -178,8 +192,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         MaterialPageRoute(
           builder: (_) => ChatScreen(
             idConversacion: convId,
-            idUsuario: widget.idUsuarioPaciente,
-            nombre: widget.nombre, 
+            idUsuario: widget.idUsuario,
+            nombre: widget.nombre,
             especialista: '',
           ),
         ),
@@ -227,7 +241,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       final ok = await alertaService.marcarComoLeida(idAlerta);
       if (ok && mounted) {
         setState(() {
-          final index = alertas.indexWhere((a) => 
+          final index = alertas.indexWhere((a) =>
             safeId(a["idAlerta"]) == idAlerta ||
             safeId(a["id"]) == idAlerta
           );
@@ -235,7 +249,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             alertas[index]["estado"] = "ATENDIDA";
           }
         });
-        _snack("✓ Alerta atendida");
+        _snack("Alerta atendida");
         await loadAlertas();
       } else {
         _snack("Error al marcar la alerta", isError: true);
@@ -290,7 +304,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   // 📥 EXPORTAR DATOS DEL PACIENTE A CSV
   // ==============================================
   Future<void> _exportarPacienteCSV() async {
-    if (signos.isEmpty && sintomas.isEmpty && tratamientos.isEmpty && 
+    if (signos.isEmpty && sintomas.isEmpty && tratamientos.isEmpty &&
         citas.isEmpty && alertas.isEmpty && recomendaciones.isEmpty) {
       _snack("No hay datos para exportar", isError: true);
       return;
@@ -299,10 +313,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     setState(() => _exportando = true);
     
     try {
-      // Crear contenido CSV
       String csvContent = _buildCSVContent();
       
-      // Guardar en documentos
       final directory = await getApplicationDocumentsDirectory();
       final fecha = DateTime.now().toIso8601String().split('T').first;
       final fileName = "paciente_${widget.nombre.replaceAll(' ', '_')}_$fecha.csv";
@@ -314,15 +326,15 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       await file.writeAsString(csvContent);
       
       if (await file.exists()) {
-        _snack("✅ Archivo guardado: $fileName");
+        _snack("Archivo guardado: $fileName");
         _mostrarDialogoArchivoGuardado(path, fileName);
       } else {
-        _snack("❌ Error al guardar el archivo", isError: true);
+        _snack("Error al guardar el archivo", isError: true);
       }
       
     } catch (e) {
       print("❌ Error exportando: $e");
-      _snack("❌ Error al exportar: ${e.toString()}", isError: true);
+      _snack("Error al exportar: ${e.toString()}", isError: true);
       
       try {
         final directory = await getTemporaryDirectory();
@@ -333,11 +345,11 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         final file = File(path);
         await file.writeAsString(_buildCSVContent());
         
-        _snack("✅ Archivo guardado en temporal: $fileName");
+        _snack("Archivo guardado en temporal: $fileName");
         _mostrarDialogoArchivoGuardado(path, fileName);
       } catch (e2) {
         print("❌ Error en fallback: $e2");
-        _snack("❌ No se pudo guardar el archivo", isError: true);
+        _snack("No se pudo guardar el archivo", isError: true);
       }
     } finally {
       setState(() => _exportando = false);
@@ -357,7 +369,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             Icon(Icons.check_circle, color: AppTheme.success, size: 28),
             const SizedBox(width: 12),
             Text(
-              "✅ Archivo guardado",
+              "Archivo guardado",
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -442,15 +454,12 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   // ==============================================
-  // 📝 CONSTRUIR CSV - FORMATO LIMPIO CON PUNTO Y COMA
+  // 📝 CONSTRUIR CSV
   // ==============================================
   String _buildCSVContent() {
     const String sep = ';';
     StringBuffer buffer = StringBuffer();
     
-    // ==========================================
-    // 📋 ENCABEZADO DEL REPORTE
-    // ==========================================
     buffer.writeln('REPORTE DEL PACIENTE');
     buffer.writeln('Paciente${sep}${widget.nombre}');
     buffer.writeln('ID Paciente${sep}${widget.idPaciente}');
@@ -459,12 +468,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     buffer.writeln('Fecha Exportación${sep}${DateTime.now().toString()}');
     buffer.writeln('');
     
-    // ==========================================
-    // 📊 SIGNOS VITALES
-    // ==========================================
     buffer.writeln('SIGNOS VITALES');
     buffer.writeln('Fecha${sep}Presión Sistólica (mmHg)${sep}Presión Diastólica (mmHg)${sep}Frecuencia Cardíaca (lpm)${sep}Saturación Oxígeno (%)');
-    
     if (signos.isNotEmpty) {
       for (var s in signos) {
         buffer.writeln(
@@ -481,12 +486,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     buffer.writeln('Total${sep}${signos.length}');
     buffer.writeln('');
     
-    // ==========================================
-    // 📋 SÍNTOMAS
-    // ==========================================
     buffer.writeln('SÍNTOMAS');
     buffer.writeln('Fecha${sep}Título${sep}Descripción${sep}Prioridad');
-    
     if (sintomas.isNotEmpty) {
       for (var s in sintomas) {
         buffer.writeln(
@@ -502,12 +503,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     buffer.writeln('Total${sep}${sintomas.length}');
     buffer.writeln('');
     
-    // ==========================================
-    // 💊 TRATAMIENTOS
-    // ==========================================
     buffer.writeln('TRATAMIENTOS');
     buffer.writeln('Descripción${sep}Estado${sep}Fecha Inicio${sep}Fecha Fin');
-    
     if (tratamientos.isNotEmpty) {
       for (var t in tratamientos) {
         buffer.writeln(
@@ -523,12 +520,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     buffer.writeln('Total${sep}${tratamientos.length}');
     buffer.writeln('');
     
-    // ==========================================
-    // 📅 CITAS MÉDICAS
-    // ==========================================
     buffer.writeln('CITAS MÉDICAS');
     buffer.writeln('Motivo${sep}Fecha${sep}Estado');
-    
     if (citas.isNotEmpty) {
       for (var c in citas) {
         buffer.writeln(
@@ -543,12 +536,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     buffer.writeln('Total${sep}${citas.length}');
     buffer.writeln('');
     
-    // ==========================================
-    // 🔔 ALERTAS
-    // ==========================================
     buffer.writeln('ALERTAS');
     buffer.writeln('Tipo${sep}Nivel${sep}Estado${sep}Origen${sep}Descripción${sep}Fecha');
-    
     if (alertas.isNotEmpty) {
       for (var a in alertas) {
         buffer.writeln(
@@ -566,12 +555,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     buffer.writeln('Total${sep}${alertas.length}');
     buffer.writeln('');
     
-    // ==========================================
-    // 💡 RECOMENDACIONES MÉDICAS
-    // ==========================================
     buffer.writeln('RECOMENDACIONES MÉDICAS');
     buffer.writeln('Descripción${sep}Fecha');
-    
     if (recomendaciones.isNotEmpty) {
       for (var r in recomendaciones) {
         buffer.writeln(
@@ -585,11 +570,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     buffer.writeln('Total${sep}${recomendaciones.length}');
     buffer.writeln('');
     
-    // ==========================================
-    // 📊 ADHERENCIA AL TRATAMIENTO
-    // ==========================================
+    buffer.writeln('ADHERENCIA AL TRATAMIENTO');
     if (adherencia != null) {
-      buffer.writeln('ADHERENCIA AL TRATAMIENTO');
       buffer.writeln('Porcentaje${sep}${adherencia!["porcentaje"] ?? ""}');
       buffer.writeln('Estado${sep}${adherencia!["estado"] ?? ""}');
       buffer.writeln('Medicamentos${sep}${adherencia!["medicamentos"] ?? ""}');
@@ -598,9 +580,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       buffer.writeln('');
     }
     
-    // ==========================================
-    // 🏁 PIE DE PÁGINA
-    // ==========================================
     buffer.writeln('FIN DEL REPORTE');
     buffer.writeln('Generado por${sep}CardioCare');
     buffer.writeln('Fecha${sep}${DateTime.now().toString()}');
@@ -668,14 +647,37 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     }
   }
 
-  Future<void> loadAdherencia() async {
+  Future<void> _cargarRecomendacionesAdherencia() async {
+    try {
+      final data = await adherenciaService.getRecomendaciones(widget.idPaciente);
+      if (!mounted) return;
+      setState(() {
+        _recomendacionesAdherencia = data;
+      });
+    } catch (e) {
+      debugPrint("❌ Error cargando recomendaciones de adherencia: $e");
+    }
+  }
+
+  Future<void> _cargarDatosAdherencia() async {
+    setState(() => _cargandoAdherencia = true);
     try {
       final data = await adherenciaService.getAdherencia(widget.idPaciente);
-      if (!mounted) return;
-      setState(() => adherencia = data);
+      if (data != null && mounted) {
+        setState(() => adherencia = data);
+      }
+      
+      await _cargarRecomendacionesAdherencia();
+      
     } catch (e) {
-      debugPrint("ERROR ADHERENCIA => $e");
+      debugPrint("❌ Error cargando datos de adherencia: $e");
+    } finally {
+      if (mounted) setState(() => _cargandoAdherencia = false);
     }
+  }
+
+  Future<void> loadAdherencia() async {
+    await _cargarDatosAdherencia();
   }
 
   Future<void> loadAll() async {
@@ -726,7 +728,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   // ==============================================
-  // 🎨 COLORES PARA MÉTRICAS - CORREGIDO
+  // 🎨 COLORES PARA MÉTRICAS
   // ==============================================
   Color _getColorMetrica(dynamic valor, double objetivo) {
     final double val = _toDouble(valor);
@@ -742,9 +744,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return AppTheme.danger;
   }
 
-  // ==============================================
-  // 📐 CONVERTIR A DOUBLE - CORREGIDO
-  // ==============================================
   double _toDouble(dynamic valor) {
     if (valor == null) return 0.0;
     if (valor is double) return valor;
@@ -753,9 +752,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return 0.0;
   }
 
-  // ==============================================
-  // 📝 FORMATEAR MÉTRICA - CORREGIDO
-  // ==============================================
   String _formatMetrica(dynamic valor) {
     if (valor == null) return '0.0';
     if (valor is double) return valor.toStringAsFixed(1);
@@ -800,9 +796,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ==============================================
-  // 📊 RESUMEN DE MÉTRICAS
-  // ==============================================
   Widget _buildMetricasResumen(AccessibilityProvider accessibility, bool isDark) {
     final resumen = metricas['resumen'] as Map? ?? {};
     
@@ -815,62 +808,25 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildResumenItem(
-            '📊',
-            '${resumen['total_signos'] ?? 0}',
-            'Signos',
-            accessibility,
-          ),
-          _buildResumenItem(
-            '💊',
-            '${resumen['total_tratamientos'] ?? 0}',
-            'Tratamientos',
-            accessibility,
-          ),
-          _buildResumenItem(
-            '📅',
-            '${resumen['total_citas'] ?? 0}',
-            'Citas',
-            accessibility,
-          ),
-          _buildResumenItem(
-            '🔔',
-            '${resumen['total_alertas'] ?? 0}',
-            'Alertas',
-            accessibility,
-          ),
+          _buildResumenItem('Total', '${resumen['total_signos'] ?? 0}', 'Signos', accessibility),
+          _buildResumenItem('Total', '${resumen['total_tratamientos'] ?? 0}', 'Tratamientos', accessibility),
+          _buildResumenItem('Total', '${resumen['total_citas'] ?? 0}', 'Citas', accessibility),
+          _buildResumenItem('Total', '${resumen['total_alertas'] ?? 0}', 'Alertas', accessibility),
         ],
       ),
     );
   }
 
-  Widget _buildResumenItem(String icono, String valor, String label, AccessibilityProvider accessibility) {
+  Widget _buildResumenItem(String label, String valor, String subtitulo, AccessibilityProvider accessibility) {
     return Column(
       children: [
-        Text(icono, style: const TextStyle(fontSize: 24)),
+        Text(valor, style: TextStyle(fontSize: 18 * accessibility.fontScale, fontWeight: FontWeight.bold, color: Colors.white)),
         const SizedBox(height: 4),
-        Text(
-          valor,
-          style: TextStyle(
-            fontSize: 18 * accessibility.fontScale,
-            fontWeight: FontWeight.bold,
-            color: Colors.white,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11 * accessibility.fontScale,
-            color: Colors.white70,
-          ),
-        ),
+        Text(subtitulo, style: TextStyle(fontSize: 11 * accessibility.fontScale, color: Colors.white70)),
       ],
     );
   }
 
-  // ==============================================
-  // 📊 GRID DE MÉTRICAS - CORREGIDO
-  // ==============================================
   Widget _buildMetricasGrid(AccessibilityProvider accessibility, bool isDark) {
     return GridView.count(
       shrinkWrap: true,
@@ -880,110 +836,35 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       mainAxisSpacing: 12,
       childAspectRatio: 1.4,
       children: [
-        _buildMetricaCard(
-          '🏥 Cobertura atención',
-          _formatMetrica(metricas['cobertura_atencion']),
-          '%',
-          _getColorMetrica(metricas['cobertura_atencion'] ?? 0, 80.0),
-          Icons.health_and_safety,
-          accessibility,
-          isDark,
-        ),
-        _buildMetricaCard(
-          '📋 Cobertura programa',
-          _formatMetrica(metricas['cobertura_programa']),
-          '%',
-          _getColorMetrica(metricas['cobertura_programa'] ?? 0, 80.0),
-          Icons.assignment,
-          accessibility,
-          isDark,
-        ),
-        _buildMetricaCard(
-          '💊 Adherencia',
-          _formatMetrica(metricas['adherencia_tratamiento']),
-          '%',
-          _getColorMetrica(metricas['adherencia_tratamiento'] ?? 0, 80.0),
-          Icons.medication,
-          accessibility,
-          isDark,
-        ),
-        _buildMetricaCard(
-          '🫁 SpO2 promedio',
-          _formatMetrica(metricas['spo2_promedio']),
-          '%',
-          _getColorMetrica(metricas['spo2_promedio'] ?? 0, 90.0),
-          Icons.air,
-          accessibility,
-          isDark,
-        ),
-        _buildMetricaCard(
-          '📈 Mejoría SpO2',
-          _formatMetrica(metricas['mejoria_spo2']),
-          '%',
-          _getColorMetrica(metricas['mejoria_spo2'] ?? 0, 50.0),
-          Icons.trending_up,
-          accessibility,
-          isDark,
-        ),
-        _buildMetricaCard(
-          '🚭 Fumadores',
-          _formatMetrica(metricas['pacientes_fumadores']),
-          '%',
-          _getColorMetricaInversa(metricas['pacientes_fumadores'] ?? 0, 20.0),
-          Icons.smoke_free,
-          accessibility,
-          isDark,
-        ),
-        _buildMetricaCard(
-          '📝 Desmonte',
-          _formatMetrica(metricas['recomendaciones_desmonte'] ?? 0),
-          '',
-          _getColorMetrica(metricas['recomendaciones_desmonte'] ?? 0, 3.0),
-          Icons.note_add,
-          accessibility,
-          isDark,
-        ),
-        _buildMetricaCard(
-          '📊 Calidad registro',
-          _formatMetrica(metricas['calidad_registro']),
-          '%',
-          _getColorMetrica(metricas['calidad_registro'] ?? 0, 80.0),
-          Icons.verified,
-          accessibility,
-          isDark,
-        ),
+        _buildMetricaCard('Cobertura atención', _formatMetrica(metricas['cobertura_atencion']), '%',
+            _getColorMetrica(metricas['cobertura_atencion'] ?? 0, 80.0), Icons.health_and_safety, accessibility, isDark),
+        _buildMetricaCard('Cobertura programa', _formatMetrica(metricas['cobertura_programa']), '%',
+            _getColorMetrica(metricas['cobertura_programa'] ?? 0, 80.0), Icons.assignment, accessibility, isDark),
+        _buildMetricaCard('Adherencia', _formatMetrica(metricas['adherencia_tratamiento']), '%',
+            _getColorMetrica(metricas['adherencia_tratamiento'] ?? 0, 80.0), Icons.medication, accessibility, isDark),
+        _buildMetricaCard('SpO2 promedio', _formatMetrica(metricas['spo2_promedio']), '%',
+            _getColorMetrica(metricas['spo2_promedio'] ?? 0, 90.0), Icons.air, accessibility, isDark),
+        _buildMetricaCard('Mejoría SpO2', _formatMetrica(metricas['mejoria_spo2']), '%',
+            _getColorMetrica(metricas['mejoria_spo2'] ?? 0, 50.0), Icons.trending_up, accessibility, isDark),
+        _buildMetricaCard('Fumadores', _formatMetrica(metricas['pacientes_fumadores']), '%',
+            _getColorMetricaInversa(metricas['pacientes_fumadores'] ?? 0, 20.0), Icons.smoke_free, accessibility, isDark),
+        _buildMetricaCard('Desmonte', _formatMetrica(metricas['recomendaciones_desmonte'] ?? 0), '',
+            _getColorMetrica(metricas['recomendaciones_desmonte'] ?? 0, 3.0), Icons.note_add, accessibility, isDark),
+        _buildMetricaCard('Calidad registro', _formatMetrica(metricas['calidad_registro']), '%',
+            _getColorMetrica(metricas['calidad_registro'] ?? 0, 80.0), Icons.verified, accessibility, isDark),
       ],
     );
   }
 
-  // ==============================================
-  // 🎴 TARJETA DE MÉTRICA INDIVIDUAL
-  // ==============================================
-  Widget _buildMetricaCard(
-    String titulo,
-    String valor,
-    String unidad,
-    Color color,
-    IconData icono,
-    AccessibilityProvider accessibility,
-    bool isDark,
-  ) {
+  Widget _buildMetricaCard(String titulo, String valor, String unidad, Color color, IconData icono,
+      AccessibilityProvider accessibility, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.gray800 : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: isDark ? null : [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: Border.all(
-          color: isDark ? AppTheme.gray600 : AppTheme.gray200,
-          width: 1,
-        ),
+        boxShadow: isDark ? null : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        border: Border.all(color: isDark ? AppTheme.gray600 : AppTheme.gray200, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -993,23 +874,15 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             children: [
               Container(
                 padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: color.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
                 child: Icon(icono, color: color, size: 18),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
-                  titulo,
-                  style: TextStyle(
-                    fontSize: 10 * accessibility.fontScale,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? AppTheme.gray300 : AppTheme.gray500,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Text(titulo,
+                  style: TextStyle(fontSize: 10 * accessibility.fontScale, fontWeight: FontWeight.w500,
+                      color: isDark ? AppTheme.gray300 : AppTheme.gray500),
+                  maxLines: 2, overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
@@ -1018,22 +891,13 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                valor,
-                style: TextStyle(
-                  fontSize: 24 * accessibility.fontScale,
-                  fontWeight: FontWeight.bold,
-                  color: color,
-                ),
+              Text(valor,
+                style: TextStyle(fontSize: 24 * accessibility.fontScale, fontWeight: FontWeight.bold, color: color),
               ),
               if (unidad.isNotEmpty) ...[
                 const SizedBox(width: 2),
-                Text(
-                  unidad,
-                  style: TextStyle(
-                    fontSize: 12 * accessibility.fontScale,
-                    color: isDark ? AppTheme.gray400 : AppTheme.gray500,
-                  ),
+                Text(unidad,
+                  style: TextStyle(fontSize: 12 * accessibility.fontScale, color: isDark ? AppTheme.gray400 : AppTheme.gray500),
                 ),
               ],
             ],
@@ -1043,46 +907,27 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ==============================================
-  // 📥 BOTÓN DE EXPORTAR MÉTRICAS
-  // ==============================================
   Widget _buildExportMetricasButton(AccessibilityProvider accessibility, bool isDark) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: _exportando ? null : _exportarMetricasCSV,
         icon: _exportando
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.white,
-                ),
-              )
+            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
             : const Icon(Icons.download, size: 22),
-        label: Text(
-          '📊 Exportar métricas a CSV',
-          style: TextStyle(
-            fontSize: 16 * accessibility.fontScale,
-            fontWeight: FontWeight.w600,
-          ),
+        label: Text('Exportar métricas a CSV',
+          style: TextStyle(fontSize: 16 * accessibility.fontScale, fontWeight: FontWeight.w600),
         ),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppTheme.info,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
     );
   }
 
-  // ==============================================
-  // 📥 EXPORTAR MÉTRICAS A CSV
-  // ==============================================
   Future<void> _exportarMetricasCSV() async {
     if (metricas.isEmpty) {
       _snack("No hay métricas para exportar", isError: true);
@@ -1103,15 +948,15 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       await file.writeAsString(csvContent);
       
       if (await file.exists()) {
-        _snack("✅ Métricas guardadas: $fileName");
+        _snack("Métricas guardadas: $fileName");
         _mostrarDialogoArchivoGuardado(path, fileName);
       } else {
-        _snack("❌ Error al guardar métricas", isError: true);
+        _snack("Error al guardar métricas", isError: true);
       }
       
     } catch (e) {
       print("❌ Error exportando métricas: $e");
-      _snack("❌ Error al exportar métricas", isError: true);
+      _snack("Error al exportar métricas", isError: true);
     } finally {
       setState(() => _exportando = false);
     }
@@ -1175,293 +1020,100 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return buffer.toString();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final accessibility = Provider.of<AccessibilityProvider>(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  // ==============================================
+  // 🧭 FUNCIONES DEL TUTORIAL
+  // ==============================================
+  void _abrirTutorial() {
+    setState(() {
+      _mostrarTutorial = true;
+      _pasoTutorial = 0;
+    });
+  }
 
-    return Scaffold(
-      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              color: isDark ? AppTheme.gray800 : AppTheme.white,
+  void _cerrarTutorial() {
+    setState(() => _mostrarTutorial = false);
+  }
+
+  void _siguientePasoTutorial() {
+    if (_pasoTutorial < _pasosTutorial.length - 1) {
+      setState(() => _pasoTutorial++);
+    } else {
+      _cerrarTutorial();
+    }
+  }
+
+  Widget _buildTutorialOverlay() {
+    if (!_mostrarTutorial) return const SizedBox();
+
+    return Stack(
+      children: [
+        ModalBarrier(color: Colors.black.withOpacity(0.6), dismissible: true, onDismiss: _cerrarTutorial),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Theme.of(context).brightness == Brightness.dark ? AppTheme.gray800 : Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 8))],
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 12, 12, 8),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          iconSize: 32,
-                          icon: Icon(Icons.arrow_back, 
-                              color: isDark ? Colors.white : AppTheme.gray700,
-                              size: 32),
-                          onPressed: () => Navigator.pop(context),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                        child: Text("Paso ${_pasoTutorial + 1} de ${_pasosTutorial.length}",
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.primary),
                         ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                widget.nombre,
-                                style: TextStyle(
-                                  color: isDark ? Colors.white : AppTheme.gray700,
-                                  fontSize: 22 * accessibility.fontScale,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                "${signos.length} signos · ${citas.length} citas · ${alertas.length} alertas",
-                                style: TextStyle(
-                                  color: AppTheme.gray500,
-                                  fontSize: 14 * accessibility.fontScale,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // 📥 Botón Exportar
-                        _buildExportButton(),
-                        const SizedBox(width: 4),
-                        // 💬 Chat
-                        Stack(
-                          children: [
-                            IconButton(
-                              iconSize: 32,
-                              icon: Icon(Icons.chat_bubble_outline, 
-                                  color: isDark ? Colors.white : AppTheme.gray700,
-                                  size: 32),
-                              onPressed: abrirChat,
-                            ),
-                            if (mensajesNoLeidos > 0)
-                              Positioned(
-                                right: 8,
-                                top: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: const BoxDecoration(
-                                    color: AppTheme.danger, 
-                                    shape: BoxShape.circle
-                                  ),
-                                  child: Text(
-                                    mensajesNoLeidos.toString(),
-                                    style: const TextStyle(
-                                      color: Colors.white, 
-                                      fontSize: 14, 
-                                      fontWeight: FontWeight.bold
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close, size: 24),
+                        onPressed: _cerrarTutorial,
+                        tooltip: "Saltar tutorial",
+                      ),
+                    ],
                   ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppTheme.gray800 : AppTheme.gray50,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      labelColor: AppTheme.primary,
-                      unselectedLabelColor: AppTheme.gray500,
-                      indicator: const BoxDecoration(),
-                      labelStyle: TextStyle(
-                        fontSize: 14 * accessibility.fontScale,
-                        fontWeight: FontWeight.w600,
+                  const SizedBox(height: 16),
+                  Text(_pasosTutorial[_pasoTutorial],
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500, height: 1.5),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      TextButton(onPressed: _cerrarTutorial, child: const Text("Saltar tutorial")),
+                      ElevatedButton(
+                        onPressed: _siguientePasoTutorial,
+                        style: AppTheme.primaryButtonStyle.copyWith(
+                          padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                        ),
+                        child: Text(_pasoTutorial == _pasosTutorial.length - 1 ? "Finalizar" : "Siguiente"),
                       ),
-                      unselectedLabelStyle: TextStyle(
-                        fontSize: 13 * accessibility.fontScale,
-                      ),
-                      tabs: const [
-                        Tab(icon: Icon(Icons.monitor_heart, size: 24), text: "Signos"),
-                        Tab(icon: Icon(Icons.healing, size: 24), text: "Síntomas"),
-                        Tab(icon: Icon(Icons.medication, size: 24), text: "Trat."),
-                        Tab(icon: Icon(Icons.event, size: 24), text: "Citas"),
-                        Tab(icon: Icon(Icons.warning_amber, size: 24), text: "Alertas"),
-                        Tab(icon: Icon(Icons.lightbulb_outline, size: 24), text: "Recom."),
-                        Tab(icon: Icon(Icons.analytics_outlined, size: 24), text: "Adherencia"),
-                        Tab(icon: Icon(Icons.assessment, size: 24), text: "Métricas"),
-                      ],
-                    ),
+                    ],
                   ),
                 ],
               ),
             ),
-            Expanded(
-              child: loading
-                  ? const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 4,
-                        color: AppTheme.primary,
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: loadAll,
-                      color: AppTheme.primary,
-                      child: TabBarView(
-                        controller: _tabController,
-                        children: [
-                          _signosView(accessibility),
-                          _sintomasView(accessibility, isDark),
-                          _tratamientosView(accessibility, isDark),
-                          _citasView(accessibility, isDark),
-                          _alertasView(accessibility, isDark),
-                          _buildRecomendacionesView(accessibility, isDark),
-                          _buildAdherenciaView(accessibility, isDark),
-                          _buildMetricasView(accessibility, isDark),
-                        ],
-                      ),
-                    ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ==============================================
-  // 🧩 BOTÓN DE EXPORTAR EN APP BAR
-  // ==============================================
-  Widget _buildExportButton() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.primary.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: IconButton(
-        icon: _exportando
-            ? const SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppTheme.primary,
-                ),
-              )
-            : const Icon(Icons.download, color: AppTheme.primary, size: 28),
-        onPressed: _exportando ? null : () => _mostrarDialogoExportar(),
-        tooltip: 'Exportar datos del paciente',
-      ),
-    );
-  }
-
-  // ==============================================
-  // 📋 DIÁLOGO DE EXPORTACIÓN
-  // ==============================================
-  void _mostrarDialogoExportar() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    final tieneDatos = signos.isNotEmpty || sintomas.isNotEmpty || 
-                       tratamientos.isNotEmpty || citas.isNotEmpty || 
-                       alertas.isNotEmpty || recomendaciones.isNotEmpty;
-    
-    if (!tieneDatos) {
-      _snack("No hay datos para exportar", isError: true);
-      return;
-    }
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        backgroundColor: isDark ? AppTheme.gray800 : AppTheme.white,
-        title: Row(
-          children: [
-            Icon(Icons.download, color: AppTheme.primary, size: 28),
-            const SizedBox(width: 12),
-            Text(
-              "Exportar Datos",
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDark ? AppTheme.white : AppTheme.gray700,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              "Se exportarán todos los datos del paciente en formato CSV.",
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? AppTheme.gray300 : AppTheme.gray500,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.info.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.info.withOpacity(0.2)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "📊 Datos a exportar:",
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? AppTheme.gray300 : AppTheme.gray500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    "• ${signos.length} Signos vitales\n"
-                    "• ${sintomas.length} Síntomas\n"
-                    "• ${tratamientos.length} Tratamientos\n"
-                    "• ${citas.length} Citas\n"
-                    "• ${alertas.length} Alertas\n"
-                    "• ${recomendaciones.length} Recomendaciones",
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: isDark ? AppTheme.gray400 : AppTheme.gray500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              "Cancelar",
-              style: TextStyle(
-                fontSize: 15,
-                color: isDark ? AppTheme.gray300 : AppTheme.gray500,
-              ),
-            ),
           ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _exportarPacienteCSV();
-            },
-            icon: const Icon(Icons.download, size: 18),
-            label: const Text("Exportar CSV"),
-            style: AppTheme.primaryButtonStyle,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
-  // ─── ADHERENCIA ───
+  // ==============================================
+  // 📋 VISTA DE ADHERENCIA (SIN CONSISTENCIA)
+  // ==============================================
   Widget _buildAdherenciaView(AccessibilityProvider accessibility, bool isDark) {
+    if (_cargandoAdherencia) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     if (adherencia == null) {
       return _buildEmptyPage(
         "Sin datos de adherencia",
@@ -1473,13 +1125,34 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
     final porcentaje = double.tryParse(adherencia!["porcentaje"].toString()) ?? 0;
     final Color color = porcentaje >= 80 ? AppTheme.success : porcentaje >= 50 ? AppTheme.warning : AppTheme.danger;
+    
+    String estadoSeguimiento;
+    IconData estadoIcono;
+    Color estadoColor;
+    
+    if (porcentaje >= 80) {
+      estadoSeguimiento = "✅ Siguiendo correctamente";
+      estadoIcono = Icons.check_circle;
+      estadoColor = AppTheme.success;
+    } else if (porcentaje >= 50) {
+      estadoSeguimiento = "⚠️ Seguimiento parcial";
+      estadoIcono = Icons.warning_amber;
+      estadoColor = AppTheme.warning;
+    } else {
+      estadoSeguimiento = "❌ Bajo seguimiento";
+      estadoIcono = Icons.error_outline;
+      estadoColor = AppTheme.danger;
+    }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         children: [
+          // ==========================================
+          // 📊 CIRCULAR DE ADHERENCIA
+          // ==========================================
           Container(
-            padding: const EdgeInsets.all(28),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
@@ -1545,7 +1218,36 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     ],
                   ),
                 ),
+                const SizedBox(height: 24),
+                
+                // ✅ INDICADOR DE SEGUIMIENTO
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: estadoColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: estadoColor.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(estadoIcono, color: estadoColor, size: 28),
+                      const SizedBox(width: 12),
+                      Text(
+                        estadoSeguimiento,
+                        style: TextStyle(
+                          fontSize: 16 * accessibility.fontScale,
+                          fontWeight: FontWeight.bold,
+                          color: estadoColor,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
                 const SizedBox(height: 28),
+                
+                // ✅ DETALLE DE ADHERENCIA POR ÁREA
                 _adherenciaItem("Medicamentos", adherencia!["medicamentos"],
                     Icons.medication_outlined, AppTheme.primary, accessibility),
                 const SizedBox(height: 14),
@@ -1556,6 +1258,296 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     Icons.event_outlined, AppTheme.success, accessibility),
               ],
             ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // ==========================================
+          // 💡 RECOMENDACIONES DE ADHERENCIA
+          // ==========================================
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.gray800 : Colors.white,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: isDark ? null : AppTheme.subtleShadow,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.info.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.lightbulb_outline,
+                        color: AppTheme.info,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Recomendaciones de Adherencia",
+                        style: TextStyle(
+                          fontSize: 18 * accessibility.fontScale,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? AppTheme.white : AppTheme.gray700,
+                        ),
+                      ),
+                    ),
+                    if (_recomendacionesAdherencia.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: AppTheme.info,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          "${_recomendacionesAdherencia.length}",
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                if (_recomendacionesAdherencia.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.gray700 : AppTheme.gray50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.check_circle_outline,
+                          size: 40,
+                          color: AppTheme.success,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "¡Excelente! No hay recomendaciones pendientes",
+                          style: TextStyle(
+                            fontSize: 15 * accessibility.fontScale,
+                            color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ..._recomendacionesAdherencia.map((rec) => _buildRecomendacionAdherenciaCard(rec, accessibility, isDark)),
+              ],
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRecomendacionAdherenciaCard(
+    Map<String, dynamic> rec,
+    AccessibilityProvider accessibility,
+    bool isDark,
+  ) {
+    final isSmall = _isSmallScreen(context);
+    final prioridad = rec["prioridad"]?.toString().toUpperCase() ?? "MEDIA";
+    final leida = rec["leida"] == true || rec["leida"] == 1;
+    
+    Color priorityColor;
+    IconData priorityIcon;
+    String priorityLabel;
+    
+    switch (prioridad) {
+      case "ALTA":
+      case "URGENTE":
+        priorityColor = AppTheme.danger;
+        priorityIcon = Icons.priority_high;
+        priorityLabel = "Alta";
+        break;
+      case "MEDIA":
+        priorityColor = AppTheme.warning;
+        priorityIcon = Icons.flag;
+        priorityLabel = "Media";
+        break;
+      default:
+        priorityColor = AppTheme.info;
+        priorityIcon = Icons.flag_outlined;
+        priorityLabel = "Baja";
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(isSmall ? 12 : 16),
+      decoration: BoxDecoration(
+        color: leida 
+            ? (isDark ? AppTheme.gray700.withOpacity(0.5) : AppTheme.gray50)
+            : (isDark ? AppTheme.gray700 : Colors.white),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: leida 
+              ? (isDark ? AppTheme.gray600 : AppTheme.gray200)
+              : priorityColor.withOpacity(0.3),
+          width: leida ? 1 : 2,
+        ),
+        boxShadow: leida ? null : [
+          BoxShadow(
+            color: priorityColor.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: priorityColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  priorityIcon,
+                  color: priorityColor,
+                  size: isSmall ? 18 : 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      rec["titulo"] ?? "Recomendación",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: (isSmall ? 14 : 16) * accessibility.fontScale,
+                        color: leida 
+                            ? (isDark ? AppTheme.gray400 : AppTheme.gray500)
+                            : (isDark ? AppTheme.white : AppTheme.gray700),
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      rec["categoria"] ?? "General",
+                      style: TextStyle(
+                        fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                        color: priorityColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: priorityColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  priorityLabel,
+                  style: TextStyle(
+                    fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                    fontWeight: FontWeight.w600,
+                    color: priorityColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (rec["descripcion"] != null && rec["descripcion"].toString().isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              rec["descripcion"],
+              style: TextStyle(
+                fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                color: leida 
+                    ? (isDark ? AppTheme.gray500 : AppTheme.gray400)
+                    : (isDark ? AppTheme.gray300 : AppTheme.gray600),
+                height: 1.4,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Icon(
+                Icons.calendar_today,
+                size: isSmall ? 12 : 14,
+                color: AppTheme.gray400,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                _formatFecha(rec["fecha"] ?? rec["fechaRegistro"]),
+                style: TextStyle(
+                  fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                  color: AppTheme.gray500,
+                ),
+              ),
+              const Spacer(),
+              if (!leida)
+                TextButton(
+                  onPressed: () async {
+                    final id = rec["idRecomendacion"] ?? rec["id"];
+                    if (id != null) {
+                      final ok = await adherenciaService.marcarRecomendacionLeida(id);
+                      if (ok && mounted) {
+                        _snack("✅ Recomendación marcada como leída");
+                        await _cargarRecomendacionesAdherencia();
+                      }
+                    }
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppTheme.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    "Marcar como leída",
+                    style: TextStyle(
+                      fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              if (leida)
+                Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      size: isSmall ? 14 : 16,
+                      color: AppTheme.success,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Leída",
+                      style: TextStyle(
+                        fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                        color: AppTheme.success,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
           ),
         ],
       ),
@@ -1993,7 +1985,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 MaterialPageRoute(
                   builder: (_) => CrearSignosScreen(
                     idUsuario: widget.idUsuarioPaciente,
-                    idMedico: widget.idMedico,
+                    idMedico: widget.idUsuario,
+                    esPaciente: false,
                   ),
                 ),
               ).then((_) async {
@@ -2605,12 +2598,17 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
+  // ==============================================
+  // 📖 REFERENCIA DE SIGNOS VITALES
+  // ==============================================
   Widget _buildReferenciaSignos(AccessibilityProvider accessibility) {
+    final isSmall = MediaQuery.of(context).size.width < 360;
+    
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppTheme.primary.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppTheme.primary.withOpacity(0.2)),
       ),
       child: Column(
@@ -2618,44 +2616,48 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         children: [
           Row(
             children: [
-              const Icon(Icons.info_outline, size: 22, color: AppTheme.primary),
-              const SizedBox(width: 10),
+              const Icon(Icons.info_outline, size: 20, color: AppTheme.primary),
+              const SizedBox(width: 8),
               Text(
-                "Valores normales de referencia",
+                "Valores de referencia",
                 style: TextStyle(
-                  fontSize: 16 * accessibility.fontScale,
+                  fontSize: 14 * accessibility.fontScale,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.primary,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 14),
-          _filaReferencia("Presión arterial", "menos de 120/80 mmHg", accessibility),
-          _filaReferencia("Frecuencia cardiaca", "entre 60 y 100 lpm", accessibility),
-          _filaReferencia("Oxígeno en sangre", "entre 95% y 100%", accessibility),
+          const SizedBox(height: 12),
+          _filaReferencia("Frecuencia cardíaca", "60-100 lpm", accessibility),
+          _filaReferencia("Presión arterial", "120/80 mmHg", accessibility),
+          _filaReferencia("Saturación O₂", "95-100%", accessibility),
         ],
       ),
     );
   }
 
   Widget _filaReferencia(String nombre, String valor, AccessibilityProvider accessibility) {
+    final isSmall = MediaQuery.of(context).size.width < 360;
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          const Icon(Icons.circle, size: 8, color: AppTheme.primary),
-          const SizedBox(width: 10),
-          Text(
-            nombre,
-            style: TextStyle(fontSize: 15 * accessibility.fontScale),
+          Expanded(
+            child: Text(
+              nombre,
+              style: TextStyle(
+                fontSize: 14 * accessibility.fontScale,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ),
-          const Spacer(),
           Text(
             valor,
             style: TextStyle(
-              fontSize: 15 * accessibility.fontScale,
+              fontSize: 13 * accessibility.fontScale,
               fontWeight: FontWeight.w600,
+              color: AppTheme.primary,
             ),
           ),
         ],
@@ -3273,6 +3275,305 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  bool _isSmallScreen(BuildContext context) => MediaQuery.of(context).size.width < 360;
+
+  @override
+  Widget build(BuildContext context) {
+    final accessibility = Provider.of<AccessibilityProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isSmall = MediaQuery.of(context).size.width < 360;
+
+    return Scaffold(
+      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
+      body: Stack(
+        children: [
+          SafeArea(
+            child: Column(
+              children: [
+                Container(
+                  color: isDark ? AppTheme.gray800 : AppTheme.white,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 12, 12, 8),
+                        child: Row(
+                          children: [
+                            IconButton(
+                              iconSize: 32,
+                              icon: Icon(Icons.arrow_back,
+                                  color: isDark ? Colors.white : AppTheme.gray700,
+                                  size: 32),
+                              onPressed: () => Navigator.pop(context),
+                            ),
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    widget.nombre,
+                                    style: TextStyle(
+                                      color: isDark ? Colors.white : AppTheme.gray700,
+                                      fontSize: isSmall ? 18 : 22 * accessibility.fontScale,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    "${signos.length} signos · ${citas.length} citas · ${alertas.length} alertas",
+                                    style: TextStyle(
+                                      color: AppTheme.gray500,
+                                      fontSize: isSmall ? 12 : 14 * accessibility.fontScale,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            _buildExportButton(),
+                            const SizedBox(width: 4),
+                            IconButton(
+                              iconSize: 32,
+                              icon: const Icon(Icons.help_outline, color: AppTheme.primary, size: 32),
+                              onPressed: _abrirTutorial,
+                              tooltip: "Ayuda y tutorial",
+                            ),
+                            const SizedBox(width: 4),
+                            Stack(
+                              children: [
+                                IconButton(
+                                  iconSize: 32,
+                                  icon: Icon(Icons.chat_bubble_outline,
+                                      color: isDark ? Colors.white : AppTheme.gray700,
+                                      size: 32),
+                                  onPressed: abrirChat,
+                                ),
+                                if (mensajesNoLeidos > 0)
+                                  Positioned(
+                                    right: 8,
+                                    top: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: const BoxDecoration(
+                                        color: AppTheme.danger,
+                                        shape: BoxShape.circle
+                                      ),
+                                      child: Text(
+                                        mensajesNoLeidos.toString(),
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppTheme.gray800 : AppTheme.gray50,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: TabBar(
+                          controller: _tabController,
+                          labelColor: AppTheme.primary,
+                          unselectedLabelColor: AppTheme.gray500,
+                          indicator: const BoxDecoration(),
+                          labelStyle: TextStyle(
+                            fontSize: isSmall ? 12 : 14 * accessibility.fontScale,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          unselectedLabelStyle: TextStyle(
+                            fontSize: isSmall ? 11 : 13 * accessibility.fontScale,
+                          ),
+                          tabs: const [
+                            Tab(icon: Icon(Icons.monitor_heart, size: 24), text: "Signos"),
+                            Tab(icon: Icon(Icons.healing, size: 24), text: "Síntomas"),
+                            Tab(icon: Icon(Icons.medication, size: 24), text: "Trat."),
+                            Tab(icon: Icon(Icons.event, size: 24), text: "Citas"),
+                            Tab(icon: Icon(Icons.warning_amber, size: 24), text: "Alertas"),
+                            Tab(icon: Icon(Icons.lightbulb_outline, size: 24), text: "Recom."),
+                            Tab(icon: Icon(Icons.analytics_outlined, size: 24), text: "Adherencia"),
+                            Tab(icon: Icon(Icons.assessment, size: 24), text: "Métricas"),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: loading
+                      ? const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 4,
+                            color: AppTheme.primary,
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: loadAll,
+                          color: AppTheme.primary,
+                          child: TabBarView(
+                            controller: _tabController,
+                            children: [
+                              _signosView(accessibility),
+                              _sintomasView(accessibility, isDark),
+                              _tratamientosView(accessibility, isDark),
+                              _citasView(accessibility, isDark),
+                              _alertasView(accessibility, isDark),
+                              _buildRecomendacionesView(accessibility, isDark),
+                              _buildAdherenciaView(accessibility, isDark),
+                              _buildMetricasView(accessibility, isDark),
+                            ],
+                          ),
+                        ),
+                ),
+              ],
+            ),
+          ),
+          _buildTutorialOverlay(),
+        ],
+      ),
+    );
+  }
+
+  // ==============================================
+  // 🧩 BOTÓN DE EXPORTAR EN APP BAR
+  // ==============================================
+  Widget _buildExportButton() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: IconButton(
+        icon: _exportando
+            ? const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppTheme.primary,
+                ),
+              )
+            : const Icon(Icons.download, color: AppTheme.primary, size: 28),
+        onPressed: _exportando ? null : () => _mostrarDialogoExportar(),
+        tooltip: 'Exportar datos del paciente',
+      ),
+    );
+  }
+
+  // ==============================================
+  // 📋 DIÁLOGO DE EXPORTACIÓN
+  // ==============================================
+  void _mostrarDialogoExportar() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    final tieneDatos = signos.isNotEmpty || sintomas.isNotEmpty ||
+                       tratamientos.isNotEmpty || citas.isNotEmpty ||
+                       alertas.isNotEmpty || recomendaciones.isNotEmpty;
+    
+    if (!tieneDatos) {
+      _snack("No hay datos para exportar", isError: true);
+      return;
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        backgroundColor: isDark ? AppTheme.gray800 : AppTheme.white,
+        title: Row(
+          children: [
+            Icon(Icons.download, color: AppTheme.primary, size: 28),
+            const SizedBox(width: 12),
+            Text(
+              "Exportar Datos",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: isDark ? AppTheme.white : AppTheme.gray700,
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "Se exportarán todos los datos del paciente en formato CSV.",
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? AppTheme.gray300 : AppTheme.gray500,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.info.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppTheme.info.withOpacity(0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Datos a exportar:",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: isDark ? AppTheme.gray300 : AppTheme.gray500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "• ${signos.length} Signos vitales\n"
+                    "• ${sintomas.length} Síntomas\n"
+                    "• ${tratamientos.length} Tratamientos\n"
+                    "• ${citas.length} Citas\n"
+                    "• ${alertas.length} Alertas\n"
+                    "• ${recomendaciones.length} Recomendaciones",
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(
+              "Cancelar",
+              style: TextStyle(
+                fontSize: 15,
+                color: isDark ? AppTheme.gray300 : AppTheme.gray500,
+              ),
+            ),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _exportarPacienteCSV();
+            },
+            icon: const Icon(Icons.download, size: 18),
+            label: const Text("Exportar CSV"),
+            style: AppTheme.primaryButtonStyle,
+          ),
+        ],
       ),
     );
   }

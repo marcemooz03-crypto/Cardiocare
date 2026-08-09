@@ -238,7 +238,7 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                   ),
                   SizedBox(height: spacing),
 
-                  // 🔧 CAMPO: MÉDICO - CORREGIDO (SIN OVERFLOW)
+                  // 🔧 CAMPO: MÉDICO - CON WRAP (SIN OVERFLOW)
                   Container(
                     decoration: _tarjetaDecoracion(isSmall),
                     child: DropdownButtonFormField<int>(
@@ -264,33 +264,25 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                         
                         return DropdownMenuItem<int>(
                           value: id,
-                          // ✅ ELIMINADO: width fijo. Ahora se adapta automáticamente sin romperse
-                          child: Padding(
-                            padding: EdgeInsets.symmetric(vertical: 4),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  nombre,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                    fontSize: fontSizeBody,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                          child: Wrap(  // ✅ CORREGIDO: Wrap elimina el overflow
+                            spacing: 2,
+                            runSpacing: 2,
+                            children: [
+                              Text(
+                                nombre,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: fontSizeBody,
                                 ),
-                                Text(
-                                  especialidad,
-                                  style: TextStyle(
-                                    fontSize: fontSizeSmall,
-                                    color: Colors.grey[600],
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                " • $especialidad",
+                                style: TextStyle(
+                                  fontSize: fontSizeSmall,
+                                  color: Colors.grey[600],
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
                         );
                       }).toList(),

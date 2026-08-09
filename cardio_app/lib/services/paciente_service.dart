@@ -40,7 +40,6 @@ class PacienteService {
     required String nombrePaciente,
   }) async {
     try {
-      // ✅ Asegurar que el nombre del paciente no esté vacío
       final String nombreFinal = nombrePaciente.isNotEmpty 
           ? nombrePaciente 
           : 'Paciente #$idPaciente';
@@ -109,7 +108,7 @@ class PacienteService {
   Future<bool> enviarSintomaConNivel({
     required int idPaciente,
     required String tipo,
-    required String nivel, // 'bajo', 'medio', 'alto'
+    required String nivel,
     required String descripcion,
     required String nombrePaciente,
   }) async {
@@ -123,11 +122,10 @@ class PacienteService {
   }
 
   // ==============================================
-  // 🫀 SIGNOS VITALES - CORREGIDO
+  // 🫀 SIGNOS VITALES
   // ==============================================
   Future<List<Map<String, dynamic>>> getSignos(int idUsuario) async {
     try {
-      // 🔥 CORREGIDO: Usar ApiConfig en lugar de localhost
       final url = "${ApiConfig.baseUrl}/api/signos/$idUsuario";
       print("📡 SOLICITANDO SIGNOS A: $url");
       

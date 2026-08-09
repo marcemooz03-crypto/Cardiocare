@@ -3,7 +3,6 @@ import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
 
 class MedicoService {
-
   final String baseUrl = "${ApiConfig.baseUrl}/api/medico";
 
   // =========================
@@ -21,9 +20,7 @@ class MedicoService {
       
       final data = jsonDecode(res.body);
       if (data is List) return data;
-      if (data is Map && data["data"] is List) {
-        return data["data"];
-      }
+      if (data is Map && data["data"] is List) return data["data"];
       return [];
     } catch (e) {
       print("❌ Error getMedicosPorPaciente: $e");
@@ -122,6 +119,45 @@ class MedicoService {
   }
 
   // =========================
+  // ✅ OBTENER ID PROFESIONAL POR USUARIO
+  // =========================
+  Future<int?> getIdProfesionalPorUsuario(int idUsuario) async {
+    try {
+      final url = "${ApiConfig.baseUrl}/api/signos/profesional/usuario/$idUsuario";
+      print("🔍 Buscando profesional para usuario: $idUsuario");
+      
+      final res = await http.get(
+        Uri.parse(url),
+        headers: {"Accept": "application/json"},
+      );
+      
+      if (res.statusCode != 200) {
+        print("❌ Error obteniendo profesional: ${res.statusCode}");
+        return null;
+      }
+      
+      final data = jsonDecode(res.body);
+      return data["idProfesional"] as int?;
+    } catch (e) {
+      print("❌ Error getIdProfesionalPorUsuario: $e");
+      return null;
+    }
+  }
+
+  // =========================
+  // ✅ VERIFICAR SI ES PROFESIONAL
+  // =========================
+  Future<bool> esProfesional(int idUsuario) async {
+    try {
+      final idProf = await getIdProfesionalPorUsuario(idUsuario);
+      return idProf != null;
+    } catch (e) {
+      print("❌ Error esProfesional: $e");
+      return false;
+    }
+  }
+
+  // =========================
   // 📋 SÍNTOMAS REPORTADOS
   // =========================
   Future<List<Map<String, dynamic>>> getSintomas(int idUsuario) async {
@@ -188,11 +224,10 @@ class MedicoService {
   }
 
   // =========================
-  // 🩺 OBTENER SIGNOS POR PACIENTE (CORREGIDO)
+  // 🩺 OBTENER SIGNOS POR PACIENTE
   // =========================
   Future<List<Map<String, dynamic>>> getSignosPorPaciente(int idPaciente) async {
     try {
-      // ✅ Primero obtener el idUsuario del paciente
       final idUsuario = await getIdUsuarioPorPaciente(idPaciente);
       
       if (idUsuario == null) {
@@ -234,7 +269,7 @@ class MedicoService {
   }
 
   // =========================
-  // 👤 OBTENER ID USUARIO POR ID PACIENTE (NUEVO)
+  // 👤 OBTENER ID USUARIO POR ID PACIENTE
   // =========================
   Future<int?> getIdUsuarioPorPaciente(int idPaciente) async {
     try {
@@ -394,7 +429,7 @@ class MedicoService {
   }
 
   // =========================
-  // ➕ REGISTRAR SIGNOS
+  // ➕ REGISTRAR SIGNOS (MÉTODO BASE)
   // =========================
   Future<Map<String, dynamic>> crearSigno(Map<String, dynamic> data) async {
     try {
@@ -437,7 +472,7 @@ class MedicoService {
   }
 
   // =========================
-  // ➕ REGISTRAR SIGNOS CON USUARIO
+  // ➕ REGISTRAR SIGNOS CON USUARIO (CORREGIDO)
   // =========================
   Future<Map<String, dynamic>> crearSignoConUsuario({
     required int idUsuario,
@@ -446,13 +481,11 @@ class MedicoService {
     required int presionDiastolica,
     required int frecuenciaCardiaca,
     required int saturacionOxigeno,
-    required int frecuenciaRespiratoria,
-    required double temperatura,
+    String contexto = "Casa",
     String nota = "",
-    String? fechaRegistro,
   }) async {
     try {
-      // Obtener idPaciente
+      // Obtener idPaciente (solo para verificar que existe)
       final idPaciente = await getIdPacientePorUsuario(idUsuario);
       
       if (idPaciente == null) {
@@ -464,6 +497,32 @@ class MedicoService {
       
       print("✅ idPaciente encontrado: $idPaciente para usuario: $idUsuario");
       
+      // ✅ DETERMINAR EL ROL DEL QUE REGISTRA
+      final bool esProf = await esProfesional(idMedico);
+      
+      int registradoPor = idMedico;
+      String rolRegistra = 'paciente';
+      
+      if (esProf) {
+        final idProfesional = await getIdProfesionalPorUsuario(idMedico);
+        if (idProfesional != null) {
+          registradoPor = idProfesional;
+          rolRegistra = 'medico';
+          print("✅ Es médico con idProfesional: $registradoPor");
+        } else {
+          print("⚠️ Es profesional pero no se encontró idProfesional");
+        }
+      } else {
+        if (idUsuario != idMedico) {
+          return {
+            'success': false,
+            'error': 'Un paciente solo puede registrar sus propios signos',
+          };
+        }
+        rolRegistra = 'paciente';
+        print("✅ Es paciente registrando sus propios signos");
+      }
+
       // Validar rangos
       if (presionSistolica < 60 || presionSistolica > 250) {
         return {
@@ -489,21 +548,17 @@ class MedicoService {
           'error': 'Saturación de oxígeno fuera de rango (70-100)',
         };
       }
-      if (temperatura < 33 || temperatura > 42) {
-        return {
-          'success': false,
-          'error': 'Temperatura fuera de rango (33-42)',
-        };
-      }
 
+      // ✅ CONSTRUIR DATOS - SOLO CAMPOS QUE EXISTEN
       final data = {
-        "idUsuario": idUsuario,  // ✅ Cambiar de idPaciente a idUsuario
-        "registradoPor": idMedico, // ✅ Usar registradoPor para el médico
+        "idUsuario": idUsuario,
+        "registradoPor": registradoPor,
         "presionSistolica": presionSistolica,
         "presionDiastolica": presionDiastolica,
         "frecuenciaCardiaca": frecuenciaCardiaca,
         "saturacionOxigeno": saturacionOxigeno,
-        "contexto": nota.trim().isEmpty ? "Registro médico" : nota.trim(),
+        "contexto": nota.trim().isNotEmpty ? nota.trim() : contexto,
+        "rolRegistra": rolRegistra,
       };
 
       print("📦 DATOS A ENVIAR: $data");
@@ -546,7 +601,7 @@ class MedicoService {
   }
 
   // =========================
-  // 📊 OBTENER ALERTAS DEL MÉDICO (NUEVO)
+  // 📊 OBTENER ALERTAS DEL MÉDICO
   // =========================
   Future<List<Map<String, dynamic>>> getAlertasMedico(int idUsuario) async {
     try {
@@ -579,7 +634,7 @@ class MedicoService {
   }
 
   // =========================
-  // 📊 CONTAR ALERTAS NO LEÍDAS DEL MÉDICO (NUEVO)
+  // 📊 CONTAR ALERTAS NO LEÍDAS DEL MÉDICO
   // =========================
   Future<int> contarAlertasNoLeidasMedico(int idUsuario) async {
     try {

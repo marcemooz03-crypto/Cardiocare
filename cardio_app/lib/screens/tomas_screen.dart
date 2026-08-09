@@ -90,7 +90,7 @@ class _TomasScreenState extends State<TomasScreen> {
       // ✅ Cargar las nuevas tomas
       await _cargarTomas();
       
-      _mostrarMensaje("🔄 Tomas regeneradas correctamente", AppTheme.success);
+      _mostrarMensaje("Tomas regeneradas correctamente", AppTheme.success);
     } catch (e) {
       debugPrint("❌ ERROR regenerarTomas => $e");
       _mostrarMensaje("Error al regenerar tomas", AppTheme.danger);
@@ -135,10 +135,10 @@ class _TomasScreenState extends State<TomasScreen> {
         });
         _mostrarMensaje(
           estado == "Tomado" 
-              ? "✅ Medicamento registrado como tomado" 
+              ? "Medicamento registrado como tomado" 
               : estado == "Omitido" 
-                  ? "⚠️ Medicamento marcado como omitido"
-                  : "↺ Estado reiniciado",
+                  ? "Medicamento marcado como omitido"
+                  : "Estado reiniciado",
           estado == "Tomado" ? AppTheme.success : 
           estado == "Omitido" ? AppTheme.warning : 
           AppTheme.info,
@@ -193,7 +193,7 @@ class _TomasScreenState extends State<TomasScreen> {
       
       await _cargarTomas();
       _mostrarMensaje(
-        "🗑️ ${_tomasSeleccionadas.length} toma(s) eliminada(s)",
+        "${_tomasSeleccionadas.length} toma(s) eliminada(s)",
         AppTheme.info,
       );
       _modoSeleccion = false;
@@ -248,7 +248,7 @@ class _TomasScreenState extends State<TomasScreen> {
         setState(() {
           tomas.removeWhere((t) => t["idToma"] == idToma);
         });
-        _mostrarMensaje("🗑️ Toma eliminada correctamente", AppTheme.info);
+        _mostrarMensaje("Toma eliminada correctamente", AppTheme.info);
       }
     } catch (e) {
       debugPrint("❌ ERROR eliminarToma => $e");
@@ -340,14 +340,19 @@ class _TomasScreenState extends State<TomasScreen> {
                     ),
                   ),
                   const Expanded(
-                    child: Text(
-                      "💊 Mis Medicamentos",
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "Mis Medicamentos",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   // ✅ Botón para regenerar tomas
@@ -539,11 +544,11 @@ class _TomasScreenState extends State<TomasScreen> {
         children: [
           Row(
             children: [
-              _buildStatItem("💊 Total", "${tomas.length}", Icons.medication, AppTheme.primary),
+              _buildStatItem("Total", "${tomas.length}", Icons.medication, AppTheme.primary),
               _buildDivider(),
-              _buildStatItem("✅ Tomados", "$tomadas", Icons.check_circle, AppTheme.success),
+              _buildStatItem("Tomados", "$tomadas", Icons.check_circle, AppTheme.success),
               _buildDivider(),
-              _buildStatItem("⏳ Pendientes", "$pendientes", Icons.access_time, AppTheme.warning),
+              _buildStatItem("Pendientes", "$pendientes", Icons.access_time, AppTheme.warning),
             ],
           ),
           const SizedBox(height: 16),
@@ -612,17 +617,23 @@ class _TomasScreenState extends State<TomasScreen> {
   Widget _buildHeader(int count) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : AppTheme.gray700;
+    final isSmall = MediaQuery.of(context).size.width < 360; // Detectar pantalla pequeña
     
     return Row(
       children: [
         Icon(Icons.list_alt, color: AppTheme.primary, size: 24),
         const SizedBox(width: 8),
-        Text(
-          "Medicamentos de hoy",
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: textColor,
+        // ✅ CORREGIDO: Usamos Flexible para evitar overflow
+        Flexible(
+          child: Text(
+            "Medicamentos de hoy",
+            style: TextStyle(
+              fontSize: isSmall ? 16 : 18,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+            ),
+            overflow: TextOverflow.ellipsis, // Si es muy largo, se corta
+            maxLines: 1,
           ),
         ),
         const Spacer(),
@@ -636,25 +647,29 @@ class _TomasScreenState extends State<TomasScreen> {
             child: Text(
               "Selecciona tomas",
               style: TextStyle(
-                fontSize: 13,
+                fontSize: isSmall ? 11 : 13,
                 fontWeight: FontWeight.w600,
                 color: AppTheme.danger,
               ),
             ),
           )
         else
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppTheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              "$count medicamentos",
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.primary,
+          // ✅ CORREGIDO: Usamos FittedBox para que se achique si no cabe
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                "$count medicamentos",
+                style: TextStyle(
+                  fontSize: isSmall ? 11 : 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.primary,
+                ),
               ),
             ),
           ),
@@ -690,8 +705,8 @@ class _TomasScreenState extends State<TomasScreen> {
           const SizedBox(height: 16),
           Text(
             recordatorios.isEmpty 
-                ? "🔕 Sin recordatorios activos" 
-                : "🎉 ¡Sin medicamentos por hoy!",
+                ? "Sin recordatorios activos" 
+                : "¡Sin medicamentos por hoy!",
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -757,7 +772,7 @@ class _TomasScreenState extends State<TomasScreen> {
 
     final estadoData = _getEstadoData(estado);
     final Color estadoColor = estadoData["color"];
-    final String estadoIcon = estadoData["icon"];
+    final IconData estadoIcon = estadoData["icon"];
     final String estadoTexto = estadoData["label"];
     
     final bgColor = isDark ? AppTheme.gray800 : Colors.white;
@@ -827,18 +842,18 @@ class _TomasScreenState extends State<TomasScreen> {
   Map<String, dynamic> _getEstadoData(String estado) {
     switch (estado) {
       case "Tomado":
-        return {"color": AppTheme.success, "icon": "✅", "label": "Tomado"};
+        return {"color": AppTheme.success, "icon": Icons.check_circle, "label": "Tomado"};
       case "Omitido":
-        return {"color": AppTheme.danger, "icon": "❌", "label": "Omitido"};
+        return {"color": AppTheme.danger, "icon": Icons.cancel, "label": "Omitido"};
       default:
-        return {"color": AppTheme.warning, "icon": "⏳", "label": "Pendiente"};
+        return {"color": AppTheme.warning, "icon": Icons.access_time, "label": "Pendiente"};
     }
   }
 
   Widget _buildCardHeader(
     int numero, 
     String nombre, 
-    String estadoIcon, 
+    IconData estadoIcon, 
     String estadoTexto, 
     Color estadoColor,
     bool seleccionada,
@@ -925,13 +940,10 @@ class _TomasScreenState extends State<TomasScreen> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
+                  Icon(
                     estadoIcon,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    color: Colors.white,
+                    size: 16,
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -1074,7 +1086,7 @@ class _TomasScreenState extends State<TomasScreen> {
               children: [
                 Expanded(
                   child: _buildActionButton(
-                    "✅ Tomar",
+                    "Tomar",
                     AppTheme.success,
                     () => _cambiarEstado(t, "Tomado"),
                     Icons.check_circle,
@@ -1083,7 +1095,7 @@ class _TomasScreenState extends State<TomasScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _buildActionButton(
-                    "❌ Omitir",
+                    "Omitir",
                     AppTheme.danger,
                     () => _cambiarEstado(t, "Omitido"),
                     Icons.cancel,
@@ -1095,7 +1107,7 @@ class _TomasScreenState extends State<TomasScreen> {
               children: [
                 Expanded(
                   child: _buildActionButton(
-                    "↺ Deshacer",
+                    "Deshacer",
                     isDark ? AppTheme.gray600 : Colors.grey,
                     () => _cambiarEstado(t, "Pendiente"),
                     Icons.undo,
@@ -1104,7 +1116,7 @@ class _TomasScreenState extends State<TomasScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: _buildActionButton(
-                    "🗑️ Eliminar",
+                    "Eliminar",
                     AppTheme.danger,
                     () => _eliminarTomaIndividual(t),
                     Icons.delete,

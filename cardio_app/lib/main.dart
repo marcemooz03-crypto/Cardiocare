@@ -7,9 +7,14 @@ import 'package:provider/provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'package:flutter/cupertino.dart';
+import 'services/recordatorio_service.dart'; // ✅ Importar servicio de recordatorios
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // ✅ Inicializar notificaciones locales
+  await RecordatorioService.init();
+  
   runApp(
     MultiProvider(
       providers: [
@@ -80,19 +85,24 @@ class CardioCareApp extends StatelessWidget {
       // =========================
       // 🧭 NAVEGACIÓN
       // =========================
-      initialRoute: '/login', // ✅ Ahora inicia en LoginScreen
+      initialRoute: '/login',
       routes: {
-        '/login': (context) => const LoginScreen(), // ✅ Ruta principal
+        '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         '/home': (context) => const HomeScreen(),
-        // Si quieres mantener splash como ruta opcional:
-        // '/splash': (context) => const SplashScreen(),
       },
       
       // =========================
       // 🔧 CONFIGURACIÓN ADICIONAL
       // =========================
       locale: const Locale('es', 'CO'),
+      
+      // ✅ Manejo de errores de navegación
+      onUnknownRoute: (settings) {
+        return MaterialPageRoute(
+          builder: (context) => const LoginScreen(),
+        );
+      },
     );
   }
 
@@ -100,7 +110,6 @@ class CardioCareApp extends StatelessWidget {
   // TEMA CLARO (Normal)
   // ==============================================
   ThemeData _buildLightTheme(AccessibilityProvider accessibility) {
-    // Si está en modo alto contraste, usar tema de alto contraste
     if (accessibility.altoContraste) {
       return _buildHighContrastTheme(accessibility);
     }
@@ -288,7 +297,7 @@ class CardioCareApp extends StatelessWidget {
         color: AppTheme.primary,
       ),
       
-      // Page Transitions (CORREGIDO)
+      // Page Transitions
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),
@@ -302,7 +311,6 @@ class CardioCareApp extends StatelessWidget {
   // TEMA OSCURO (Normal)
   // ==============================================
   ThemeData _buildDarkTheme(AccessibilityProvider accessibility) {
-    // Si está en modo alto contraste, usar tema de alto contraste oscuro
     if (accessibility.altoContraste) {
       return _buildHighContrastTheme(accessibility);
     }
@@ -311,7 +319,6 @@ class CardioCareApp extends StatelessWidget {
       useMaterial3: true,
       brightness: Brightness.dark,
       
-      // Colores principales (versión oscura)
       primaryColor: AppTheme.primaryLight,
       colorScheme: const ColorScheme.dark(
         primary: AppTheme.primaryLight,
@@ -321,10 +328,8 @@ class CardioCareApp extends StatelessWidget {
         background: AppTheme.gray900,
       ),
       
-      // Scaffold
       scaffoldBackgroundColor: AppTheme.gray900,
       
-      // AppBar
       appBarTheme: const AppBarTheme(
         backgroundColor: AppTheme.gray800,
         foregroundColor: AppTheme.white,
@@ -337,7 +342,6 @@ class CardioCareApp extends StatelessWidget {
         ),
       ),
       
-      // Texto
       textTheme: const TextTheme(
         displayLarge: AppTheme.headline1,
         displayMedium: AppTheme.headline2,
@@ -352,7 +356,6 @@ class CardioCareApp extends StatelessWidget {
         displayColor: AppTheme.white,
       ),
       
-      // Cards
       cardTheme: CardThemeData(
         color: AppTheme.gray800,
         elevation: 0,
@@ -362,7 +365,6 @@ class CardioCareApp extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
       ),
       
-      // Inputs
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: AppTheme.gray800,
@@ -383,7 +385,6 @@ class CardioCareApp extends StatelessWidget {
         hintStyle: const TextStyle(color: AppTheme.gray500),
       ),
       
-      // Switch
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
@@ -399,7 +400,6 @@ class CardioCareApp extends StatelessWidget {
         }),
       ),
       
-      // Chip
       chipTheme: ChipThemeData(
         backgroundColor: AppTheme.gray700,
         labelStyle: const TextStyle(fontSize: 12, color: AppTheme.white),
@@ -409,7 +409,6 @@ class CardioCareApp extends StatelessWidget {
         ),
       ),
       
-      // SnackBar
       snackBarTheme: const SnackBarThemeData(
         backgroundColor: AppTheme.gray800,
         contentTextStyle: TextStyle(color: AppTheme.white),
@@ -419,7 +418,6 @@ class CardioCareApp extends StatelessWidget {
         behavior: SnackBarBehavior.floating,
       ),
       
-      // Dialog
       dialogTheme: DialogThemeData(
         backgroundColor: AppTheme.gray800,
         shape: RoundedRectangleBorder(
@@ -430,26 +428,22 @@ class CardioCareApp extends StatelessWidget {
         contentTextStyle: const TextStyle(color: AppTheme.white, fontSize: 14),
       ),
       
-      // Icon Theme
       iconTheme: const IconThemeData(
         color: AppTheme.primaryLight,
       ),
       
-      // Divider
       dividerTheme: const DividerThemeData(
         color: AppTheme.gray600,
         thickness: 1,
         space: 1,
       ),
       
-      // TabBar
       tabBarTheme: const TabBarThemeData(
         labelColor: AppTheme.primaryLight,
         unselectedLabelColor: AppTheme.gray400,
         indicatorSize: TabBarIndicatorSize.label,
       ),
       
-      // Page Transitions (CORREGIDO)
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),
@@ -457,7 +451,6 @@ class CardioCareApp extends StatelessWidget {
         },
       ),
       
-      // Progress Indicator
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AppTheme.primaryLight,
       ),
@@ -613,7 +606,6 @@ class CardioCareApp extends StatelessWidget {
         indicatorSize: TabBarIndicatorSize.label,
       ),
       
-      // Page Transitions (CORREGIDO)
       pageTransitionsTheme: const PageTransitionsTheme(
         builders: {
           TargetPlatform.android: CupertinoPageTransitionsBuilder(),

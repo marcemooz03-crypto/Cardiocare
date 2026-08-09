@@ -1,4 +1,5 @@
 import 'package:cardio_app/screens/citas_screen.dart';
+import 'package:cardio_app/screens/crear_signos_screen.dart';
 import 'package:cardio_app/screens/cuidadores_screen.dart';
 import 'package:cardio_app/screens/tomas_screen.dart';
 import 'package:flutter/material.dart';
@@ -19,7 +20,7 @@ import '../services/signo_service.dart';
 import '../services/recordatorio_service.dart';
 import '../services/recomendacion_service.dart';
 import '../services/auth_service.dart';
-import '../services/admin_service.dart'; // ✅ Agregado para soporte de cuidadores
+import '../services/admin_service.dart';
 
 import 'chat_screen.dart';
 import 'agendar_cita.dart';
@@ -54,7 +55,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   final recordatorioService = RecordatorioService();
   final recomendacionService = RecomendacionService();
   final authService = AuthService();
-  final adminService = AdminService(); // ✅ Para obtener paciente por cuidador
+  final adminService = AdminService();
 
   late TabController _tabController;
 
@@ -67,9 +68,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   List<Map<String, dynamic>> recomendaciones = [];
   List<Map<String, dynamic>> _medicamentosFlat = [];
 
+  // Recordatorios de medicamentos
   final Map<String, Map<String, dynamic>> _recordatoriosBD = {};
   final Map<String, bool> _activoLocal = {};
   final Map<String, String> _horaOriginal = {};
+
+  // ✅ NUEVO: Recordatorios de presión arterial
+  final Map<String, Map<String, dynamic>> _recordatoriosPresionBD = {};
+  final Map<String, bool> _activoPresionLocal = {};
+  final Map<String, String> _horaPresionOriginal = {};
 
   bool _recordatoriosCargados = false;
   bool _tratamientosCargados = false;
@@ -78,6 +85,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   bool _citasCargados = false;
   bool _recomendacionesCargadas = false;
   bool _medicosCargados = false;
+  bool _recordatoriosPresionCargados = false;
 
   bool loading = true;
   int mensajesNoLeidos = 0;
@@ -86,7 +94,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   Map<int, int> _mensajesNoLeidosPorMedico = {};
   Map<int, int> _conversacionesPorMedico = {};
   
-  bool _mostrarGuia = true;
+  bool _mostrarGuia = false;
   int _guiaPaso = 0;
 
   final List<String> _meses = [
@@ -97,7 +105,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   final List<Map<String, String>> _pasosGuia = [
     {'titulo': 'Bienvenido', 'descripcion': 'Esta es su pantalla principal. Aquí puede ver toda su información médica.'},
     {'titulo': 'Sus datos', 'descripcion': 'Aquí ve su nombre, EPS y médico tratante.'},
-    {'titulo': 'Signos vitales', 'descripcion': 'Los signos vitales son registrados por su médico. Usted solo puede verlos.'},
+    {'titulo': 'Signos vitales', 'descripcion': 'Puede registrar sus signos vitales y ver el historial.'},
     {'titulo': 'Medicamentos', 'descripcion': 'En "Trat." puede ver sus medicamentos y activar recordatorios.'},
     {'titulo': 'Registrar síntomas', 'descripcion': 'Use los botones de colores para registrar cómo se siente.'},
     {'titulo': 'Chat con médico', 'descripcion': 'Use el ícono de chat para hablar con su médico.'},
@@ -113,7 +121,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     super.initState();
     _tabController = TabController(length: 6, vsync: this);
     _cargarDatosConCache();
-    _mostrarGuia = true;
+    _mostrarGuia = false;
   }
 
   @override
@@ -128,6 +136,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     return fa.compareTo(fb);
   }
 
+  // ==============================================
+  // 💾 GUARDAR ESTADO DE RECORDATORIOS (MEDICAMENTOS)
+  // ==============================================
   Future<void> _guardarEstadoRecordatorios() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -141,12 +152,37 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         await prefs.setString('${keyPrefix}hora_${entry.key}', entry.value);
       }
       
-      debugPrint("✅ Estado de recordatorios guardado");
+      debugPrint("✅ Estado de recordatorios de medicamentos guardado");
     } catch (e) {
       debugPrint("❌ Error guardando estado: $e");
     }
   }
 
+  // ==============================================
+  // 💾 GUARDAR ESTADO DE RECORDATORIOS DE PRESIÓN
+  // ==============================================
+  Future<void> _guardarEstadoRecordatoriosPresion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keyPrefix = 'recordatorios_presion_${widget.idPaciente}_';
+      
+      for (var entry in _activoPresionLocal.entries) {
+        await prefs.setBool('${keyPrefix}activo_${entry.key}', entry.value);
+      }
+      
+      for (var entry in _horaPresionOriginal.entries) {
+        await prefs.setString('${keyPrefix}hora_${entry.key}', entry.value);
+      }
+      
+      debugPrint("✅ Estado de recordatorios de presión guardado");
+    } catch (e) {
+      debugPrint("❌ Error guardando estado presión: $e");
+    }
+  }
+
+  // ==============================================
+  // 📥 CARGAR ESTADO DE RECORDATORIOS (MEDICAMENTOS)
+  // ==============================================
   Future<void> _cargarEstadoRecordatorios() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -174,9 +210,49 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       }
       
       setState(() {});
-      debugPrint("✅ Estado de recordatorios cargado");
+      debugPrint("✅ Estado de recordatorios de medicamentos cargado");
     } catch (e) {
       debugPrint("❌ Error cargando estado: $e");
+    }
+  }
+
+  // ==============================================
+  // 📥 CARGAR ESTADO DE RECORDATORIOS DE PRESIÓN
+  // ==============================================
+  Future<void> _cargarEstadoRecordatoriosPresion() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keyPrefix = 'recordatorios_presion_${widget.idPaciente}_';
+      
+      // Si ya hay datos cargados, no recargar
+      if (_activoPresionLocal.isNotEmpty && _horaPresionOriginal.isNotEmpty) {
+        return;
+      }
+      
+      // Cargar estado guardado para cada tipo de recordatorio de presión
+      final List<String> tiposPresion = ['mañana', 'tarde', 'noche'];
+      
+      for (var tipo in tiposPresion) {
+        final key = 'presion_$tipo';
+        final activoKey = '${keyPrefix}activo_$key';
+        final horaKey = '${keyPrefix}hora_$key';
+        
+        final activo = prefs.getBool(activoKey);
+        final hora = prefs.getString(horaKey);
+        
+        if (activo != null) {
+          _activoPresionLocal[key] = activo;
+        }
+        
+        if (hora != null && hora.isNotEmpty) {
+          _horaPresionOriginal[key] = hora;
+        }
+      }
+      
+      setState(() {});
+      debugPrint("✅ Estado de recordatorios de presión cargado");
+    } catch (e) {
+      debugPrint("❌ Error cargando estado presión: $e");
     }
   }
 
@@ -212,9 +288,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       _cargarRecomendaciones(),
       _cargarTratamientos(),
       _cargarRecordatorios(),
+      _cargarRecordatoriosPresion(),
     ]);
     
     await _cargarEstadoRecordatorios();
+    await _cargarEstadoRecordatoriosPresion();
     await _cargarTodosLosMensajesNoLeidos();
     
     if (!mounted) return;
@@ -241,7 +319,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   }
 
   // ==============================================
-  // 🔧 CARGAR PERFIL - CORREGIDO (SOPORTA CUIDADORES)
+  // 🔧 CARGAR PERFIL
   // ==============================================
   Future<void> _cargarProfile() async {
     if (paciente != null) return;
@@ -249,7 +327,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     try {
       print("🔍 Cargando perfil para usuario: ${widget.idUsuario}");
       
-      // ✅ Usar AdminService en lugar de ProfileService para soportar cuidadores
       final data = await adminService.getPacientePorUsuario(widget.idUsuario);
       
       print("📦 Datos del paciente: $data");
@@ -358,6 +435,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     } catch (_) {}
   }
 
+  // ==============================================
+  // 📥 CARGAR RECORDATORIOS DE MEDICAMENTOS
+  // ==============================================
   Future<void> _cargarRecordatorios() async {
     if (_recordatoriosCargados && _recordatoriosBD.isNotEmpty) {
       return;
@@ -410,9 +490,60 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
 
       _recordatoriosCargados = true;
       setState(() {});
-      debugPrint("📋 Recordatorios cargados: ${_recordatoriosBD.length}");
+      debugPrint("📋 Recordatorios de medicamentos cargados: ${_recordatoriosBD.length}");
     } catch (e) {
       debugPrint("❌ loadRecordatorios: $e");
+    }
+  }
+
+  // ==============================================
+  // 📥 CARGAR RECORDATORIOS DE PRESIÓN ARTERIAL
+  // ==============================================
+  Future<void> _cargarRecordatoriosPresion() async {
+    if (_recordatoriosPresionCargados && _recordatoriosPresionBD.isNotEmpty) {
+      return;
+    }
+    
+    try {
+      // Crear recordatorios de presión por defecto si no existen
+      _recordatoriosPresionBD.clear();
+      
+      final List<Map<String, dynamic>> tiposPresion = [
+        {'key': 'presion_mañana', 'label': '🌅 Mañana', 'hora': '07:00', 'icon': Icons.wb_sunny},
+        {'key': 'presion_tarde', 'label': '☀️ Tarde', 'hora': '14:00', 'icon': Icons.wb_sunny_outlined},
+        {'key': 'presion_noche', 'label': '🌙 Noche', 'hora': '21:00', 'icon': Icons.nightlight_round},
+      ];
+      
+      for (var tipo in tiposPresion) {
+        final key = tipo['key'] as String;
+        final horaDefecto = tipo['hora'] as String;
+        
+        _recordatoriosPresionBD[key] = {
+          'idRecordatorio': 0,
+          'idPaciente': widget.idPaciente,
+          'tipo': 'presion_arterial',
+          'etiqueta': tipo['label'],
+          'hora': horaDefecto,
+          'activo': 1,
+        };
+        
+        if (!_horaPresionOriginal.containsKey(key)) {
+          _horaPresionOriginal[key] = horaDefecto;
+        }
+        
+        if (!_activoPresionLocal.containsKey(key)) {
+          _activoPresionLocal[key] = true;
+        }
+      }
+      
+      // Cargar estado guardado
+      await _cargarEstadoRecordatoriosPresion();
+      
+      _recordatoriosPresionCargados = true;
+      setState(() {});
+      debugPrint("📋 Recordatorios de presión cargados: ${_recordatoriosPresionBD.length}");
+    } catch (e) {
+      debugPrint("❌ loadRecordatoriosPresion: $e");
     }
   }
 
@@ -424,6 +555,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     _citasCargados = false;
     _recomendacionesCargadas = false;
     _medicosCargados = false;
+    _recordatoriosPresionCargados = false;
     
     await _cargarDatosConCache();
   }
@@ -465,16 +597,19 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     _signosCargados = false;
     await _cargarSignos();
   }
+  Future<void> loadRecordatoriosPresion() async {
+    _recordatoriosPresionCargados = false;
+    await _cargarRecordatoriosPresion();
+  }
 
   // ==============================================
-  // 💬 CARGAR MENSAJES NO LEÍDOS - CORREGIDO
+  // 💬 CARGAR MENSAJES NO LEÍDOS
   // ==============================================
   Future<void> _cargarTodosLosMensajesNoLeidos() async {
     int totalNoLeidos = 0;
     _mensajesNoLeidosPorMedico.clear();
     _conversacionesPorMedico.clear();
     
-    // ✅ Usar widget.idUsuario para el paciente (es el idUsuario correcto)
     final idUsuarioPaciente = widget.idUsuario;
     
     for (var medico in medicos) {
@@ -501,11 +636,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   }
 
   // ==============================================
-  // 💬 ABRIR CHAT CON MÉDICO - CORREGIDO
+  // 💬 ABRIR CHAT CON MÉDICO
   // ==============================================
   Future<void> _abrirChatConMedico(int idMedico, String nombreMedico) async {
     try {
-      // ✅ Usar widget.idUsuario (es el idUsuario del paciente, ej: 24)
       final idUsuarioPaciente = widget.idUsuario;
       
       print("🔍 Abriendo chat: paciente(idUsuario=$idUsuarioPaciente) con medico(idProfesional=$idMedico)");
@@ -527,7 +661,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         MaterialPageRoute(
           builder: (_) => ChatScreen(
             idConversacion: convId,
-            idUsuario: idUsuarioPaciente, // ✅ Usar idUsuario del paciente
+            idUsuario: idUsuarioPaciente,
             nombre: nombreMedico,
             especialista: 'medico',
           ),
@@ -764,6 +898,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
+  // ==============================================
+  // 🔄 TOGGLE RECORDATORIO DE MEDICAMENTO
+  // ==============================================
   Future<void> _toggleRecordatorio(String key, bool nuevoValor, Map<String, dynamic> med) async {
     if (!nuevoValor) {
       try {
@@ -892,6 +1029,67 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       setState(() => _activoLocal[key] = false);
       _snack("❌ Error al activar el recordatorio");
     }
+  }
+
+  // ==============================================
+  // 🔄 TOGGLE RECORDATORIO DE PRESIÓN ARTERIAL
+  // ==============================================
+  Future<void> _toggleRecordatorioPresion(String key, bool nuevoValor, Map<String, dynamic> recordatorio) async {
+    final String etiqueta = recordatorio['etiqueta'] ?? 'Presión arterial';
+    
+    if (!nuevoValor) {
+      setState(() {
+        _activoPresionLocal[key] = false;
+      });
+      await _guardarEstadoRecordatoriosPresion();
+      _snack("Recordatorio de presión desactivado");
+      return;
+    }
+
+    final TimeOfDay? horaSeleccionada = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.now(),
+      helpText: "Seleccione la hora para tomar su presión",
+      cancelText: "Cancelar",
+      confirmText: "Activar",
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppTheme.primary,
+              onPrimary: Colors.white,
+              onSurface: AppTheme.gray700,
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: AppTheme.primary,
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    
+    if (horaSeleccionada == null) {
+      setState(() => _activoPresionLocal[key] = false);
+      return;
+    }
+    
+    final horaFormateada = "${horaSeleccionada.hour.toString().padLeft(2, '0')}:${horaSeleccionada.minute.toString().padLeft(2, '0')}";
+    
+    setState(() {
+      _activoPresionLocal[key] = true;
+      _horaPresionOriginal[key] = horaFormateada;
+      _recordatoriosPresionBD[key] = {
+        ..._recordatoriosPresionBD[key]!,
+        'hora': horaFormateada,
+        'activo': 1,
+      };
+    });
+    
+    await _guardarEstadoRecordatoriosPresion();
+    _snack("Recordatorio de presión activado para $etiqueta a las $horaFormateada");
   }
 
   void abrirCitas() => Navigator.push(context, MaterialPageRoute(builder: (_) => CitasScreen(citas: citas, esMedico: false, )));
@@ -1068,6 +1266,32 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
+  // 🎯 FUNCIÓN PARA ABRIR LA GUÍA MANUALMENTE
+  void _abrirGuia() {
+    setState(() {
+      _mostrarGuia = true;
+      _guiaPaso = 0;
+    });
+  }
+
+  // ==============================================
+  // ➕ REGISTRAR SIGNOS DESDE EL PACIENTE
+  // ==============================================
+  void _registrarSignosPaciente() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CrearSignosScreen(
+          idUsuario: widget.idUsuario,
+          idMedico: widget.idUsuario,
+          esPaciente: true,
+        ),
+      ),
+    ).then((_) {
+      loadSignos();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final accessibility = Provider.of<AccessibilityProvider>(context);
@@ -1134,6 +1358,17 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: IconButton(
+                        icon: Icon(Icons.help_outline, color: Colors.white, size: isSmall ? 22 : 26),
+                        onPressed: _abrirGuia,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: IconButton(
                         icon: Icon(Icons.settings_outlined, color: Colors.white, size: isSmall ? 22 : 26),
                         onPressed: abrirConfiguracion,
                       ),
@@ -1148,7 +1383,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               height: isSmall ? 42 : 50,
               child: TabBar(
                 controller: _tabController,
-                labelColor: AppTheme.primary,
+                labelColor: const Color.fromARGB(255, 30, 52, 138),
                 unselectedLabelColor: AppTheme.gray500,
                 indicator: BoxDecoration(
                   color: AppTheme.primary.withOpacity(0.1),
@@ -1278,6 +1513,21 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       ],
                     ),
                   ),
+                  GestureDetector(
+                    onTap: () => setState(() => _mostrarGuia = false),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.gray200.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.close,
+                        size: isSmall ? 16 : 20,
+                        color: AppTheme.gray500,
+                      ),
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
@@ -1335,7 +1585,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         ),
                       ),
                       child: Text(
-                        "💬 Chat",
+                        "Chat",
                         style: TextStyle(
                           fontSize: (isSmall ? 12 : 15) * accessibility.fontScale,
                         ),
@@ -1348,7 +1598,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       padding: EdgeInsets.symmetric(horizontal: isSmall ? 8 : 12),
                     ),
                     child: Text(
-                      "Cerrar",
+                      "Saltar tutorial",
                       style: TextStyle(
                         fontSize: (isSmall ? 11 : 14) * accessibility.fontScale,
                         color: AppTheme.gray500,
@@ -1450,7 +1700,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              "📊 Mis Signos Vitales",
+                              "Mis Signos Vitales",
                               style: TextStyle(
                                 fontSize: (isSmall ? 15 : 17) * accessibility.fontScale,
                                 fontWeight: FontWeight.bold,
@@ -1459,7 +1709,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              "Tu médico registra tus signos vitales durante las consultas",
+                              "Registra y da seguimiento a tus signos vitales",
                               style: TextStyle(
                                 fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
                                 color: AppTheme.gray500,
@@ -1507,7 +1757,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            "📋 Los signos vitales solo pueden ser registrados por tu médico durante tus consultas. Tú puedes verlos aquí.",
+                            "Registra tus signos vitales para dar seguimiento a tu salud. ¡Mantén un control diario!",
                             style: TextStyle(
                               fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
                               color: AppTheme.gray600,
@@ -1519,6 +1769,27 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     ),
                   ),
                 ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.add, size: 20),
+                label: Text(
+                  "Registrar signos vitales",
+                  style: TextStyle(
+                    fontSize: (isSmall ? 14 : 16) * accessibility.fontScale,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: AppTheme.primaryButtonStyle.copyWith(
+                  padding: WidgetStateProperty.all(
+                    EdgeInsets.symmetric(vertical: isSmall ? 10 : 14),
+                  ),
+                ),
+                onPressed: _registrarSignosPaciente,
               ),
             ),
             const SizedBox(height: 16),
@@ -1583,7 +1854,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
             child: Column(
               children: [
                 Text(
-                  "📝 Los signos vitales son registrados por tu médico",
+                  "¡Registra tus primeros signos vitales!",
                   style: TextStyle(
                     fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
                     color: AppTheme.gray600,
@@ -3060,6 +3331,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.gray800 : Colors.white,
         borderRadius: BorderRadius.circular(18),
@@ -3463,74 +3735,102 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   }
 
   // ==============================================
-  // 📋 TAB RECORDATORIOS
+  // 📋 TAB RECORDATORIOS (CON PRESIÓN ARTERIAL)
   // ==============================================
   Widget _tabRecordatorios(AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
     
-    if (_medicamentosFlat.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.medication_outlined, size: isSmall ? 50 : 64, color: AppTheme.gray300),
-            const SizedBox(height: 16),
-            Text(
-              tratamientos.isEmpty
-                  ? "No hay tratamientos registrados"
-                  : "Los tratamientos no tienen medicamentos",
-              style: TextStyle(
-                fontSize: (isSmall ? 14 : 16) * accessibility.fontScale,
-                color: AppTheme.gray500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      );
-    }
-
     return SingleChildScrollView(
       padding: EdgeInsets.all(isSmall ? 10 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ✅ SECCIÓN: RECORDATORIOS DE PRESIÓN ARTERIAL
           Container(
-            padding: EdgeInsets.all(isSmall ? 8 : 12),
+            padding: EdgeInsets.all(isSmall ? 10 : 14),
+            margin: const EdgeInsets.only(bottom: 16),
             decoration: BoxDecoration(
-              color: AppTheme.info.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.danger.withOpacity(0.1),
+                  AppTheme.danger.withOpacity(0.03),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: AppTheme.danger.withOpacity(0.2),
+                width: 1,
+              ),
             ),
             child: Row(
               children: [
-                Icon(Icons.info_outline, color: AppTheme.info, size: isSmall ? 16 : 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    "Active los recordatorios para tomar su medicamento",
-                    style: TextStyle(
-                      fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
-                      color: AppTheme.info,
-                    ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.danger.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
                   ),
+                  child: Icon(
+                    Icons.bloodtype,
+                    color: AppTheme.danger,
+                    size: isSmall ? 18 : 22,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "🫀 Recordatorios de Presión Arterial",
+                        style: TextStyle(
+                          fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.gray700,
+                        ),
+                      ),
+                      Text(
+                        "Toma tu presión en los horarios recomendados",
+                        style: TextStyle(
+                          fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                          color: AppTheme.gray500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.favorite,
+                  color: AppTheme.danger.withOpacity(0.3),
+                  size: isSmall ? 16 : 20,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
-          ..._medicamentosFlat.map((m) {
-            final key = m["key"] as String;
-            final activo = _activoLocal[key] ?? false;
-            String horaMostrar = _horaOriginal[key] ?? "--:--";
+          
+          // Recordatorios de presión
+          ..._recordatoriosPresionBD.entries.map((entry) {
+            final key = entry.key;
+            final recordatorio = entry.value;
+            final etiqueta = recordatorio['etiqueta'] ?? 'Presión';
+            final activo = _activoPresionLocal[key] ?? false;
+            final hora = _horaPresionOriginal[key] ?? recordatorio['hora'] ?? '--:--';
+            final icono = key.contains('mañana') 
+                ? Icons.wb_sunny 
+                : key.contains('tarde') 
+                    ? Icons.wb_sunny_outlined 
+                    : Icons.nightlight_round;
             
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: EdgeInsets.all(isSmall ? 10 : 14),
               decoration: BoxDecoration(
-                color: activo ? AppTheme.success.withOpacity(0.05) : Colors.white,
+                color: activo ? AppTheme.danger.withOpacity(0.05) : Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: activo ? AppTheme.success.withOpacity(0.4) : AppTheme.gray200,
+                  color: activo ? AppTheme.danger.withOpacity(0.4) : AppTheme.gray200,
                   width: activo ? 2 : 1,
                 ),
                 boxShadow: [
@@ -3547,12 +3847,12 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   Container(
                     padding: EdgeInsets.all(isSmall ? 8 : 10),
                     decoration: BoxDecoration(
-                      color: activo ? AppTheme.success.withOpacity(0.15) : AppTheme.gray200.withOpacity(0.3),
+                      color: activo ? AppTheme.danger.withOpacity(0.15) : AppTheme.gray200.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
-                      Icons.medication,
-                      color: activo ? AppTheme.success : AppTheme.gray500,
+                      icono,
+                      color: activo ? AppTheme.danger : AppTheme.gray500,
                       size: isSmall ? 20 : 24,
                     ),
                   ),
@@ -3563,36 +3863,32 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          m["nombre"] ?? "Medicamento",
+                          etiqueta,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
                             color: activo ? AppTheme.gray700 : AppTheme.gray500,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          "${m["dosis"] ?? ""} - Cada ${m["frecuencia"] ?? ""}",
+                          "Tomar presión arterial",
                           style: TextStyle(
                             fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
                             color: AppTheme.gray500,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                        if (activo && horaMostrar != "--:--") ...[
+                        if (activo && hora != "--:--") ...[
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              Icon(Icons.access_time, size: isSmall ? 12 : 14, color: AppTheme.success),
+                              Icon(Icons.access_time, size: isSmall ? 12 : 14, color: AppTheme.danger),
                               const SizedBox(width: 4),
                               Text(
-                                "$horaMostrar hrs",
+                                "$hora hrs",
                                 style: TextStyle(
                                   fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
-                                  color: AppTheme.success,
+                                  color: AppTheme.danger,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -3602,7 +3898,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         if (!activo) ...[
                           const SizedBox(height: 4),
                           Text(
-                            "Activar recordatorio",
+                            "Activar recordatorio de presión",
                             style: TextStyle(
                               fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
                               color: AppTheme.gray500,
@@ -3614,15 +3910,225 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   ),
                   Switch(
                     value: activo,
-                    activeColor: AppTheme.success,
+                    activeColor: AppTheme.danger,
                     inactiveThumbColor: AppTheme.gray300,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    onChanged: (v) => _toggleRecordatorio(key, v, m),
+                    onChanged: (v) => _toggleRecordatorioPresion(key, v, recordatorio),
                   ),
                 ],
               ),
             );
           }).toList(),
+          
+          const SizedBox(height: 16),
+          Divider(color: AppTheme.gray200, thickness: 1),
+          const SizedBox(height: 16),
+          
+          // ✅ SECCIÓN: RECORDATORIOS DE MEDICAMENTOS
+          if (_medicamentosFlat.isNotEmpty) ...[
+            Container(
+              padding: EdgeInsets.all(isSmall ? 10 : 14),
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.primary.withOpacity(0.1),
+                    AppTheme.primary.withOpacity(0.03),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppTheme.primary.withOpacity(0.2),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.medication,
+                      color: AppTheme.primary,
+                      size: isSmall ? 18 : 22,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "💊 Recordatorios de Medicamentos",
+                          style: TextStyle(
+                            fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.gray700,
+                          ),
+                        ),
+                        Text(
+                          "No olvides tomar tus medicamentos",
+                          style: TextStyle(
+                            fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                            color: AppTheme.gray500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.medication_liquid,
+                    color: AppTheme.primary.withOpacity(0.3),
+                    size: isSmall ? 16 : 20,
+                  ),
+                ],
+              ),
+            ),
+            
+            ..._medicamentosFlat.map((m) {
+              final key = m["key"] as String;
+              final activo = _activoLocal[key] ?? false;
+              String horaMostrar = _horaOriginal[key] ?? "--:--";
+              
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: EdgeInsets.all(isSmall ? 10 : 14),
+                decoration: BoxDecoration(
+                  color: activo ? AppTheme.success.withOpacity(0.05) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: activo ? AppTheme.success.withOpacity(0.4) : AppTheme.gray200,
+                    width: activo ? 2 : 1,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(isSmall ? 8 : 10),
+                      decoration: BoxDecoration(
+                        color: activo ? AppTheme.success.withOpacity(0.15) : AppTheme.gray200.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(
+                        Icons.medication,
+                        color: activo ? AppTheme.success : AppTheme.gray500,
+                        size: isSmall ? 20 : 24,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            m["nombre"] ?? "Medicamento",
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                              color: activo ? AppTheme.gray700 : AppTheme.gray500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            "${m["dosis"] ?? ""} - Cada ${m["frecuencia"] ?? ""}",
+                            style: TextStyle(
+                              fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                              color: AppTheme.gray500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (activo && horaMostrar != "--:--") ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.access_time, size: isSmall ? 12 : 14, color: AppTheme.success),
+                                const SizedBox(width: 4),
+                                Text(
+                                  "$horaMostrar hrs",
+                                  style: TextStyle(
+                                    fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                    color: AppTheme.success,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          if (!activo) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              "Activar recordatorio",
+                              style: TextStyle(
+                                fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                color: AppTheme.gray500,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Switch(
+                      value: activo,
+                      activeColor: AppTheme.success,
+                      inactiveThumbColor: AppTheme.gray300,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      onChanged: (v) => _toggleRecordatorio(key, v, m),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          ] else ...[
+            Container(
+              padding: EdgeInsets.all(isSmall ? 16 : 20),
+              decoration: BoxDecoration(
+                color: AppTheme.gray50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppTheme.gray200.withOpacity(0.5)),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.medication_outlined, size: isSmall ? 40 : 50, color: AppTheme.gray300),
+                  const SizedBox(height: 10),
+                  Text(
+                    "No hay medicamentos registrados",
+                    style: TextStyle(
+                      fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                      color: AppTheme.gray500,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Los medicamentos aparecerán cuando tengas tratamientos activos",
+                    style: TextStyle(
+                      fontSize: (isSmall ? 11 : 12) * accessibility.fontScale,
+                      color: AppTheme.gray400,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          ],
+          
           const SizedBox(height: 80),
         ],
       ),

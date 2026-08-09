@@ -31,9 +31,13 @@ class _ChatScreenState extends State<ChatScreen> {
   bool enviando = false;
   Timer? _timer;
 
+  // 🔥 GUARDAMOS EL NOMBRE DEL MÉDICO PARA MOSTRARLO
+  String _nombreMedico = "";
+
   @override
   void initState() {
     super.initState();
+    _nombreMedico = widget.nombre; // Guardamos el nombre del médico
     _loadMensajes();
     _timer = Timer.periodic(
       const Duration(seconds: 3),
@@ -84,6 +88,7 @@ class _ChatScreenState extends State<ChatScreen> {
         return fa.compareTo(fb);
       });
 
+      // ✅ PROTECCIÓN CONTRA DUPLICADOS
       if (lista.length != mensajes.length) {
         setState(() {
           mensajes = lista;
@@ -180,7 +185,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   bool _esMio(Map<String, dynamic> m) {
-    return int.tryParse(m["idRemitente"]?.toString() ?? "0") == widget.idUsuario;
+    final idRemitente = int.tryParse(m["idRemitente"]?.toString() ?? "0");
+    
+    // 🔥 VERIFICACIÓN: Si el remitente es el ID del paciente, es MÍO.
+    // Si es OTRO número (el médico), NO es mío.
+    return idRemitente == widget.idUsuario;
   }
 
   @override
@@ -202,7 +211,7 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  // ✅ Botón regreso más grande
+                  // ✅ Botón regreso
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
@@ -214,7 +223,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // ✅ Inicial del nombre con fondo
+                  // ✅ Inicial del nombre (Avatar del médico)
                   Container(
                     width: 50,
                     height: 50,
@@ -225,7 +234,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        widget.nombre.isNotEmpty ? widget.nombre[0].toUpperCase() : "M",
+                        _nombreMedico.isNotEmpty ? _nombreMedico[0].toUpperCase() : "M",
                         style: TextStyle(
                           color: AppTheme.primary,
                           fontWeight: FontWeight.bold,
@@ -241,7 +250,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Text(
-                          widget.nombre,
+                          _nombreMedico,
                           style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
@@ -266,7 +275,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ],
                     ),
                   ),
-                  // ✅ Menú de opciones más grande
+                  // ✅ Menú de opciones
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
@@ -322,7 +331,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            // ✅ Opción de eliminar con texto grande
+            // ✅ Opción de eliminar
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(14),
@@ -483,12 +492,12 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
 
-    // ✅ Mostrar inicial del remitente en lugar de imagen
-    bool showInitial = true;
+    // ✅ Lógica de WhatsApp: Avatar solo aparece en el primer mensaje de un bloque
+    bool showAvatar = true;
     if (index > 0) {
       final prev = mensajes[index - 1];
       if (_esMio(prev) == esMio) {
-        showInitial = false;
+        showAvatar = false;
       }
     }
 
@@ -511,23 +520,24 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
           ),
+        // ✅ Usamos un Row con espacio fijo para el avatar
         Padding(
-          padding: EdgeInsets.only(
-            top: showInitial ? 10 : 2,
-            bottom: 2,
-            left: esMio ? 60 : 0,
-            right: esMio ? 0 : 60,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 2),
           child: Row(
             mainAxisAlignment: esMio ? MainAxisAlignment.end : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              if (!esMio) ...[
-                if (showInitial)
-                  // ✅ Inicial del remitente (médico)
-                  Container(
-                    width: 40,
-                    height: 40,
+              // Espacio para el avatar si es mío y no se muestra
+              if (esMio && !showAvatar)
+                const SizedBox(width: 44), // Ancho del avatar + margen
+              
+              // AVATAR DEL MÉDICO (solo para el primer mensaje del bloque del médico)
+              if (!esMio && showAvatar)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Container(
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppTheme.primary.withOpacity(0.15),
@@ -535,7 +545,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        widget.nombre.isNotEmpty ? widget.nombre[0].toUpperCase() : "M",
+                        // ✅ Se usa la inicial del médico (widget.nombre)
+                        _nombreMedico.isNotEmpty ? _nombreMedico[0].toUpperCase() : "M",
                         style: TextStyle(
                           color: AppTheme.primary,
                           fontWeight: FontWeight.bold,
@@ -543,30 +554,27 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                     ),
-                  )
-                else
-                  const SizedBox(width: 48),
-                const SizedBox(width: 10),
-              ],
+                  ),
+                ),
+              
+              // BURBUJA
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    gradient: esMio
-                        ? AppTheme.primaryGradient
-                        : null,
-                    color: esMio ? null : Colors.white,
+                    // ✅ Colores tipo WhatsApp
+                    color: esMio ? const Color(0xFFDCF8C6) : Colors.white,
                     borderRadius: BorderRadius.only(
-                      topLeft: const Radius.circular(22),
-                      topRight: const Radius.circular(22),
-                      bottomLeft: Radius.circular(esMio ? 22 : 6),
-                      bottomRight: Radius.circular(esMio ? 6 : 22),
+                      topLeft: const Radius.circular(20),
+                      topRight: const Radius.circular(20),
+                      bottomLeft: Radius.circular(esMio ? 20 : 4),
+                      bottomRight: Radius.circular(esMio ? 4 : 20),
                     ),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.06),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
                       ),
                     ],
                   ),
@@ -574,29 +582,28 @@ class _ChatScreenState extends State<ChatScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ✅ Texto del mensaje más grande
+                      // ✅ Texto siempre en negro
                       Text(
                         contenido,
-                        style: TextStyle(
-                          fontSize: 18,
-                          height: 1.5,
-                          color: esMio ? Colors.white : AppTheme.gray700,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          color: AppTheme.gray700,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 4),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
                             hora,
                             style: TextStyle(
-                              fontSize: 13,
-                              color: esMio ? Colors.white70 : AppTheme.gray400,
+                              fontSize: 12,
+                              color: esMio ? AppTheme.gray600 : AppTheme.gray400,
                             ),
                           ),
                           if (esMio) ...[
-                            const SizedBox(width: 8),
-                            const Icon(Icons.done_all, size: 18, color: Colors.white70),
+                            const SizedBox(width: 6),
+                            const Icon(Icons.done_all, size: 16, color: AppTheme.gray600),
                           ],
                         ],
                       ),
@@ -604,13 +611,14 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
               ),
-              if (esMio) ...[
-                // ✅ Inicial del remitente (paciente)
-                if (showInitial) ...[
-                  const SizedBox(width: 10),
-                  Container(
-                    width: 40,
-                    height: 40,
+
+              // AVATAR DEL PACIENTE (para mensajes propios, solo el primero del bloque)
+              if (esMio && showAvatar)
+                Padding(
+                  padding: const EdgeInsets.only(left: 10),
+                  child: Container(
+                    width: 36,
+                    height: 36,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: AppTheme.primary.withOpacity(0.15),
@@ -627,10 +635,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       ),
                     ),
                   ),
-                ] else ...[
-                  const SizedBox(width: 48),
-                ],
-              ],
+                ),
             ],
           ),
         ),
@@ -658,7 +663,7 @@ class _ChatScreenState extends State<ChatScreen> {
       child: SafeArea(
         child: Row(
           children: [
-            // ✅ Campo de texto más grande
+            // ✅ Campo de texto
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -691,7 +696,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             const SizedBox(width: 14),
-            // ✅ Botón enviar más grande
+            // ✅ Botón enviar
             GestureDetector(
               onTap: _enviarMensaje,
               child: Container(

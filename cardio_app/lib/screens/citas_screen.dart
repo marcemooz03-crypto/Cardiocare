@@ -360,13 +360,17 @@ class _CitasScreenState extends State<CitasScreen> {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
+        // ✅ TÍTULO EN AZUL REY Y SIN EMOJIS
         title: Text(
-          widget.esMedico ? "📋 Agenda profesional" : "📋 Mis citas médicas",
-          style: const TextStyle(fontWeight: FontWeight.w600),
+          widget.esMedico ? "Agenda profesional" : "Mis citas",
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
         ),
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.blue[800],
+        backgroundColor: const Color.fromARGB(255, 30, 52, 138),
+        foregroundColor: Colors.white,
         centerTitle: false,
         actions: [
           if (_isLoading)
@@ -377,7 +381,7 @@ class _CitasScreenState extends State<CitasScreen> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue[700]!),
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                 ),
               ),
             ),
@@ -385,7 +389,7 @@ class _CitasScreenState extends State<CitasScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _recargarCitas,
-        color: Colors.blue[700],
+        color: const Color.fromARGB(255, 3, 89, 175),
         child: _citas.isEmpty
             ? _buildEmptyState()
             : ListView.builder(
@@ -580,7 +584,7 @@ class _CitasScreenState extends State<CitasScreen> {
                       if (puedeGestionar) ...[
                         Expanded(
                           child: _buildAccionBoton(
-                            texto: '✅ Confirmar',
+                            texto: 'Confirmar',
                             icon: Icons.check,
                             color: Colors.green,
                             onPressed: () => _aprobarCita(cita["idCita"]),
@@ -589,7 +593,7 @@ class _CitasScreenState extends State<CitasScreen> {
                         const SizedBox(width: 12),
                         Expanded(
                           child: _buildAccionBoton(
-                            texto: '❌ Rechazar',
+                            texto: 'Rechazar',
                             icon: Icons.close,
                             color: Colors.red,
                             onPressed: () => _rechazarCita(cita["idCita"]),
@@ -598,7 +602,7 @@ class _CitasScreenState extends State<CitasScreen> {
                       ] else if (puedeCancelar) ...[
                         Expanded(
                           child: _buildAccionBoton(
-                            texto: '🚫 Cancelar cita',
+                            texto: 'Cancelar cita',
                             icon: Icons.cancel,
                             color: Colors.red,
                             onPressed: () => _cancelarCita(cita["idCita"]),
