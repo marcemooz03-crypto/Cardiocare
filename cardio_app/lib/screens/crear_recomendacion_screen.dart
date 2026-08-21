@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../app.theme.dart';
 import '../services/recomendacion_service.dart';
 
 class CrearRecomendacionScreen extends StatefulWidget {
@@ -27,16 +28,10 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
   DateTime? _fechaSeleccionada;
   TimeOfDay? _horaSeleccionada;
 
-  // Solo colores que se usan realmente
-  static const _primary = Color(0xFF2563EB);
-  static const _success = Color(0xFF10B981);
-  static const _warning = Color(0xFFF59E0B);
-  static const _info = Color(0xFF06B6D4);
-
   static const List<Map<String, dynamic>> _categorias = [
     {'nombre': 'Alimentación', 'icono': Icons.restaurant, 'color': Color(0xFFF59E0B)},
     {'nombre': 'Ejercicio', 'icono': Icons.fitness_center, 'color': Color(0xFF10B981)},
-    {'nombre': 'Medicación', 'icono': Icons.medication, 'color': Color(0xFF2563EB)},
+    {'nombre': 'Medicación', 'icono': Icons.medication, 'color': AppTheme.primary},
     {'nombre': 'Hábitos', 'icono': Icons.self_improvement, 'color': Color(0xFF8B5CF6)},
     {'nombre': 'Seguimiento', 'icono': Icons.monitor_heart, 'color': Color(0xFF14B8A6)},
     {'nombre': 'Otros', 'icono': Icons.notes, 'color': Color(0xFF6B7280)},
@@ -55,13 +50,16 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
       SnackBar(
         content: Row(
           children: [
-            Icon(esError ? Icons.error_outline : Icons.check_circle, 
-                 color: Colors.white, size: 20),
+            Icon(
+              esError ? Icons.error_outline : Icons.check_circle,
+              color: Colors.white,
+              size: 20,
+            ),
             const SizedBox(width: 12),
             Expanded(child: Text(mensaje)),
           ],
         ),
-        backgroundColor: esError ? Colors.red : _success,
+        backgroundColor: esError ? AppTheme.danger : AppTheme.success,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -79,7 +77,7 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: _primary),
+            colorScheme: const ColorScheme.light(primary: AppTheme.primary),
           ),
           child: child!,
         );
@@ -97,7 +95,7 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(primary: _primary),
+            colorScheme: const ColorScheme.light(primary: AppTheme.primary),
           ),
           child: child!,
         );
@@ -113,11 +111,11 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
     final descripcion = _descripcionController.text.trim();
 
     if (titulo.isEmpty) {
-      _mostrarMensaje("📝 Por favor, ingrese un título", esError: true);
+      _mostrarMensaje("Por favor, ingrese un título", esError: true);
       return;
     }
     if (descripcion.isEmpty) {
-      _mostrarMensaje("📋 Por favor, ingrese la descripción", esError: true);
+      _mostrarMensaje("Por favor, ingrese la descripción", esError: true);
       return;
     }
 
@@ -135,10 +133,10 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
       if (!mounted) return;
 
       if (ok) {
-        _mostrarMensaje("✓ Recomendación creada exitosamente");
+        _mostrarMensaje("Recomendación creada exitosamente");
         Navigator.pop(context, true);
       } else {
-        _mostrarMensaje("❌ No se pudo crear la recomendación", esError: true);
+        _mostrarMensaje("No se pudo crear la recomendación", esError: true);
       }
     } catch (e) {
       _mostrarMensaje("Error: $e", esError: true);
@@ -155,16 +153,12 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
     final colorCategoria = categoriaActual['color'] as Color;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
+      backgroundColor: AppTheme.gray100,
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(100),
         child: Container(
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [_primary, Color(0xFF60A5FA)],
-            ),
+            gradient: AppTheme.primaryGradient,
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(24),
               bottomRight: Radius.circular(24),
@@ -191,7 +185,7 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
                         child: Column(
                           children: [
                             Text(
-                              "📋 Nueva Recomendación",
+                              "Nueva Recomendación",
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: Colors.white,
@@ -228,24 +222,30 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
             // Tarjeta de título
             _TarjetaModerna(
               icon: Icons.title,
-              color: _primary,
+              color: AppTheme.primary,
               title: "Título de la recomendación",
               child: TextField(
                 controller: _tituloController,
                 textCapitalization: TextCapitalization.sentences,
-                style: const TextStyle(fontSize: 16),
-                decoration: const InputDecoration(
+                style: TextStyle(
+                  fontSize: 16,
+                  color: AppTheme.gray700,
+                ),
+                decoration: InputDecoration(
                   hintText: "Ej: Realizar caminata diaria",
-                  hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                  hintStyle: TextStyle(
+                    color: AppTheme.gray400,
+                    fontSize: 14,
+                  ),
                   border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 8),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
                 ),
               ),
             ),
 
             const SizedBox(height: 16),
 
-            // Tarjeta de categoría mejorada
+            // Tarjeta de categoría
             _TarjetaModerna(
               icon: Icons.category,
               color: colorCategoria,
@@ -280,7 +280,7 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
                             color: sel ? null : Colors.white,
                             borderRadius: BorderRadius.circular(16),
                             border: Border.all(
-                              color: sel ? color : const Color(0xFFE5E7EB),
+                              color: sel ? color : AppTheme.gray200,
                               width: sel ? 0 : 1.5,
                             ),
                             boxShadow: sel
@@ -307,7 +307,7 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
-                                  color: sel ? Colors.white : const Color(0xFF374151),
+                                  color: sel ? Colors.white : AppTheme.gray700,
                                 ),
                               ),
                             ],
@@ -325,17 +325,24 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
             // Tarjeta de descripción
             _TarjetaModerna(
               icon: Icons.description,
-              color: _info,
+              color: AppTheme.info,
               title: "Descripción detallada",
               subtitle: "Explica claramente la recomendación",
               child: TextField(
                 controller: _descripcionController,
                 maxLines: 6,
                 textCapitalization: TextCapitalization.sentences,
-                style: const TextStyle(fontSize: 15, height: 1.4),
-                decoration: const InputDecoration(
-                  hintText: "Describe en detalle la recomendación médica...\n\nEjemplo:\n• Realizar 30 minutos de caminata diaria\n• Mantener una hidratación adecuada\n• Evitar esfuerzos excesivos",
-                  hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14),
+                style: TextStyle(
+                  fontSize: 15,
+                  height: 1.4,
+                  color: AppTheme.gray700,
+                ),
+                decoration: InputDecoration(
+                  hintText: "Describe en detalle la recomendación médica...",
+                  hintStyle: TextStyle(
+                    color: AppTheme.gray400,
+                    fontSize: 14,
+                  ),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -344,10 +351,10 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
 
             const SizedBox(height: 16),
 
-            // Opción de fecha programada (opcional)
+            // Tarjeta de fecha programada
             _TarjetaModerna(
               icon: Icons.schedule,
-              color: _warning,
+              color: AppTheme.warning,
               title: "Programar recordatorio (opcional)",
               subtitle: "Establece una fecha y hora para recordar esta recomendación",
               child: Column(
@@ -363,12 +370,21 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
                         });
                       }
                     },
-                    title: const Text(
+                    title: Text(
                       "Programar recordatorio",
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.gray700,
+                      ),
                     ),
-                    subtitle: const Text("Recibirás una notificación en la fecha seleccionada"),
-                    activeColor: _warning,
+                    subtitle: Text(
+                      "Recibirás una notificación en la fecha seleccionada",
+                      style: TextStyle(
+                        color: AppTheme.gray500,
+                        fontSize: 12,
+                      ),
+                    ),
+                    activeColor: AppTheme.warning,
                     contentPadding: EdgeInsets.zero,
                   ),
                   if (_fechaProgramada) ...[
@@ -382,7 +398,7 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
                                 ? "${_fechaSeleccionada!.day}/${_fechaSeleccionada!.month}/${_fechaSeleccionada!.year}"
                                 : "Seleccionar fecha",
                             onTap: _seleccionarFecha,
-                            color: _warning,
+                            color: AppTheme.warning,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -393,7 +409,7 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
                                 ? _horaSeleccionada!.format(context)
                                 : "Seleccionar hora",
                             onTap: _seleccionarHora,
-                            color: _warning,
+                            color: AppTheme.warning,
                           ),
                         ),
                       ],
@@ -405,7 +421,7 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
 
             const SizedBox(height: 24),
 
-            // Botón guardar mejorado
+            // Botón guardar
             SizedBox(
               width: double.infinity,
               child: AnimatedContainer(
@@ -424,10 +440,13 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
                       : const Icon(Icons.save, size: 22),
                   label: Text(
                     _loading ? "Guardando..." : "Crear recomendación",
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _primary,
+                    backgroundColor: AppTheme.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
@@ -445,17 +464,27 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: _info.withOpacity(0.1),
+                color: AppTheme.info.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppTheme.info.withOpacity(0.2),
+                ),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: _info, size: 18),
+                  Icon(
+                    Icons.info_outline,
+                    color: AppTheme.info,
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       "La recomendación será visible para el paciente en su perfil",
-                      style: TextStyle(fontSize: 12, color: Color(0xFF06B6D4)),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.info,
+                      ),
                     ),
                   ),
                 ],
@@ -519,19 +548,19 @@ class _TarjetaModerna extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1F2937),
+                        color: AppTheme.gray700,
                       ),
                     ),
                     if (subtitle != null) ...[
                       const SizedBox(height: 2),
                       Text(
                         subtitle!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: Color(0xFF6B7280),
+                          color: AppTheme.gray500,
                         ),
                       ),
                     ],
