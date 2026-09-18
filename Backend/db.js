@@ -1,10 +1,10 @@
 const mysql = require('mysql2');
 
 const db = mysql.createConnection({
-  host: 'localhost',
-  user: 'root',
-  password: 'r00t123',
-  database: 'cardiocare'
+  host: 'bbexpzzoxo4utw2mkbdu-mysql.services.clever-cloud.com',
+  user: 'uw0ewr6bfqssqgy9',
+  password: 'T2g3zVpwiIVvQ3JH8tD0',
+  database: 'bbexpzzoxo4utw2mkbdu'
 });
 
 db.connect(err => {

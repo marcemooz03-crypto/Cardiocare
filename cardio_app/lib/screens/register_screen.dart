@@ -38,6 +38,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   bool obscure = true;
   bool obscureConfirm = true;
   bool aceptaTerminos = false;
+  
+  // ✅ NUEVO: Autorización de uso de datos
+  bool autorizaUsoDatos = false;
 
   int? epsSeleccionada;
 
@@ -247,6 +250,12 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
       return;
     }
 
+    // ✅ NUEVO: Validar autorización de uso de datos
+    if (!autorizaUsoDatos) {
+      _mostrarMensaje("Debes autorizar el uso de tus datos", esError: true);
+      return;
+    }
+
     // Validaciones específicas por rol
     if (rol == 3) {
       if (fecha.text.isEmpty) {
@@ -289,11 +298,12 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
       "correo": correo.text.trim(),
       "contrasena": pass.text.trim(),
       "idRol": rol,
+      // ✅ NUEVO: Enviar autorización al backend
+      "autorizaUsoDatos": autorizaUsoDatos,
     };
 
     // 👤 PACIENTE
     if (rol == 3) {
-      // ✅ La fecha ya está en formato YYYY-MM-DD gracias a _selectDate
       data.addAll({
         "fechaNacimiento": fecha.text.isNotEmpty ? fecha.text.trim() : null,
         "genero": genero.text.isEmpty ? null : genero.text.trim(),
@@ -321,7 +331,6 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         final idUsuario = resultado['idUsuario'];
         await prefs.setInt('idUsuario', idUsuario ?? 0);
         
-        // Si es paciente, guardar idPaciente
         if (rol == 3) {
           final idPaciente = resultado['idPaciente'];
           if (idPaciente != null) {
@@ -377,7 +386,7 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
   }
 
   // =====================================================
-  // 📅 SELECT DATE - CORREGIDO (Formato YYYY-MM-DD)
+  // 📅 SELECT DATE
   // =====================================================
   Future<void> _selectDate(TextEditingController controller) async {
     final DateTime? picked = await showDatePicker(
@@ -402,7 +411,6 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
     
     if (picked != null) {
       setState(() {
-        // ✅ Guardar en formato YYYY-MM-DD para el backend
         final year = picked.year;
         final month = picked.month.toString().padLeft(2, '0');
         final day = picked.day.toString().padLeft(2, '0');
@@ -620,6 +628,9 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
         _buildRolSelector(),
         const SizedBox(height: 16),
         _buildTermsCheckbox(),
+        const SizedBox(height: 12),
+        // ✅ NUEVO: Autorización de uso de datos
+        _buildAutorizacionDatos(),
       ],
     );
   }
@@ -676,6 +687,11 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           _buildConfirmationItem("Nombre", nombre.text.trim()),
           _buildConfirmationItem("Correo", correo.text.trim()),
           _buildConfirmationItem("Rol", rolNombre),
+          // ✅ NUEVO: Mostrar autorización en confirmación
+          _buildConfirmationItem(
+            "Autorización datos", 
+            autorizaUsoDatos ? "✅ Autorizado" : "❌ No autorizado"
+          ),
           if (rol == 3) ...[
             _buildConfirmationItem("Fecha de nacimiento", fecha.text.isNotEmpty ? fecha.text : "No especificado"),
             _buildConfirmationItem("Género", genero.text.isNotEmpty ? genero.text : "No especificado"),
@@ -999,6 +1015,78 @@ class _RegisterScreenState extends State<RegisterScreen> with SingleTickerProvid
           ),
         ),
       ],
+    );
+  }
+
+  // =====================================================
+  // ✅ NUEVO: AUTORIZACIÓN DE USO DE DATOS
+  // =====================================================
+  Widget _buildAutorizacionDatos() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accessibility = Provider.of<AccessibilityProvider>(context, listen: false);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.gray700 : AppTheme.info.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: autorizaUsoDatos 
+              ? AppTheme.success.withOpacity(0.3) 
+              : AppTheme.info.withOpacity(0.2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SizedBox(
+                width: 24,
+                height: 24,
+                child: Checkbox(
+                  value: autorizaUsoDatos,
+                  onChanged: (value) {
+                    setState(() => autorizaUsoDatos = value ?? false);
+                  },
+                  activeColor: AppTheme.primary,
+                  checkColor: Colors.white,
+                  side: BorderSide(
+                    color: isDark ? AppTheme.gray400 : AppTheme.gray300,
+                    width: 2,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  "Autorizo el uso de mis datos para fines médicos",
+                  style: TextStyle(
+                    fontSize: 14 * accessibility.fontScale,
+                    fontWeight: FontWeight.w600,
+                    color: isDark ? AppTheme.white : AppTheme.gray700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(left: 32),
+            child: Text(
+              "Autorizo a CardioCare a utilizar mi información personal (nombre, correo, datos de salud) "
+              "exclusivamente para el seguimiento médico, gestión de citas, recordatorios y mejora del servicio. "
+              "Entiendo que mis datos serán tratados con confidencialidad y no serán compartidos con terceros "
+              "sin mi consentimiento expreso.",
+              style: TextStyle(
+                fontSize: 12 * accessibility.fontScale,
+                color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
