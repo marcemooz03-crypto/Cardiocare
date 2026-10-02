@@ -163,14 +163,15 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   // ==============================================
-  // 📅 AGENDAR CITA (MÉDICO)
+  // 📅 AGENDAR CITA (MÉDICO) — CORREGIDO
   // ==============================================
   Future<void> _abrirAgendarCita() async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => AgendarCitaMedicoScreen(
-          idPaciente: widget.idPaciente,
+          // ✅ Usamos idUsuarioPaciente porque la FK de `cita` apunta a usuario.idUsuario
+          idUsuarioPaciente: widget.idUsuarioPaciente,
           idProfesional: widget.idMedico,
           nombrePaciente: widget.nombre,
         ),
@@ -258,10 +259,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       print("🔍 Cargando alertas para paciente: ${widget.idPaciente}");
       final data = await alertaService.getAlertas(widget.idPaciente);
       print("📦 Alertas encontradas: ${data.length}");
-
-      if (data.isNotEmpty) {
-        print("📋 Primera alerta: ${data.first}");
-      }
 
       if (!mounted) return;
       setState(() => alertas = List<Map<String, dynamic>>.from(data));
@@ -378,8 +375,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       final fileName =
           "paciente_${widget.nombre.replaceAll(' ', '_')}_$fecha.csv";
       final path = "${directory.path}/$fileName";
-
-      print("📁 Guardando archivo en: $path");
 
       final file = File(path);
       await file.writeAsString(csvContent);
@@ -640,9 +635,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   Future<void> loadSignos() async {
     try {
       print("🔍 Buscando signos para usuario: ${widget.idUsuarioPaciente}");
-
       final data = await signosService.getSignos(widget.idUsuarioPaciente);
-
       print("📦 Signos encontrados: ${data.length}");
 
       if (!mounted) return;
@@ -671,8 +664,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     } catch (_) {}
   }
 
-  // ✅ CORREGIDO: usa idUsuarioPaciente porque la columna `tratamiento.idPaciente`
-  //    guarda un idUsuario (FK a usuario.idUsuario)
+  // ✅ CORREGIDO: usa idUsuarioPaciente (FK apunta a usuario.idUsuario)
   Future<void> loadTratamientos() async {
     try {
       final data = await tratamientoService.getByPaciente(
@@ -685,12 +677,15 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     }
   }
 
+  // ✅ CORREGIDO: usa idUsuarioPaciente (FK apunta a usuario.idUsuario)
   Future<void> loadCitas() async {
     try {
-      final data = await medicoService.getCitas(widget.idPaciente);
+      final data = await citaService.getByPaciente(widget.idUsuarioPaciente);
       if (!mounted) return;
       setState(() => citas = List<Map<String, dynamic>>.from(data));
-    } catch (_) {}
+    } catch (e) {
+      debugPrint("❌ Error loadCitas: $e");
+    }
   }
 
   Future<void> loadRecomendaciones() async {
@@ -906,9 +901,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ==============================================
-  // ✅ MÉTRICAS GRID — RESPONSIVE
-  // ==============================================
   Widget _buildMetricasGrid(
     AccessibilityProvider accessibility,
     bool isDark,
@@ -1010,9 +1002,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ==============================================
-  // ✅ MÉTRICA CARD — RESPONSIVE
-  // ==============================================
   Widget _buildMetricaCard(
     String titulo,
     String valor,
@@ -1908,7 +1897,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── RECOMENDACIONES (RESPONSIVE) ───
   Widget _buildRecomendacionesView(
       AccessibilityProvider accessibility, bool isDark) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -2287,7 +2275,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── SIGNOS ───
   Widget _signosView(AccessibilityProvider accessibility) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -3201,7 +3188,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── SÍNTOMAS ───
   Widget _sintomasView(AccessibilityProvider accessibility, bool isDark) {
     if (sintomas.isEmpty) {
       return _buildEmptyPage(
@@ -3355,6 +3341,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     context,
                     MaterialPageRoute(
                       builder: (_) => CrearTratamientoScreen(
+                        // ✅ CAMBIO: pasar idUsuarioPaciente
                         idUsuarioPaciente: widget.idUsuarioPaciente,
                         idMedico: widget.idMedico,
                       ),
@@ -3590,7 +3577,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   Widget _buildCitaCard(Map<String, dynamic> c,
       AccessibilityProvider accessibility, bool isDark) {
     final estado = c["estado"]?.toString().toLowerCase() ?? "pendiente";
-    final estadoColor = estado == "aprobada"
+    final estadoColor = estado == "aprobada" || estado == "confirmada"
         ? AppTheme.success
         : estado == "rechazada" || estado == "cancelada"
             ? AppTheme.danger
@@ -3760,7 +3747,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── WIDGETS COMUNES ───
   Widget _buildEmpty(String msg, IconData icon, bool isDark) {
     return Container(
       width: double.infinity,

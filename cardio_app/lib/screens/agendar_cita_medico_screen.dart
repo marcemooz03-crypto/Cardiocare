@@ -6,13 +6,15 @@ import '../services/cita_service.dart';
 import '../services/horario_service.dart';
 
 class AgendarCitaMedicoScreen extends StatefulWidget {
-  final int idPaciente;
+  /// ✅ ID del USUARIO del paciente (usuario.idUsuario).
+  final int idUsuarioPaciente;
+
   final int idProfesional;
   final String nombrePaciente;
 
   const AgendarCitaMedicoScreen({
     super.key,
-    required this.idPaciente,
+    required this.idUsuarioPaciente,
     required this.idProfesional,
     required this.nombrePaciente,
   });
@@ -33,8 +35,17 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
   bool _isLoading = false;
   bool _cargandoHorarios = true;
 
-  /// Mapa: díaSemana (1=Lunes ... 7=Domingo) -> lista de horarios
   Map<int, List<Map<String, dynamic>>> _horariosPorDia = {};
+
+  static const List<String> _nombresDias = [
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+    'Domingo',
+  ];
 
   @override
   void initState() {
@@ -53,15 +64,25 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
   // ==============================================
   Future<void> _cargarHorarios() async {
     try {
+      debugPrint("🔍 Cargando horarios del médico ${widget.idProfesional}");
+
       final data =
           await _horarioService.getByProfesional(widget.idProfesional);
+
+      debugPrint("📦 Horarios recibidos: ${data.length}");
+      debugPrint("📦 Detalle: $data");
+
       if (!mounted) return;
 
       final Map<int, List<Map<String, dynamic>>> agrupados = {};
       for (var h in data) {
-        final dia = h["diaSemana"] as int;
+        final diaRaw = h["diaSemana"];
+        final dia = diaRaw is int ? diaRaw : int.tryParse("$diaRaw") ?? 0;
+        if (dia < 1 || dia > 7) continue;
         agrupados.putIfAbsent(dia, () => []).add(h);
       }
+
+      debugPrint("📦 Agrupados por día: $agrupados");
 
       setState(() {
         _horariosPorDia = agrupados;
@@ -85,7 +106,6 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
       return;
     }
 
-    // Validar de nuevo por seguridad
     final horariosDelDia = _horariosPorDia[_selectedDate!.weekday] ?? [];
     if (!_horaEnRango(_selectedTime!, horariosDelDia)) {
       _mostrarMensajeError(
@@ -105,7 +125,8 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
     );
 
     final datosCita = {
-      "idPaciente": widget.idPaciente,
+      "idPaciente": widget.idUsuarioPaciente,
+      "idUsuario": widget.idUsuarioPaciente,
       "idProfesional": widget.idProfesional,
       "fecha": fechaHoraCompleta.toIso8601String(),
       "motivo": _motivoController.text.trim(),
@@ -175,16 +196,25 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
       return;
     }
 
+    DateTime initialDate = DateTime.now();
+    for (int i = 0; i < 365; i++) {
+      final candidate = DateTime.now().add(Duration(days: i));
+      if (_horariosPorDia.containsKey(candidate.weekday)) {
+        initialDate =
+            DateTime(candidate.year, candidate.month, candidate.day);
+        break;
+      }
+    }
+
     final fechaSeleccionada = await showDatePicker(
       context: context,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 365)),
-      initialDate: DateTime.now(),
+      initialDate: initialDate,
       helpText: 'Selecciona la fecha de la cita',
       cancelText: 'Cancelar',
       confirmText: 'Siguiente',
       selectableDayPredicate: (DateTime dia) {
-        // weekday: 1=Lunes ... 7=Domingo
         return _horariosPorDia.containsKey(dia.weekday);
       },
     );
@@ -193,7 +223,6 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
 
     final horariosDelDia = _horariosPorDia[fechaSeleccionada.weekday] ?? [];
 
-    // Inicializar el picker con el primer rango del día
     TimeOfDay initial = const TimeOfDay(hour: 9, minute: 0);
     if (horariosDelDia.isNotEmpty) {
       initial = _parseHora(horariosDelDia.first["horaInicio"] as String);
@@ -209,7 +238,6 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
 
     if (horaSeleccionada == null) return;
 
-    // ✅ Validar que la hora esté dentro de algún rango
     if (!_horaEnRango(horaSeleccionada, horariosDelDia)) {
       _mostrarMensajeError(
         'La hora seleccionada está fuera de tu horario de atención',
@@ -256,6 +284,185 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
   }
 
   // ==============================================
+  // ✅ NUEVO: TARJETA DE DISPONIBILIDAD DEL MÉDICO
+  // ==============================================
+  Widget _buildDisponibilidadMedico(
+      AccessibilityProvider accessibility, bool isDark) {
+    final List<int> diasOrdenados = _horariosPorDia.keys.toList()..sort();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppTheme.success.withOpacity(0.1)
+            : Colors.green[50],
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? AppTheme.success.withOpacity(0.3)
+              : Colors.green[200]!,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? AppTheme.success.withOpacity(0.2)
+                      : Colors.green[100],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.event_available,
+                  color: isDark ? AppTheme.success : Colors.green[800],
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Tu disponibilidad',
+                      style: TextStyle(
+                        fontSize: 15 * accessibility.fontScale,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? Colors.white : Colors.green[900],
+                      ),
+                    ),
+                    Text(
+                      'Días y horarios en los que atiendes',
+                      style: TextStyle(
+                        fontSize: 12 * accessibility.fontScale,
+                        color: isDark
+                            ? AppTheme.gray300
+                            : Colors.green[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          ...diasOrdenados.map((dia) {
+            final rangos = _horariosPorDia[dia] ?? [];
+            final nombre = _nombresDias[dia - 1];
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 90,
+                    child: Text(
+                      nombre,
+                      style: TextStyle(
+                        fontSize: 12 * accessibility.fontScale,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.green[900],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: rangos.map((r) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppTheme.gray800 : Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isDark
+                                  ? AppTheme.gray600
+                                  : Colors.green[300]!,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.access_time,
+                                size: 13,
+                                color: isDark
+                                    ? AppTheme.success
+                                    : Colors.green[700],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${r["horaInicio"]} - ${r["horaFin"]}',
+                                style: TextStyle(
+                                  fontSize:
+                                      12 * accessibility.fontScale,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? Colors.white
+                                      : Colors.green[800],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? AppTheme.success.withOpacity(0.15)
+                  : Colors.green[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 16,
+                  color: isDark ? AppTheme.success : Colors.green[800],
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Solo podrás agendar citas dentro de estos rangos',
+                    style: TextStyle(
+                      fontSize: 12 * accessibility.fontScale,
+                      color: isDark
+                          ? AppTheme.gray300
+                          : Colors.green[900],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==============================================
   // 🏗 BUILD
   // ==============================================
   @override
@@ -288,9 +495,7 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ─────────────────────────────
-                // 👤 Info del paciente
-                // ─────────────────────────────
+                // Info del paciente
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
@@ -334,9 +539,7 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // ─────────────────────────────
-                // ⚠️ Aviso si no hay horarios
-                // ─────────────────────────────
+                // Aviso si no hay horarios / mostrar disponibilidad
                 if (_cargandoHorarios)
                   const Center(
                     child: Padding(
@@ -372,13 +575,14 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
                         ),
                       ],
                     ),
-                  ),
+                  )
+                else
+                  // ✅ NUEVO: mostrar disponibilidad del médico
+                  _buildDisponibilidadMedico(accessibility, isDark),
 
                 if (sinHorarios) const SizedBox(height: 16),
 
-                // ─────────────────────────────
-                // 📝 Motivo
-                // ─────────────────────────────
+                // Motivo
                 TextFormField(
                   controller: _motivoController,
                   maxLines: 3,
@@ -405,9 +609,7 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
                 ),
                 const SizedBox(height: 12),
 
-                // ─────────────────────────────
-                // 📅 Fecha y hora
-                // ─────────────────────────────
+                // Fecha y hora
                 InkWell(
                   onTap: botonDeshabilitado ? null : _seleccionarFechaYHora,
                   borderRadius: BorderRadius.circular(12),
@@ -453,10 +655,9 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
                                     style: TextStyle(
                                       fontSize:
                                           15 * accessibility.fontScale,
-                                      fontWeight:
-                                          _selectedDate != null
-                                              ? FontWeight.w600
-                                              : FontWeight.normal,
+                                      fontWeight: _selectedDate != null
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
                                       color: _selectedDate != null
                                           ? (isDark
                                               ? Colors.white
@@ -473,11 +674,8 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
                                 size: 16, color: AppTheme.gray400),
                           ],
                         ),
-
-                        // Mostrar horarios disponibles del día elegido
                         if (_selectedDate != null &&
-                            (_horariosPorDia[_selectedDate!.weekday] ??
-                                    [])
+                            (_horariosPorDia[_selectedDate!.weekday] ?? [])
                                 .isNotEmpty) ...[
                           const SizedBox(height: 10),
                           Container(
@@ -515,9 +713,7 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
                 ),
                 const SizedBox(height: 24),
 
-                // ─────────────────────────────
-                // 💾 Botón guardar
-                // ─────────────────────────────
+                // Botón guardar
                 SizedBox(
                   width: double.infinity,
                   height: 56,

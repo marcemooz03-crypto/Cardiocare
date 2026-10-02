@@ -28,7 +28,7 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
   bool _isLoading = false;
   bool _cargandoHorarios = false;
 
-  /// Mapa: díaSemana (1=Lunes ... 7=Domingo) -> lista de horarios del médico
+  /// Mapa: díaSemana (1=Lunes ... 7=Domingo) -> lista de horarios
   Map<int, List<Map<String, dynamic>>> _horariosPorDia = {};
 
   static const List<String> _estadosCita = [
@@ -38,15 +38,18 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
     "Cancelada",
   ];
 
-  // ==============================================
-  // 📱 UTILIDADES DE RESPONSIVE
-  // ==============================================
+  static const List<String> _nombresDias = [
+    'Lunes',
+    'Martes',
+    'Miércoles',
+    'Jueves',
+    'Viernes',
+    'Sábado',
+    'Domingo',
+  ];
+
   bool _isSmallScreen(BuildContext context) =>
       MediaQuery.of(context).size.width < 360;
-
-  bool _isMediumScreen(BuildContext context) =>
-      MediaQuery.of(context).size.width >= 360 &&
-      MediaQuery.of(context).size.width < 600;
 
   @override
   void dispose() {
@@ -60,7 +63,6 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
   Future<void> _cargarHorariosDelMedico(int idProfesional) async {
     setState(() {
       _cargandoHorarios = true;
-      // Reset de fecha/hora al cambiar de médico
       _selectedDate = null;
       _selectedTime = null;
       _horariosPorDia = {};
@@ -72,7 +74,9 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
 
       final Map<int, List<Map<String, dynamic>>> agrupados = {};
       for (var h in data) {
-        final dia = h["diaSemana"] as int;
+        final diaRaw = h["diaSemana"];
+        final dia = diaRaw is int ? diaRaw : int.tryParse("$diaRaw") ?? 0;
+        if (dia < 1 || dia > 7) continue;
         agrupados.putIfAbsent(dia, () => []).add(h);
       }
 
@@ -103,7 +107,6 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
       return;
     }
 
-    // ✅ Validación final contra horarios
     final horariosDelDia = _horariosPorDia[_selectedDate!.weekday] ?? [];
     if (!_horaEnRango(_selectedTime!, horariosDelDia)) {
       _mostrarMensajeError(
@@ -200,26 +203,34 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
       return;
     }
 
+    // ✅ Buscar el próximo día con horario para el initialDate
+    DateTime initialDate = DateTime.now();
+    for (int i = 0; i < 90; i++) {
+      final candidate = DateTime.now().add(Duration(days: i));
+      if (_horariosPorDia.containsKey(candidate.weekday)) {
+        initialDate =
+            DateTime(candidate.year, candidate.month, candidate.day);
+        break;
+      }
+    }
+
     final fechaSeleccionada = await showDatePicker(
       context: context,
       firstDate: DateTime.now(),
       lastDate: DateTime.now().add(const Duration(days: 90)),
-      initialDate: DateTime.now(),
+      initialDate: initialDate,
       helpText: 'Selecciona la fecha',
       cancelText: 'Cancelar',
       confirmText: 'Siguiente',
       selectableDayPredicate: (DateTime dia) {
-        // weekday: 1=Lunes ... 7=Domingo
         return _horariosPorDia.containsKey(dia.weekday);
       },
     );
 
     if (fechaSeleccionada == null || !mounted) return;
 
-    final horariosDelDia =
-        _horariosPorDia[fechaSeleccionada.weekday] ?? [];
+    final horariosDelDia = _horariosPorDia[fechaSeleccionada.weekday] ?? [];
 
-    // Inicializar el picker con el primer rango del día
     TimeOfDay initial = TimeOfDay.now();
     if (horariosDelDia.isNotEmpty) {
       initial = _parseHora(horariosDelDia.first["horaInicio"] as String);
@@ -235,7 +246,6 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
 
     if (horaSeleccionada == null) return;
 
-    // ✅ Validar que la hora esté dentro de algún rango
     if (!_horaEnRango(horaSeleccionada, horariosDelDia)) {
       _mostrarMensajeError(
         'La hora seleccionada está fuera del horario del médico',
@@ -282,15 +292,170 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
   }
 
   // ==============================================
+  // ✅ NUEVO: TARJETA DE DISPONIBILIDAD DEL MÉDICO
+  // ==============================================
+  Widget _buildDisponibilidadMedico(
+      bool isSmall, double fontSizeSmall, double fontSizeBody) {
+    final List<int> diasOrdenados = _horariosPorDia.keys.toList()..sort();
+
+    return Container(
+      padding: EdgeInsets.all(isSmall ? 12 : 16),
+      decoration: BoxDecoration(
+        color: Colors.green[50],
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.green[200]!, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.green[100],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.event_available,
+                  color: Colors.green[800],
+                  size: isSmall ? 18 : 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Disponibilidad del médico',
+                      style: TextStyle(
+                        fontSize: fontSizeBody,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[900],
+                      ),
+                    ),
+                    Text(
+                      'Estos son los días y horarios de atención',
+                      style: TextStyle(
+                        fontSize: fontSizeSmall,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          ...diasOrdenados.map((dia) {
+            final rangos = _horariosPorDia[dia] ?? [];
+            final nombre = _nombresDias[dia - 1];
+
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: isSmall ? 70 : 90,
+                    child: Text(
+                      nombre,
+                      style: TextStyle(
+                        fontSize: fontSizeSmall,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.green[900],
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: rangos.map((r) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: Colors.green[300]!,
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.access_time,
+                                size: isSmall ? 11 : 13,
+                                color: Colors.green[700],
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${r["horaInicio"]} - ${r["horaFin"]}',
+                                style: TextStyle(
+                                  fontSize: fontSizeSmall,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.green[800],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.green[100],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: isSmall ? 14 : 16,
+                  color: Colors.green[800],
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Elige una fecha dentro de estos días y una hora dentro de los rangos mostrados',
+                    style: TextStyle(
+                      fontSize: fontSizeSmall,
+                      color: Colors.green[900],
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==============================================
   // 🏗 BUILD
   // ==============================================
   @override
   Widget build(BuildContext context) {
     final isSmall = _isSmallScreen(context);
-    final isMedium = _isMediumScreen(context);
     final screenHeight = MediaQuery.of(context).size.height;
 
-    // Dimensiones responsivas
     final double paddingHorizontal = isSmall ? 12.0 : 20.0;
     final double paddingVertical = isSmall ? 12.0 : 20.0;
     final double spacing = isSmall ? 12.0 : 16.0;
@@ -300,8 +465,7 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
     final double fontSizeSmall = isSmall ? 11.0 : 12.0;
     final double iconSize = isSmall ? 20.0 : 22.0;
 
-    final bool sinHorarios =
-        _selectedMedicoId != null &&
+    final bool sinHorarios = _selectedMedicoId != null &&
         !_cargandoHorarios &&
         _horariosPorDia.isEmpty;
 
@@ -367,7 +531,7 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                   ),
                   SizedBox(height: spacing),
 
-                  // 🔧 CAMPO: MÉDICO
+                  // CAMPO: MÉDICO
                   Container(
                     decoration: _tarjetaDecoracion(isSmall),
                     child: DropdownButtonFormField<int>(
@@ -427,34 +591,49 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                     ),
                   ),
 
-                  // Indicador de carga de horarios
+                  // Cargando horarios
                   if (_cargandoHorarios) ...[
                     SizedBox(height: spacing),
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.blue[700]!,
+                    Container(
+                      padding: EdgeInsets.all(isSmall ? 12 : 16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue[200]!),
+                      ),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Colors.blue[700]!,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          'Cargando horarios del médico...',
-                          style: TextStyle(
-                            fontSize: fontSizeSmall,
-                            color: Colors.grey[600],
+                          const SizedBox(width: 10),
+                          Text(
+                            'Consultando disponibilidad del médico...',
+                            style: TextStyle(
+                              fontSize: fontSizeSmall,
+                              color: Colors.blue[800],
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
+                  ]
+                  // Mostrar disponibilidad si hay horarios
+                  else if (_selectedMedicoId != null &&
+                      _horariosPorDia.isNotEmpty) ...[
+                    SizedBox(height: spacing),
+                    _buildDisponibilidadMedico(
+                        isSmall, fontSizeSmall, fontSizeBody),
                   ],
 
-                  // Aviso si el médico no tiene horarios
+                  // Aviso si no hay horarios
                   if (sinHorarios) ...[
                     SizedBox(height: spacing),
                     Container(
@@ -583,8 +762,6 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                                 ),
                               ],
                             ),
-
-                            // Mostrar horarios disponibles del día elegido
                             if (_selectedDate != null &&
                                 (_horariosPorDia[_selectedDate!.weekday] ??
                                         [])
@@ -628,7 +805,6 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                   ),
                   SizedBox(height: isSmall ? 8 : 12),
 
-                  // Mensaje informativo horarios generales
                   Row(
                     children: [
                       Icon(
@@ -652,7 +828,6 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
                   ),
                   SizedBox(height: isSmall ? 24 : 32),
 
-                  // Botón principal
                   SizedBox(
                     width: double.infinity,
                     height: buttonHeight,
@@ -709,7 +884,6 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
   }
 
   InputDecoration _inputDecoracion(String label, IconData icon, bool isSmall) {
-    final double fontSize = isSmall ? 13.0 : 14.0;
     final double fontSizeLabel = isSmall ? 12.0 : 13.0;
     final double iconSize = isSmall ? 18.0 : 22.0;
     final double paddingVertical = isSmall ? 12.0 : 16.0;
