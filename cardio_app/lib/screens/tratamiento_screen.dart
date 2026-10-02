@@ -7,13 +7,13 @@ import '../services/tratamiento_service.dart';
 class CrearTratamientoScreen extends StatefulWidget {
   /// ✅ ID del USUARIO del paciente (no el idPaciente).
   /// La tabla `tratamiento` tiene una FK a `usuario(idUsuario)`.
-  final int idUsuarioPaciente;
+  final int idPaciente;
 
   final int idMedico;
 
   const CrearTratamientoScreen({
     super.key,
-    required this.idUsuarioPaciente,
+    required this.idPaciente,
     required this.idMedico,
   });
 
@@ -272,8 +272,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
       //    Además incluimos `idPaciente` con el mismo valor por compatibilidad con el backend,
       //    en caso de que el controller lo espere con ese nombre.
       final tratamientoData = {
-        "idPaciente": widget.idUsuarioPaciente, // 👈 ID de usuario (así lo espera la FK)
-        "idUsuario": widget.idUsuarioPaciente,  // 👈 alias por si el backend usa este nombre
+        "idPaciente": widget.idPaciente, // 👈 ID de usuario (así lo espera la FK)  // 👈 alias por si el backend usa este nombre
         "idMedico": widget.idMedico,
         "idSintoma": _sintomaSeleccionadoId,
         "descripcion": _descripcionController.text.trim(),

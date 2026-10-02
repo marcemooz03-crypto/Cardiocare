@@ -34,16 +34,47 @@ function normalizarEstado(estado, defaultValue = 'Pendiente') {
 }
 
 // ============================
-// 🟢 CREAR CITA
+// 🧠 VALIDACIONES (igual que en signos)
+// ============================
+
+/**
+ * Verifica que el idPaciente exista en la tabla paciente
+ * y devuelve sus datos (idPaciente, idUsuario, nombre, correo)
+ */
+function existePaciente(idPaciente, callback) {
+  const sql = `
+    SELECT p.idPaciente, p.idUsuario, u.nombre, u.correo
+    FROM paciente p
+    JOIN usuario u ON p.idUsuario = u.idUsuario
+    WHERE p.idPaciente = ?
+  `;
+  db.query(sql, [idPaciente], (err, result) => {
+    if (err) return callback(err, false, null);
+    return callback(null, result.length > 0, result[0]);
+  });
+}
+
+/**
+ * Verifica que el idProfesional exista en profesionalsalud
+ */
+function existeProfesional(idProfesional, callback) {
+  const sql = `
+    SELECT ps.idProfesional, ps.idUsuario, u.nombre, u.correo
+    FROM profesionalsalud ps
+    JOIN usuario u ON ps.idUsuario = u.idUsuario
+    WHERE ps.idProfesional = ?
+  `;
+  db.query(sql, [idProfesional], (err, result) => {
+    if (err) return callback(err, false, null);
+    return callback(null, result.length > 0, result[0]);
+  });
+}
+
+// ============================
+// 🟢 CREAR CITA (VALIDA PACIENTE Y PROFESIONAL)
 // ============================
 exports.crearCita = (req, res) => {
-  const {
-    idPaciente,
-    idProfesional,
-    fecha,
-    motivo,
-    estado
-  } = req.body;
+  const { idPaciente, idProfesional, fecha, motivo, estado } = req.body;
 
   // ✅ Validación de campos obligatorios
   if (!idPaciente || !idProfesional || !fecha || !motivo) {
@@ -55,41 +86,78 @@ exports.crearCita = (req, res) => {
   }
 
   // ✅ Normalizar estado
-  let estadoFinal = normalizarEstado(estado, 'Pendiente');
-  if (!estadoFinal) {
-    estadoFinal = 'Pendiente';
-  }
+  const estadoFinal = normalizarEstado(estado, 'Pendiente') || 'Pendiente';
 
-  const sql = `
-    INSERT INTO cita
-    (idPaciente, idProfesional, fecha, motivo, estado)
-    VALUES (?, ?, ?, ?, ?)
-  `;
+  // 1️⃣ VERIFICAR QUE EL PACIENTE EXISTE
+  existePaciente(idPaciente, (errPac, pacienteExiste, paciente) => {
+    if (errPac) {
+      console.log("❌ Error verificando paciente:", errPac);
+      return res.status(500).json({
+        ok: false,
+        error: errPac.sqlMessage || errPac.message
+      });
+    }
 
-  db.query(
-    sql,
-    [idPaciente, idProfesional, fecha, motivo, estadoFinal],
-    (err, result) => {
-      if (err) {
-        console.log("❌ Error creando cita:", err);
+    if (!pacienteExiste) {
+      return res.status(400).json({
+        ok: false,
+        message: `El paciente ${idPaciente} no está registrado como paciente`
+      });
+    }
+
+    // 2️⃣ VERIFICAR QUE EL PROFESIONAL EXISTE
+    existeProfesional(idProfesional, (errProf, profesionalExiste) => {
+      if (errProf) {
+        console.log("❌ Error verificando profesional:", errProf);
         return res.status(500).json({
           ok: false,
-          error: err.sqlMessage || err.message
+          error: errProf.sqlMessage || errProf.message
         });
       }
 
-      res.status(201).json({
-        ok: true,
-        idCita: result.insertId,
-        message: "Cita creada correctamente",
-        estado: estadoFinal
-      });
-    }
-  );
+      if (!profesionalExiste) {
+        return res.status(400).json({
+          ok: false,
+          message: `El profesional ${idProfesional} no está registrado como profesional de salud`
+        });
+      }
+
+      // 3️⃣ INSERTAR CITA
+      const sql = `
+        INSERT INTO cita
+        (idPaciente, idProfesional, fecha, motivo, estado)
+        VALUES (?, ?, ?, ?, ?)
+      `;
+
+      db.query(
+        sql,
+        [idPaciente, idProfesional, fecha, motivo, estadoFinal],
+        (err, result) => {
+          if (err) {
+            console.log("❌ Error creando cita:", err);
+            return res.status(500).json({
+              ok: false,
+              error: err.sqlMessage || err.message
+            });
+          }
+
+          console.log(`✅ Cita creada (ID: ${result.insertId}) para paciente ${paciente.nombre}`);
+
+          res.status(201).json({
+            ok: true,
+            idCita: result.insertId,
+            message: "Cita creada correctamente",
+            estado: estadoFinal,
+            paciente: paciente.nombre
+          });
+        }
+      );
+    });
+  });
 };
 
 // ============================
-// 📅 CITA POR PACIENTE
+// 📅 CITA POR PACIENTE (VALIDA PACIENTE)
 // ============================
 exports.getByPaciente = (req, res) => {
   const { idPaciente } = req.params;
@@ -101,35 +169,53 @@ exports.getByPaciente = (req, res) => {
     });
   }
 
-  // ✅ JOIN con profesionalsalud para traer nombre del médico
-  const sql = `
-    SELECT
-      c.idCita,
-      c.idPaciente,
-      c.idProfesional,
-      c.fecha,
-      c.motivo,
-      c.estado,
-      p.nombre       AS medicoNombre,
-      p.especialidad AS medicoEspecialidad
-    FROM cita c
-    LEFT JOIN profesionalsalud p
-      ON p.idProfesional = c.idProfesional
-    WHERE c.idPaciente = ?
-    ORDER BY c.fecha DESC
-  `;
-
-  db.query(sql, [idPaciente], (err, result) => {
-    if (err) {
-      console.log("❌ Error obteniendo citas por paciente:", err);
+  // ✅ Verificar que el paciente existe
+  existePaciente(idPaciente, (errPac, pacienteExiste) => {
+    if (errPac) {
+      console.log("❌ Error verificando paciente:", errPac);
       return res.status(500).json({
         ok: false,
-        error: err.sqlMessage || err.message
+        error: errPac.sqlMessage || errPac.message
       });
     }
 
-    // ✅ Devuelve el array directamente (como espera el frontend)
-    res.json(result);
+    if (!pacienteExiste) {
+      return res.status(404).json({
+        ok: false,
+        message: `El paciente ${idPaciente} no está registrado`
+      });
+    }
+
+    // ✅ JOIN con profesionalsalud para traer nombre del médico
+    const sql = `
+      SELECT
+        c.idCita,
+        c.idPaciente,
+        c.idProfesional,
+        c.fecha,
+        c.motivo,
+        c.estado,
+        p.nombre       AS medicoNombre,
+        p.especialidad AS medicoEspecialidad
+      FROM cita c
+      LEFT JOIN profesionalsalud p
+        ON p.idProfesional = c.idProfesional
+      WHERE c.idPaciente = ?
+      ORDER BY c.fecha DESC
+    `;
+
+    db.query(sql, [idPaciente], (err, result) => {
+      if (err) {
+        console.log("❌ Error obteniendo citas por paciente:", err);
+        return res.status(500).json({
+          ok: false,
+          error: err.sqlMessage || err.message
+        });
+      }
+
+      // ✅ Devuelve el array directamente (como espera el frontend)
+      res.json(result);
+    });
   });
 };
 
@@ -287,7 +373,7 @@ exports.actualizarEstadoCita = (req, res) => {
 };
 
 // ============================
-// ✏️ EDITAR CITA (REESCRITA LIMPIA)
+// ✏️ EDITAR CITA
 // ============================
 exports.editarCita = (req, res) => {
   const { idCita } = req.params;
@@ -530,40 +616,67 @@ exports.rechazarCita = (req, res) => {
 exports.obtenerEstadisticas = (req, res) => {
   const { idProfesional, idPaciente } = req.query;
 
-  let sql = `
-    SELECT estado, COUNT(*) as total
-    FROM cita
-  `;
-  const params = [];
-  const condiciones = [];
+  // Ejecuta la consulta de estadísticas (se llama después de validar)
+  const ejecutarConsulta = () => {
+    let sql = `
+      SELECT estado, COUNT(*) as total
+      FROM cita
+    `;
+    const params = [];
+    const condiciones = [];
 
-  if (idProfesional) {
-    condiciones.push("idProfesional = ?");
-    params.push(idProfesional);
-  }
-  if (idPaciente) {
-    condiciones.push("idPaciente = ?");
-    params.push(idPaciente);
-  }
-
-  if (condiciones.length > 0) {
-    sql += " WHERE " + condiciones.join(" AND ");
-  }
-
-  sql += " GROUP BY estado";
-
-  db.query(sql, params, (err, result) => {
-    if (err) {
-      console.log("❌ Error obteniendo estadísticas:", err);
-      return res.status(500).json({
-        ok: false,
-        error: err.sqlMessage || err.message
-      });
+    if (idProfesional) {
+      condiciones.push("idProfesional = ?");
+      params.push(idProfesional);
+    }
+    if (idPaciente) {
+      condiciones.push("idPaciente = ?");
+      params.push(idPaciente);
     }
 
-    res.json({
-      ok: true,
-      estadisticas: result
+    if (condiciones.length > 0) {
+      sql += " WHERE " + condiciones.join(" AND ");
+    }
+
+    sql += " GROUP BY estado";
+
+    db.query(sql, params, (err, result) => {
+      if (err) {
+        console.log("❌ Error obteniendo estadísticas:", err);
+        return res.status(500).json({
+          ok: false,
+          error: err.sqlMessage || err.message
+        });
+      }
+
+      res.json({
+        ok: true,
+        estadisticas: result
+      });
     });
-  });
+  };
+
+  // ✅ Si llega idPaciente, validar que exista
+  if (idPaciente) {
+    return existePaciente(idPaciente, (errPac, pacienteExiste) => {
+      if (errPac) {
+        console.log("❌ Error verificando paciente:", errPac);
+        return res.status(500).json({
+          ok: false,
+          error: errPac.sqlMessage || errPac.message
+        });
+      }
+
+      if (!pacienteExiste) {
+        return res.status(404).json({
+          ok: false,
+          message: `El paciente ${idPaciente} no está registrado`
+        });
+      }
+
+      ejecutarConsulta();
+    });
+  }
+
+  ejecutarConsulta();
 };

@@ -1,7 +1,28 @@
 const db = require('./db');
 
 // ======================================================
-// 🟢 CREAR TRATAMIENTO (idSintoma OPCIONAL)
+// 🧠 VALIDACIONES (igual que en signos)
+// ======================================================
+
+/**
+ * Verifica que el idPaciente exista en la tabla paciente
+ * y devuelve sus datos (idPaciente, idUsuario, nombre, correo)
+ */
+function existePaciente(idPaciente, callback) {
+  const sql = `
+    SELECT p.idPaciente, p.idUsuario, u.nombre, u.correo
+    FROM paciente p
+    JOIN usuario u ON p.idUsuario = u.idUsuario
+    WHERE p.idPaciente = ?
+  `;
+  db.query(sql, [idPaciente], (err, result) => {
+    if (err) return callback(err, false, null);
+    return callback(null, result.length > 0, result[0]);
+  });
+}
+
+// ======================================================
+// 🟢 CREAR TRATAMIENTO (VALIDA PACIENTE, idSintoma OPCIONAL)
 // ======================================================
 exports.crearTratamiento = (req, res) => {
   const {
@@ -23,44 +44,66 @@ exports.crearTratamiento = (req, res) => {
     });
   }
 
-  const sql = `
-    INSERT INTO tratamiento
-    (
-      fechaInicio,
-      fechaFin,
-      descripcion,
-      idSintoma,
-      idPaciente,
-      estado
-    )
-    VALUES (?, ?, ?, ?, ?, ?)
-  `;
-
-  db.query(
-    sql,
-    [
-      fechaInicio || null,
-      fechaFin || null,
-      descripcion,
-      idSintoma || null,      // 👈 null si no se seleccionó síntoma
-      idPaciente,
-      estado || 'Activo'
-    ],
-    (err, result) => {
-      if (err) {
-        console.log("❌ ERROR crearTratamiento:", err);
-        return res.status(500).json({
-          ok: false,
-          error: err.sqlMessage || err.message
-        });
-      }
-
-      res.status(201).json({
-        ok: true,
-        idTratamiento: result.insertId
+  // 1️⃣ VERIFICAR QUE EL PACIENTE EXISTE
+  existePaciente(idPaciente, (errPac, pacienteExiste, paciente) => {
+    if (errPac) {
+      console.log("❌ Error verificando paciente:", errPac);
+      return res.status(500).json({
+        ok: false,
+        error: errPac.sqlMessage || errPac.message
       });
     }
-  );
+
+    if (!pacienteExiste) {
+      return res.status(400).json({
+        ok: false,
+        message: `El paciente ${idPaciente} no está registrado como paciente`
+      });
+    }
+
+    // 2️⃣ INSERTAR TRATAMIENTO
+    const sql = `
+      INSERT INTO tratamiento
+      (
+        fechaInicio,
+        fechaFin,
+        descripcion,
+        idSintoma,
+        idPaciente,
+        estado
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    db.query(
+      sql,
+      [
+        fechaInicio || null,
+        fechaFin || null,
+        descripcion,
+        idSintoma || null,      // 👈 null si no se seleccionó síntoma
+        idPaciente,
+        estado || 'Activo'
+      ],
+      (err, result) => {
+        if (err) {
+          console.log("❌ ERROR crearTratamiento:", err);
+          return res.status(500).json({
+            ok: false,
+            error: err.sqlMessage || err.message
+          });
+        }
+
+        console.log(`✅ Tratamiento creado (ID: ${result.insertId}) para paciente ${paciente.nombre}`);
+
+        res.status(201).json({
+          ok: true,
+          idTratamiento: result.insertId,
+          paciente: paciente.nombre
+        });
+      }
+    );
+  });
 };
 
 // ======================================================
@@ -96,38 +139,63 @@ exports.obtenerTodos = (req, res) => {
 };
 
 // ======================================================
-// 👤 OBTENER POR PACIENTE (CON SÍNTOMA)
+// 👤 OBTENER POR PACIENTE (VALIDA PACIENTE, CON SÍNTOMA)
 // ======================================================
 exports.obtenerPorPaciente = (req, res) => {
   const { idPaciente } = req.params;
 
-  const sql = `
-    SELECT
-      t.idTratamiento,
-      t.fechaInicio,
-      t.fechaFin,
-      t.descripcion,
-      t.estado,
-      t.idPaciente,
+  if (!idPaciente) {
+    return res.status(400).json({
+      ok: false,
+      message: "El ID del paciente es requerido"
+    });
+  }
 
-      s.idSintoma,
-      s.descripcion AS sintoma
-
-    FROM tratamiento t
-    LEFT JOIN sintoma s
-      ON t.idSintoma = s.idSintoma
-
-    WHERE t.idPaciente = ?
-
-    ORDER BY t.fechaInicio DESC
-  `;
-
-  db.query(sql, [idPaciente], (err, result) => {
-    if (err) {
-      console.log("❌ ERROR obtenerPorPaciente:", err);
-      return res.status(500).json({ ok: false, error: err });
+  // ✅ Verificar que el paciente existe
+  existePaciente(idPaciente, (errPac, pacienteExiste) => {
+    if (errPac) {
+      console.log("❌ Error verificando paciente:", errPac);
+      return res.status(500).json({
+        ok: false,
+        error: errPac.sqlMessage || errPac.message
+      });
     }
-    res.json(result);
+
+    if (!pacienteExiste) {
+      return res.status(404).json({
+        ok: false,
+        message: `El paciente ${idPaciente} no está registrado`
+      });
+    }
+
+    const sql = `
+      SELECT
+        t.idTratamiento,
+        t.fechaInicio,
+        t.fechaFin,
+        t.descripcion,
+        t.estado,
+        t.idPaciente,
+
+        s.idSintoma,
+        s.descripcion AS sintoma
+
+      FROM tratamiento t
+      LEFT JOIN sintoma s
+        ON t.idSintoma = s.idSintoma
+
+      WHERE t.idPaciente = ?
+
+      ORDER BY t.fechaInicio DESC
+    `;
+
+    db.query(sql, [idPaciente], (err, result) => {
+      if (err) {
+        console.log("❌ ERROR obtenerPorPaciente:", err);
+        return res.status(500).json({ ok: false, error: err });
+      }
+      res.json(result);
+    });
   });
 };
 
