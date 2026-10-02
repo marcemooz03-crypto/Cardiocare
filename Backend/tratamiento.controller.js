@@ -63,27 +63,9 @@ function sintomaPerteneceAPaciente(idSintoma, idPaciente, callback) {
   });
 }
 
-/**
- * Verifica que el síntoma exista y pertenezca al paciente cuyo idUsuario se indica
- * (sintoma.idPaciente -> paciente.idPaciente, paciente.idUsuario -> usuario.idUsuario)
- */
-function sintomaPerteneceAUsuario(idSintoma, idUsuario, callback) {
-  const sql = `
-    SELECT s.idSintoma
-    FROM sintoma s
-    JOIN paciente p ON p.idPaciente = s.idPaciente
-    WHERE s.idSintoma = ? AND p.idUsuario = ?
-  `;
-  db.query(sql, [idSintoma, idUsuario], (err, result) => {
-    if (err) return callback(err, false);
-    return callback(null, result.length > 0);
-  });
-}
-
 // ======================================================
 // 🔁 CONSULTA REUTILIZABLE: tratamientos de un paciente
-// ⚠️ La FK fk_tratamiento_usuario apunta tratamiento.idPaciente -> usuario.idUsuario,
-//    por eso el valor recibido aquí es el idUsuario del paciente.
+// tratamiento.idPaciente guarda el idPaciente REAL (FK -> paciente.idPaciente).
 // ======================================================
 function listarPorIdPaciente(res, idPaciente, etiquetaLog) {
   const sql = `
@@ -165,7 +147,7 @@ exports.crearTratamiento = (req, res) => {
       console.log(
         `🔎 TRATAMIENTO ids => body.idUsuario: ${idUsuario}, body.idPaciente: ${idPaciente} | ` +
         `paciente.idPaciente: ${paciente.idPaciente}, paciente.idUsuario: ${paciente.idUsuario} | ` +
-        `se inserta en tratamiento.idPaciente: ${paciente.idUsuario}`
+        `se inserta en tratamiento.idPaciente: ${paciente.idPaciente}`
       );
       const sql = `
         INSERT INTO tratamiento
@@ -187,7 +169,7 @@ exports.crearTratamiento = (req, res) => {
           fechaFin || null,
           descripcion,
           idSintoma || null,      // 👈 null si no se seleccionó síntoma
-          paciente.idUsuario,     // 👈 FK fk_tratamiento_usuario: tratamiento.idPaciente -> usuario.idUsuario
+          paciente.idPaciente,    // 👈 idPaciente REAL (paciente.idPaciente)
           estado || 'Activo'
         ],
         (err, result) => {
@@ -299,7 +281,7 @@ exports.obtenerPorPaciente = (req, res) => {
       });
     }
 
-    listarPorIdPaciente(res, paciente.idUsuario, "obtenerPorPaciente");
+    listarPorIdPaciente(res, paciente.idPaciente, "obtenerPorPaciente");
   });
 };
 
@@ -332,7 +314,7 @@ exports.obtenerPorUsuario = (req, res) => {
       });
     }
 
-    listarPorIdPaciente(res, paciente.idUsuario, "obtenerPorUsuario");
+    listarPorIdPaciente(res, paciente.idPaciente, "obtenerPorUsuario");
   });
 };
 
@@ -544,7 +526,7 @@ exports.editarTratamiento = (req, res) => {
         });
       }
 
-      const idUsuarioTrat = filas[0].idPaciente; // la columna guarda el idUsuario (FK a usuario)
+      const idPacienteTrat = filas[0].idPaciente; // idPaciente REAL (paciente.idPaciente)
 
       // 2️⃣ UPDATE (se ejecuta después de validar el síntoma)
       const actualizar = () => {
@@ -587,7 +569,7 @@ exports.editarTratamiento = (req, res) => {
       if (!idSintoma) return actualizar();
 
       // El síntoma debe existir y ser del mismo paciente del tratamiento
-      sintomaPerteneceAUsuario(idSintoma, idUsuarioTrat, (errSin, pertenece) => {
+      sintomaPerteneceAPaciente(idSintoma, idPacienteTrat, (errSin, pertenece) => {
         if (errSin) {
           console.log("❌ Error verificando síntoma:", errSin);
           return res.status(500).json({
