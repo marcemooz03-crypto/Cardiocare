@@ -28,9 +28,13 @@ const MAPA_ESTADOS = {
  * @returns {string|null} estado válido o null si no es permitido
  */
 function normalizarEstado(estado, defaultValue = 'Pendiente') {
-  let estadoFinal = estado || defaultValue;
-  estadoFinal = MAPA_ESTADOS[estadoFinal] || estadoFinal;
-  return ESTADOS_PERMITIDOS.includes(estadoFinal) ? estadoFinal : null;
+  // Acepta 'aprobada', 'Aprobada', ' APROBADA ', etc.
+  const clave = String(estado || defaultValue).trim().toLowerCase();
+
+  const viaMapa = Object.keys(MAPA_ESTADOS).find(k => k.toLowerCase() === clave);
+  if (viaMapa) return MAPA_ESTADOS[viaMapa];
+
+  return ESTADOS_PERMITIDOS.find(e => e.toLowerCase() === clave) || null;
 }
 
 // ============================
@@ -186,7 +190,8 @@ exports.getByPaciente = (req, res) => {
       });
     }
 
-    // ✅ JOIN con profesionalsalud para traer nombre del médico
+    // ✅ JOIN con profesionalsalud + usuario para traer nombre del médico
+    //    (el nombre vive en usuario, igual que en el resto del sistema)
     const sql = `
       SELECT
         c.idCita,
@@ -195,11 +200,13 @@ exports.getByPaciente = (req, res) => {
         c.fecha,
         c.motivo,
         c.estado,
-        p.nombre       AS medicoNombre,
-        p.especialidad AS medicoEspecialidad
+        u.nombre        AS medicoNombre,
+        ps.especialidad AS medicoEspecialidad
       FROM cita c
-      LEFT JOIN profesionalsalud p
-        ON p.idProfesional = c.idProfesional
+      LEFT JOIN profesionalsalud ps
+        ON ps.idProfesional = c.idProfesional
+      LEFT JOIN usuario u
+        ON u.idUsuario = ps.idUsuario
       WHERE c.idPaciente = ?
       ORDER BY c.fecha DESC
     `;
