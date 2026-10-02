@@ -11,7 +11,7 @@ class VerRecomendacionScreen extends StatelessWidget {
   // Colores que coinciden con CrearRecomendacionScreen
   static const _primary = Color(0xFF2563EB);
   static const _info = Color(0xFF06B6D4);
-  
+
   // Mapeo de colores por categoría
   static const Map<String, Color> _categoriaColores = {
     'Alimentación': Color(0xFFF59E0B),
@@ -21,7 +21,7 @@ class VerRecomendacionScreen extends StatelessWidget {
     'Seguimiento': Color(0xFF14B8A6),
     'Otros': Color(0xFF6B7280),
   };
-  
+
   // Mapeo de iconos por categoría
   static const Map<String, IconData> _categoriaIconos = {
     'Alimentación': Icons.restaurant,
@@ -70,13 +70,13 @@ class VerRecomendacionScreen extends StatelessWidget {
     final categoria = recomendacion["categoria"] ?? "Otros";
     final colorCategoria = _getCategoriaColor();
     final iconoCategoria = _getCategoriaIcono();
-    final tieneHora = recomendacion["fecha"] != null && 
-                      recomendacion["fecha"].toString().contains(" ");
+    final tieneHora = recomendacion["fecha"] != null &&
+        recomendacion["fecha"].toString().contains(" ");
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F4F6),
       appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(100),
+        preferredSize: const Size.fromHeight(90),
         child: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -85,56 +85,58 @@ class VerRecomendacionScreen extends StatelessWidget {
               colors: [_primary, Color(0xFF60A5FA)],
             ),
             borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(24),
-              bottomRight: Radius.circular(24),
+              bottomLeft: Radius.circular(20),
+              bottomRight: Radius.circular(20),
             ),
           ),
           child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ),
-                      const Expanded(
-                        child: Column(
-                          children: [
-                            Text(
-                              "📋 Recomendación Médica",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              "Indicaciones para el paciente",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 48),
-                    ],
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
+                      onPressed: () => Navigator.pop(context),
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(minWidth: 38, minHeight: 38),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          "Recomendación Médica",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          "Indicaciones para el paciente",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -143,11 +145,13 @@ class VerRecomendacionScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Tarjeta principal
+            // ─────────────────────────────
+            // 🗂️ Tarjeta principal
+            // ─────────────────────────────
             Container(
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(24),
+                borderRadius: BorderRadius.circular(20),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.05),
@@ -159,62 +163,63 @@ class VerRecomendacionScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Cabecera con categoría
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [colorCategoria, colorCategoria.withOpacity(0.8)],
-                      ),
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(24),
-                        topRight: Radius.circular(24),
-                      ),
-                    ),
-                    child: Row(
+                  // ─────────────────────────────
+                  // Cabecera compacta con chip de categoría
+                  // ─────────────────────────────
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Chip de categoría compacto
                         Container(
-                          padding: const EdgeInsets.all(12),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(16),
+                            color: colorCategoria.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: colorCategoria.withOpacity(0.3),
+                              width: 1,
+                            ),
                           ),
-                          child: Icon(iconoCategoria, color: Colors.white, size: 28),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
+                              Icon(iconoCategoria, color: colorCategoria, size: 14),
+                              const SizedBox(width: 6),
                               Text(
                                 categoria,
-                                style: const TextStyle(
-                                  color: Colors.white70,
+                                style: TextStyle(
+                                  color: colorCategoria,
                                   fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                recomendacion["titulo"] ?? "Recomendación Médica",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // Título
+                        Text(
+                          recomendacion["titulo"] ?? "Recomendación Médica",
+                          style: const TextStyle(
+                            color: Color(0xFF1F2937),
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            height: 1.3,
                           ),
                         ),
                       ],
                     ),
                   ),
 
+                  const Divider(height: 1, color: Color(0xFFE5E7EB)),
+
+                  // ─────────────────────────────
                   // Contenido
+                  // ─────────────────────────────
                   Padding(
-                    padding: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -226,7 +231,7 @@ class VerRecomendacionScreen extends StatelessWidget {
                           value: recomendacion["profesional"] ?? "Médico tratante",
                         ),
 
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 12),
 
                         // Fecha
                         _InfoRow(
@@ -237,7 +242,7 @@ class VerRecomendacionScreen extends StatelessWidget {
                         ),
 
                         if (tieneHora) ...[
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 12),
                           _InfoRow(
                             icon: Icons.access_time,
                             color: const Color(0xFFF59E0B),
@@ -246,38 +251,53 @@ class VerRecomendacionScreen extends StatelessWidget {
                           ),
                         ],
 
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 18),
                         const Divider(color: Color(0xFFE5E7EB)),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 18),
 
+                        // ─────────────────────────────
                         // Descripción
+                        // ─────────────────────────────
                         Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(14),
                           decoration: BoxDecoration(
                             color: const Color(0xFFF9FAFB),
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFE5E7EB)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.description, size: 18, color: _info),
-                                  SizedBox(width: 8),
-                                  Text(
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: _info.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(
+                                      Icons.description,
+                                      size: 14,
+                                      color: _info,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Text(
                                     "Descripción",
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 14,
+                                      fontSize: 13,
+                                      color: Color(0xFF1F2937),
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               Text(
                                 recomendacion["descripcion"] ?? "Sin descripción",
                                 style: const TextStyle(
-                                  fontSize: 15,
+                                  fontSize: 14,
                                   height: 1.6,
                                   color: Color(0xFF374151),
                                 ),
@@ -292,23 +312,30 @@ class VerRecomendacionScreen extends StatelessWidget {
               ),
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
 
-            // Mensaje informativo
+            // ─────────────────────────────
+            // Mensaje informativo compacto
+            // ─────────────────────────────
             Container(
-              padding: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: _info.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                color: _info.withOpacity(0.08),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _info.withOpacity(0.2)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: _info, size: 18),
+                  const Icon(Icons.info_outline, color: _info, size: 16),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
                       "Esta recomendación fue creada por tu médico tratante",
-                      style: TextStyle(fontSize: 12, color: _info),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _info,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
                 ],
@@ -321,7 +348,9 @@ class VerRecomendacionScreen extends StatelessWidget {
   }
 }
 
-// Widget para filas de información
+// ==============================================
+// Widget para filas de información (compacto)
+// ==============================================
 class _InfoRow extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -340,14 +369,14 @@ class _InfoRow extends StatelessWidget {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(8),
           ),
-          child: Icon(icon, color: color, size: 20),
+          child: Icon(icon, color: color, size: 16),
         ),
-        const SizedBox(width: 12),
+        const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -355,15 +384,16 @@ class _InfoRow extends StatelessWidget {
               Text(
                 label,
                 style: const TextStyle(
-                  fontSize: 11,
+                  fontSize: 10.5,
                   color: Color(0xFF6B7280),
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(height: 2),
+              const SizedBox(height: 1),
               Text(
                 value,
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 13.5,
                   fontWeight: FontWeight.w600,
                   color: Color(0xFF1F2937),
                 ),

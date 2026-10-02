@@ -90,12 +90,22 @@ class TratamientoService {
     } catch (e) { print("❌ Error medicamentos disponibles: $e"); return []; }
   }
 
-  // OBTENER SINTOMAS
+  // ✅ OBTENER SÍNTOMAS (CORREGIDO - apunta a /tratamiento/sintoma)
   Future<List<Map<String, dynamic>>> getSintomas() async {
     try {
-      final res = await http.get(Uri.parse("$baseUrl/sintoma"));
-      if (res.statusCode == 200) return List<Map<String, dynamic>>.from(jsonDecode(res.body));
+      final url = "$baseUrl/tratamiento/sintoma";
+      print("📡 GET SÍNTOMAS => $url");
+      final res = await http.get(Uri.parse(url));
+      print("📦 SÍNTOMAS RESPONSE CODE: ${res.statusCode}");
+      print("📦 SÍNTOMAS RAW: ${res.body}");
+
+      if (res.statusCode == 200) {
+        return List<Map<String, dynamic>>.from(jsonDecode(res.body));
+      }
       return [];
-    } catch (e) { print("❌ Error getSintomas: $e"); return []; }
+    } catch (e) {
+      print("❌ Error getSintomas: $e");
+      return [];
+    }
   }
 }

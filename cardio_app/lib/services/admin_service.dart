@@ -15,15 +15,10 @@ class AdminService {
         Uri.parse("$baseUrl/logs"),
         headers: {"Content-Type": "application/json"},
       );
-      
-      print("📦 LOGS RESPONSE: ${res.statusCode}");
-      print("📦 LOGS BODY: ${res.body}");
-      
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
-        }
+        if (data is List) return List<Map<String, dynamic>>.from(data);
         if (data is Map && data["data"] is List) {
           return List<Map<String, dynamic>>.from(data["data"]);
         }
@@ -44,15 +39,10 @@ class AdminService {
         Uri.parse("$baseUrl/alertas"),
         headers: {"Content-Type": "application/json"},
       );
-      
-      print("📦 ALERTAS RESPONSE: ${res.statusCode}");
-      print("📦 ALERTAS BODY: ${res.body}");
-      
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
-        }
+        if (data is List) return List<Map<String, dynamic>>.from(data);
         if (data is Map && data["data"] is List) {
           return List<Map<String, dynamic>>.from(data["data"]);
         }
@@ -73,7 +63,6 @@ class AdminService {
         Uri.parse("$baseUrl/alertas/$idAlerta/atender"),
         headers: {"Content-Type": "application/json"},
       );
-      print("📦 MARCAR ALERTA: ${res.statusCode}");
       return res.statusCode == 200;
     } catch (e) {
       print("❌ ERROR marcarAlertaLeida: $e");
@@ -106,10 +95,7 @@ class AdminService {
         Uri.parse("$baseUrl/config"),
         headers: {"Content-Type": "application/json"},
       );
-      
-      print("📦 CONFIG RESPONSE: ${res.statusCode}");
-      print("📦 CONFIG BODY: ${res.body}");
-      
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         return Map<String, dynamic>.from(data);
@@ -129,23 +115,8 @@ class AdminService {
       final res = await http.post(
         Uri.parse("$baseUrl/config"),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "clave": clave,
-          "valor": valor,
-        }),
+        body: jsonEncode({"clave": clave, "valor": valor}),
       );
-      
-      print("📦 UPDATE CONFIG: ${res.statusCode}");
-      print("📦 BODY: ${res.body}");
-      
-      await _registrarLog(
-        accion: "Configuración actualizada",
-        descripcion: "$clave = $valor",
-        usuario: "admin",
-        modulo: "config",
-        nivel: "info",
-      );
-      
       return res.statusCode == 200;
     } catch (e) {
       print("❌ ERROR updateConfig: $e");
@@ -154,16 +125,15 @@ class AdminService {
   }
 
   // =========================
-  // 📝 REGISTRAR LOG
+  // 📝 REGISTRAR LOG (interno)
   // =========================
   Future<void> _registrarLog({
     required String accion,
     String descripcion = "",
-    String usuario = "sistema",
+    String usuario = "admin",
     int? idUsuario,
     required String modulo,
     required String nivel,
-    String ip = "127.0.0.1",
   }) async {
     try {
       await http.post(
@@ -174,7 +144,6 @@ class AdminService {
           "descripcion": descripcion,
           "usuario": usuario,
           "idUsuario": idUsuario,
-          "ip": ip,
           "modulo": modulo,
           "nivel": nivel,
         }),
@@ -193,12 +162,10 @@ class AdminService {
         Uri.parse("$baseUrl/medicos"),
         headers: {"Content-Type": "application/json"},
       );
-      
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
-        }
+        if (data is List) return List<Map<String, dynamic>>.from(data);
         if (data is Map && data["data"] is List) {
           return List<Map<String, dynamic>>.from(data["data"]);
         }
@@ -219,12 +186,10 @@ class AdminService {
         Uri.parse("$baseUrl/pacientes"),
         headers: {"Content-Type": "application/json"},
       );
-      
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data is List) {
-          return List<Map<String, dynamic>>.from(data);
-        }
+        if (data is List) return List<Map<String, dynamic>>.from(data);
         if (data is Map && data["data"] is List) {
           return List<Map<String, dynamic>>.from(data["data"]);
         }
@@ -237,126 +202,149 @@ class AdminService {
   }
 
   // =========================
-  // 👤 OBTENER PACIENTE POR USUARIO (SOPORTA PACIENTES Y CUIDADORES)
+  // 👥 OBTENER TODOS LOS USUARIOS
   // =========================
-  Future<Map<String, dynamic>?> getPacientePorUsuario(int idUsuario) async {
+  Future<List<Map<String, dynamic>>> getUsuarios() async {
     try {
-      print("🔍 [AdminService] Buscando paciente para usuario ID: $idUsuario");
-      
       final res = await http.get(
-        Uri.parse("$baseUrl/paciente/usuario/$idUsuario"),
+        Uri.parse("$baseUrl/usuarios"),
         headers: {"Content-Type": "application/json"},
       );
-      
-      print("📦 PACIENTE POR USUARIO RESPONSE: ${res.statusCode}");
-      print("📦 BODY: ${res.body}");
-      
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data != null && data.isNotEmpty) {
-          print("✅ Paciente encontrado: ${data['nombre']}");
-          return Map<String, dynamic>.from(data);
+        if (data is List) return List<Map<String, dynamic>>.from(data);
+        if (data is Map && data["data"] is List) {
+          return List<Map<String, dynamic>>.from(data["data"]);
         }
       }
-      
-      if (res.statusCode == 404) {
-        print("ℹ️ No se encontró paciente para el usuario ID: $idUsuario");
-      }
-      
-      return null;
+      return [];
     } catch (e) {
-      print("❌ ERROR getPacientePorUsuario: $e");
-      return null;
+      print("❌ ERROR getUsuarios: $e");
+      return [];
     }
   }
 
   // =========================
-  // 👤 OBTENER PACIENTE POR CUIDADOR (NUEVO)
+  // 👨‍👩‍👧 OBTENER CUIDADORES
   // =========================
-  Future<Map<String, dynamic>?> getPacientePorCuidador(int idCuidador) async {
+  Future<List<Map<String, dynamic>>> getCuidadores() async {
     try {
-      print("🔍 [AdminService] Buscando paciente para cuidador ID: $idCuidador");
-      
       final res = await http.get(
-        Uri.parse("$baseUrl/paciente/cuidador/$idCuidador"),
+        Uri.parse("$baseUrl/cuidadores"),
         headers: {"Content-Type": "application/json"},
       );
-      
-      print("📦 PACIENTE POR CUIDADOR RESPONSE: ${res.statusCode}");
-      print("📦 BODY: ${res.body}");
-      
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        if (data != null && data.isNotEmpty) {
-          print("✅ Paciente encontrado para cuidador: ${data['nombre']}");
-          return Map<String, dynamic>.from(data);
+        if (data is List) return List<Map<String, dynamic>>.from(data);
+        if (data is Map && data["data"] is List) {
+          return List<Map<String, dynamic>>.from(data["data"]);
         }
       }
-      
-      if (res.statusCode == 404) {
-        print("ℹ️ No se encontró paciente para el cuidador ID: $idCuidador");
-      }
-      
-      return null;
+      return [];
     } catch (e) {
-      print("❌ ERROR getPacientePorCuidador: $e");
-      return null;
+      print("❌ ERROR getCuidadores: $e");
+      return [];
     }
   }
 
   // =========================
-  // 🔗 ASIGNAR MÉDICO A PACIENTE
+  // 🔗 OBTENER ASIGNACIONES
   // =========================
-  Future<bool> asignar(int idPaciente, int idMedico) async {
+  Future<List<Map<String, dynamic>>> getAsignaciones() async {
     try {
-      final res = await http.post(
-        Uri.parse("$baseUrl/asignar"),
+      final res = await http.get(
+        Uri.parse("$baseUrl/asignaciones"),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "idPaciente": idPaciente,
-          "idProfesional": idMedico,
-        }),
       );
-      
+
       if (res.statusCode == 200) {
-        await _registrarLog(
-          accion: "Asignación creada",
-          descripcion: "Médico ID: $idMedico → Paciente ID: $idPaciente",
-          usuario: "admin",
-          modulo: "asignacion",
-          nivel: "info",
-        );
-        return true;
+        final data = jsonDecode(res.body);
+        if (data is List) return List<Map<String, dynamic>>.from(data);
+        if (data is Map && data["data"] is List) {
+          return List<Map<String, dynamic>>.from(data["data"]);
+        }
       }
-      return false;
+      return [];
     } catch (e) {
-      print("❌ ERROR asignar: $e");
-      return false;
+      print("❌ ERROR getAsignaciones: $e");
+      return [];
     }
   }
 
   // =========================
+  // ✅ CONVERTIR ROL STRING A idRol
+  // =========================
+  int _rolToId(String rol) {
+    switch (rol.toLowerCase()) {
+      case "admin":
+        return 1;
+      case "medico":
+      case "médico":
+        return 2;
+      case "paciente":
+        return 3;
+      case "cuidador":
+        return 4;
+      default:
+        return 3;
+    }
+  }
+
+  // =========================
+  // ✅ CONVERTIR idRol A STRING
+  // =========================
+  String idToRol(int idRol) {
+    switch (idRol) {
+      case 1:
+        return "admin";
+      case 2:
+        return "medico";
+      case 3:
+        return "paciente";
+      case 4:
+        return "cuidador";
+      default:
+        return "paciente";
+    }
+  }
+
+  // ============================================================
   // 👤 CREAR USUARIO
-  // =========================
-  Future<bool> crearUsuario({
+  // ✅ CORREGIDO: envía `rol` (string) Y `idRol` (int)
+  // ============================================================
+  Future<Map<String, dynamic>> crearUsuario({
     required String nombre,
     required String correo,
     required String password,
     required String rol,
   }) async {
     try {
+      final idRol = _rolToId(rol);
+
+      // ✅ Enviar AMBOS campos para cubrir cualquier backend
+      final body = {
+        "nombre": nombre,
+        "correo": correo,
+        "contrasena": password,
+        "rol": rol,        // string: "medico", "paciente", etc.
+        "idRol": idRol,    // int: 2, 3, 4, etc.
+      };
+
+      print("📦 CREAR USUARIO BODY: $body");
+
       final res = await http.post(
         Uri.parse("$baseUrl/usuarios"),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "nombre": nombre,
-          "correo": correo,
-          "contrasena": password,
-          "rol": rol,
-        }),
+        body: jsonEncode(body),
       );
-      
-      if (res.statusCode == 200) {
+
+      print("📥 CREAR USUARIO RESPONSE: ${res.statusCode} - ${res.body}");
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = jsonDecode(res.body);
+
         await _registrarLog(
           accion: "Usuario creado",
           descripcion: "$nombre ($rol)",
@@ -364,193 +352,107 @@ class AdminService {
           modulo: "usuario",
           nivel: "info",
         );
-        return true;
+
+        return {
+          "success": true,
+          "message": data["message"] ?? "Usuario creado exitosamente",
+          "idUsuario": data["idUsuario"],
+          "data": data,
+        };
       }
-      return false;
+
+      final errorData = jsonDecode(res.body);
+      return {
+        "success": false,
+        "message": errorData["message"] ??
+            errorData["error"] ??
+            errorData["msg"] ??
+            "Error al crear usuario",
+      };
     } catch (e) {
       print("❌ ERROR crearUsuario: $e");
-      return false;
+      return {
+        "success": false,
+        "message": "Error de conexión: $e",
+      };
     }
   }
 
-  // =========================
-  // 👤 CREAR CUIDADOR
-  // =========================
-  Future<bool> crearCuidador({
-    required String nombre,
-    required String correo,
-    required String contrasena,
-    required String relacion,
-    required int idPaciente,
-  }) async {
-    try {
-      print("📝 [AdminService] Creando cuidador para paciente: $idPaciente");
-      print("📝 Datos: nombre=$nombre, correo=$correo, relacion=$relacion");
-      
-      final res = await http.post(
-        Uri.parse("$baseUrl/cuidadores"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "nombre": nombre,
-          "correo": correo,
-          "contrasena": contrasena,
-          "relacion": relacion,
-          "idPaciente": idPaciente,
-        }),
-      );
-      
-      print("📦 Crear cuidador response: ${res.statusCode}");
-      print("📦 Body: ${res.body}");
-      
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        final data = jsonDecode(res.body);
-        if (data["ok"] == true || data["success"] == true) {
-          await _registrarLog(
-            accion: "Cuidador creado",
-            descripcion: "$nombre - $relacion (Paciente ID: $idPaciente)",
-            usuario: "admin",
-            modulo: "usuario",
-            nivel: "info",
-          );
-          return true;
-        }
-        return false;
-      }
-      
-      // Manejar códigos de error específicos del backend
-      if (res.statusCode == 409) {
-        final data = jsonDecode(res.body);
-        final mensaje = data["msg"] ?? "El paciente ya tiene un cuidador asignado";
-        throw Exception(mensaje);
-      }
-      
-      if (res.statusCode == 400) {
-        final data = jsonDecode(res.body);
-        final mensaje = data["msg"] ?? data["error"] ?? "Datos inválidos";
-        throw Exception(mensaje);
-      }
-      
-      return false;
-    } catch (e) {
-      print("❌ ERROR crearCuidador: $e");
-      rethrow;
-    }
-  }
-
-  // =========================
-  // 👤 OBTENER CUIDADOR
-  // =========================
-  Future<Map<String, dynamic>?> getCuidador(int idPaciente) async {
-    try {
-      print("📝 [AdminService] Obteniendo cuidador para paciente: $idPaciente");
-      
-      final res = await http.get(
-        Uri.parse("$baseUrl/cuidadores/paciente/$idPaciente"),
-        headers: {"Content-Type": "application/json"},
-      );
-      
-      print("📦 getCuidador response: ${res.statusCode}");
-      
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data != null && data is Map && data.isNotEmpty) {
-          print("✅ Cuidador encontrado: ${data['nombreCuidador']}");
-          return Map<String, dynamic>.from(data);
-        }
-      }
-      print("ℹ️ No hay cuidador para este paciente");
-      return null;
-    } catch (e) {
-      print("❌ ERROR getCuidador: $e");
-      return null;
-    }
-  }
-
-  // =========================
-  // 🗑️ ELIMINAR CUIDADOR
-  // =========================
-  Future<bool> eliminarCuidador(int idPaciente) async {
-    try {
-      print("📝 [AdminService] Eliminando cuidador para paciente: $idPaciente");
-      
-      final res = await http.delete(
-        Uri.parse("$baseUrl/cuidadores/paciente/$idPaciente"),
-        headers: {"Content-Type": "application/json"},
-      );
-      
-      print("📦 eliminarCuidador response: ${res.statusCode}");
-      
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        if (data["ok"] == true || data["success"] == true) {
-          await _registrarLog(
-            accion: "Cuidador eliminado",
-            descripcion: "Paciente ID: $idPaciente",
-            usuario: "admin",
-            modulo: "usuario",
-            nivel: "warning",
-          );
-          return true;
-        }
-      }
-      return false;
-    } catch (e) {
-      print("❌ ERROR eliminarCuidador: $e");
-      return false;
-    }
-  }
-
-  // =========================
+  // ============================================================
   // ✏️ EDITAR USUARIO
-  // =========================
-  Future<bool> editarUsuario({
-    required int id,
+  // ✅ CORREGIDO: envía `rol` Y `idRol`
+  // ============================================================
+  Future<Map<String, dynamic>> editarUsuario({
+    required int idUsuario,
     required String nombre,
     required String correo,
     required String rol,
   }) async {
     try {
+      final idRol = _rolToId(rol);
+
+      final body = {
+        "nombre": nombre,
+        "correo": correo,
+        "rol": rol,        // ✅ string
+        "idRol": idRol,    // ✅ int
+      };
+
+      print("📦 EDITAR USUARIO BODY: $body");
+
       final res = await http.put(
-        Uri.parse("$baseUrl/usuarios/$id"),
+        Uri.parse("$baseUrl/usuarios/$idUsuario"),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "nombre": nombre,
-          "correo": correo,
-          "rol": rol,
-        }),
+        body: jsonEncode(body),
       );
-      
+
+      print("📥 EDITAR USUARIO RESPONSE: ${res.statusCode} - ${res.body}");
+
       if (res.statusCode == 200) {
         await _registrarLog(
           accion: "Usuario editado",
-          descripcion: "$nombre (ID: $id)",
+          descripcion: "$nombre (ID: $idUsuario)",
           usuario: "admin",
           modulo: "usuario",
           nivel: "info",
         );
-        return true;
+
+        return {
+          "success": true,
+          "message": "Usuario actualizado exitosamente",
+        };
       }
-      return false;
+
+      final errorData = jsonDecode(res.body);
+      return {
+        "success": false,
+        "message": errorData["message"] ??
+            errorData["error"] ??
+            "Error al editar usuario",
+      };
     } catch (e) {
       print("❌ ERROR editarUsuario: $e");
-      return false;
+      return {
+        "success": false,
+        "message": "Error de conexión: $e",
+      };
     }
   }
 
   // =========================
   // 🗑️ ELIMINAR USUARIO
   // =========================
-  Future<bool> eliminarUsuario(int id) async {
+  Future<bool> eliminarUsuario(int idUsuario) async {
     try {
       final res = await http.delete(
-        Uri.parse("$baseUrl/usuarios/$id"),
+        Uri.parse("$baseUrl/usuarios/$idUsuario"),
         headers: {"Content-Type": "application/json"},
       );
-      
+
       if (res.statusCode == 200) {
         await _registrarLog(
           accion: "Usuario eliminado",
-          descripcion: "ID: $id",
+          descripcion: "ID: $idUsuario",
           usuario: "admin",
           modulo: "usuario",
           nivel: "warning",
@@ -564,31 +466,174 @@ class AdminService {
     }
   }
 
-  // =========================
+  // ============================================================
   // 🔄 CAMBIAR ROL
-  // =========================
-  Future<bool> cambiarRol(int id, String rol) async {
+  // ✅ CORREGIDO: envía `rol` Y `idRol`
+  // ============================================================
+  Future<Map<String, dynamic>> cambiarRol(int idUsuario, String rol) async {
     try {
+      final idRol = _rolToId(rol);
+
+      final body = {
+        "rol": rol,        // ✅ string
+        "idRol": idRol,    // ✅ int
+      };
+
+      print("📦 CAMBIAR ROL BODY: $body");
+
       final res = await http.patch(
-        Uri.parse("$baseUrl/usuarios/$id/rol"),
+        Uri.parse("$baseUrl/usuarios/$idUsuario/rol"),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"rol": rol}),
+        body: jsonEncode(body),
       );
-      
+
+      print("📥 CAMBIAR ROL RESPONSE: ${res.statusCode} - ${res.body}");
+
       if (res.statusCode == 200) {
         await _registrarLog(
           accion: "Rol cambiado",
-          descripcion: "Usuario ID: $id → $rol",
+          descripcion: "Usuario ID: $idUsuario → $rol",
           usuario: "admin",
           modulo: "usuario",
           nivel: "info",
         );
-        return true;
+
+        return {
+          "success": true,
+          "message": "Rol actualizado exitosamente",
+        };
       }
-      return false;
+
+      final errorData = jsonDecode(res.body);
+      return {
+        "success": false,
+        "message": errorData["message"] ??
+            errorData["error"] ??
+            "Error al cambiar rol",
+      };
     } catch (e) {
       print("❌ ERROR cambiarRol: $e");
+      return {
+        "success": false,
+        "message": "Error de conexión: $e",
+      };
+    }
+  }
+
+  // ============================================================
+  // 🔗 ASIGNAR MÉDICO A PACIENTE
+  // ✅ CORREGIDO: devuelve el `id` de la asignación
+  // ============================================================
+  Future<Map<String, dynamic>> asignar(int idPaciente, int idMedico) async {
+    try {
+      final body = {
+        "idPaciente": idPaciente,
+        "idProfesional": idMedico,
+      };
+
+      print("📦 ASIGNAR BODY: $body");
+
+      final res = await http.post(
+        Uri.parse("$baseUrl/asignar"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(body),
+      );
+
+      print("📥 ASIGNAR RESPONSE: ${res.statusCode} - ${res.body}");
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = jsonDecode(res.body);
+        return {
+          "success": data["ok"] == true || data["success"] == true,
+          "message": data["message"] ?? data["msg"] ?? "Asignación creada",
+          "id": data["id"],   // ✅ nuevo
+        };
+      }
+
+      final errorData = jsonDecode(res.body);
+      return {
+        "success": false,
+        "message":
+            errorData["message"] ?? errorData["error"] ?? "Error al asignar",
+      };
+    } catch (e) {
+      print("❌ ERROR asignar: $e");
+      return {"success": false, "message": "Error de conexión: $e"};
+    }
+  }
+
+  // =========================
+  // 🗑️ ELIMINAR ASIGNACIÓN
+  // =========================
+  Future<bool> eliminarAsignacion(int idMedicoPaciente) async {
+    try {
+      final res = await http.delete(
+        Uri.parse("$baseUrl/asignaciones/$idMedicoPaciente"),
+        headers: {"Content-Type": "application/json"},
+      );
+      return res.statusCode == 200;
+    } catch (e) {
+      print("❌ ERROR eliminarAsignacion: $e");
       return false;
+    }
+  }
+
+  // ============================================================
+  // 👤 OBTENER PACIENTE POR USUARIO
+  // (El backend ya maneja paciente Y cuidador en esta ruta)
+  // ============================================================
+  Future<Map<String, dynamic>?> getPacientePorUsuario(int idUsuario) async {
+    try {
+      final url = "$baseUrl/paciente/usuario/$idUsuario";
+      print("📡 GET PACIENTE POR USUARIO: $url");
+
+      final res = await http.get(
+        Uri.parse(url),
+        headers: {"Content-Type": "application/json"},
+      );
+
+      print("📥 GET PACIENTE RESPONSE: ${res.statusCode}");
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data != null && data is Map && data.isNotEmpty) {
+          return Map<String, dynamic>.from(data);
+        }
+      }
+      return null;
+    } catch (e) {
+      print("❌ ERROR getPacientePorUsuario: $e");
+      return null;
+    }
+  }
+
+  // ============================================================
+  // 👤 OBTENER PACIENTE POR CUIDADOR
+  // ✅ CORREGIDO: apunta a /paciente/usuario/:idUsuario
+  //    (el backend ya maneja cuidador en esa ruta)
+  // ============================================================
+  Future<Map<String, dynamic>?> getPacientePorCuidador(int idUsuario) async {
+    try {
+      final url = "$baseUrl/paciente/usuario/$idUsuario";
+      print("📡 GET PACIENTE POR CUIDADOR: $url");
+
+      final res = await http.get(
+        Uri.parse(url),
+        headers: {"Content-Type": "application/json"},
+      );
+
+      print("📥 GET PACIENTE CUIDADOR RESPONSE: ${res.statusCode}");
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data != null && data is Map && data.isNotEmpty) {
+          return Map<String, dynamic>.from(data);
+        }
+      }
+      return null;
+    } catch (e) {
+      print("❌ ERROR getPacientePorCuidador: $e");
+      return null;
     }
   }
 
@@ -601,7 +646,7 @@ class AdminService {
         Uri.parse("$baseUrl/perfil/$idUsuario"),
         headers: {"Content-Type": "application/json"},
       );
-      
+
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
       }
@@ -609,6 +654,159 @@ class AdminService {
     } catch (e) {
       print("❌ ERROR getPerfilAdmin: $e");
       return {};
+    }
+  }
+
+  // ============================================================
+  // 👤 CREAR CUIDADOR
+  // ✅ CORREGIDO: devuelve `idUsuario` y `data` del backend
+  // ============================================================
+  Future<Map<String, dynamic>> crearCuidador({
+    required String nombre,
+    required String correo,
+    required String contrasena,
+    required String relacion,
+    required int idPaciente,
+  }) async {
+    try {
+      final body = {
+        "nombre": nombre,
+        "correo": correo,
+        "contrasena": contrasena,
+        "relacion": relacion,
+        "idPaciente": idPaciente,
+      };
+
+      print("📦 CREAR CUIDADOR BODY: $body");
+
+      final res = await http.post(
+        Uri.parse("$baseUrl/cuidadores"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(body),
+      );
+
+      print("📥 CREAR CUIDADOR RESPONSE: ${res.statusCode} - ${res.body}");
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = jsonDecode(res.body);
+
+        await _registrarLog(
+          accion: "Cuidador creado",
+          descripcion: "$nombre ($relacion) → paciente $idPaciente",
+          usuario: "admin",
+          modulo: "cuidador",
+          nivel: "info",
+        );
+
+        return {
+          "success": true,
+          "message":
+              data["msg"] ?? data["message"] ?? "Cuidador creado exitosamente",
+          "idUsuario": data["idUsuario"],
+          "data": data,
+        };
+      }
+
+      // ✅ Extraer mensaje del backend (msg / message / error)
+      String errorMsg = "Error al crear cuidador";
+      try {
+        final errorData = jsonDecode(res.body);
+        errorMsg = errorData["msg"] ??
+            errorData["message"] ??
+            errorData["error"] ??
+            errorMsg;
+      } catch (_) {}
+
+      return {
+        "success": false,
+        "message": errorMsg,
+      };
+    } catch (e) {
+      print("❌ ERROR crearCuidador: $e");
+      return {
+        "success": false,
+        "message": "Error de conexión: $e",
+      };
+    }
+  }
+
+  // ============================================================
+  // 👤 OBTENER CUIDADOR POR PACIENTE
+  // ✅ Maneja todos los formatos posibles del backend
+  // ============================================================
+  Future<Map<String, dynamic>?> getCuidador(int idPaciente) async {
+    try {
+      final url = "$baseUrl/cuidadores/paciente/$idPaciente";
+      print("📡 GET CUIDADOR: $url");
+
+      final res = await http.get(
+        Uri.parse(url),
+        headers: {"Content-Type": "application/json"},
+      );
+
+      print("📥 GET CUIDADOR RESPONSE: ${res.statusCode} - ${res.body}");
+
+      if (res.statusCode != 200) return null;
+
+      final data = jsonDecode(res.body);
+
+      // Casos posibles del backend:
+      // 1. {idCuidador, nombreCuidador, relacionCuidador, ...}   → devolver
+      // 2. {ok: false, message: "..."}                            → null
+      // 3. []                                                     → null
+      // 4. {data: {...}}                                          → devolver data
+      // 5. {cuidador: {...}}                                      → devolver cuidador
+
+      if (data is Map) {
+        if (data["ok"] == false) return null;
+        if (data["data"] is Map) {
+          return Map<String, dynamic>.from(data["data"]);
+        }
+        if (data["cuidador"] is Map) {
+          return Map<String, dynamic>.from(data["cuidador"]);
+        }
+        if (data.isNotEmpty) {
+          return Map<String, dynamic>.from(data);
+        }
+      }
+
+      return null;
+    } catch (e) {
+      print("❌ ERROR getCuidador: $e");
+      return null;
+    }
+  }
+
+  // ============================================================
+  // 🗑️ ELIMINAR CUIDADOR POR PACIENTE
+  // ✅ Acepta 200 y 204
+  // ============================================================
+  Future<bool> eliminarCuidador(int idPaciente) async {
+    try {
+      final url = "$baseUrl/cuidadores/paciente/$idPaciente";
+      print("📡 DELETE CUIDADOR: $url");
+
+      final res = await http.delete(
+        Uri.parse(url),
+        headers: {"Content-Type": "application/json"},
+      );
+
+      print("📥 DELETE CUIDADOR RESPONSE: ${res.statusCode}");
+
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        await _registrarLog(
+          accion: "Cuidador eliminado",
+          descripcion: "Paciente ID: $idPaciente",
+          usuario: "admin",
+          modulo: "cuidador",
+          nivel: "warning",
+        );
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print("❌ ERROR eliminarCuidador: $e");
+      return false;
     }
   }
 }

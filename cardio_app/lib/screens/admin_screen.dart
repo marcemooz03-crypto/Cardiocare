@@ -1,3 +1,4 @@
+// lib/screens/admin_dashboard.dart
 import 'package:flutter/material.dart';
 import 'package:cardio_app/app.theme.dart';
 import 'package:cardio_app/screens/login_screen.dart';
@@ -26,6 +27,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   List<Map<String, dynamic>> medicos = [];
   List<Map<String, dynamic>> pacientes = [];
+  List<Map<String, dynamic>> cuidadores = [];
 
   Map<String, dynamic>? perfil;
 
@@ -36,15 +38,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
   static const _warning = AppTheme.warning;
   static const _danger = AppTheme.danger;
   static const _info = AppTheme.info;
+  static const _cuidador = Color(0xFF8B5CF6);
   static const _textSub = AppTheme.gray500;
   static const _gradientPrimary = AppTheme.primaryGradient;
 
   // ==============================================
   // 📱 UTILIDADES DE RESPONSIVE
   // ==============================================
-  bool _isSmallScreen(BuildContext context) => MediaQuery.of(context).size.width < 360;
-  bool _isMediumScreen(BuildContext context) => 
-      MediaQuery.of(context).size.width >= 360 && MediaQuery.of(context).size.width < 600;
+  bool _isSmallScreen(BuildContext context) =>
+      MediaQuery.of(context).size.width < 360;
 
   @override
   void initState() {
@@ -54,16 +56,20 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Future<void> loadAll() async {
     try {
-      final m = await service.getMedicos();
-      final p = await service.getPacientes();
-      final pr = await service.getPerfilAdmin(widget.idUsuario);
+      final futures = await Future.wait([
+        service.getMedicos(),
+        service.getPacientes(),
+        service.getCuidadores(), // ✅ NUEVO
+        service.getPerfilAdmin(widget.idUsuario),
+      ]);
 
       if (!mounted) return;
 
       setState(() {
-        medicos = List<Map<String, dynamic>>.from(m);
-        pacientes = List<Map<String, dynamic>>.from(p);
-        perfil = pr;
+        medicos = List<Map<String, dynamic>>.from(futures[0] as List);
+        pacientes = List<Map<String, dynamic>>.from(futures[1] as List);
+        cuidadores = List<Map<String, dynamic>>.from(futures[2] as List);
+        perfil = Map<String, dynamic>.from(futures[3] as Map);
         loading = false;
       });
     } catch (e) {
@@ -77,7 +83,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
         title: Row(
           children: [
             Icon(Icons.logout, color: AppTheme.danger, size: 28),
@@ -85,9 +93,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
             Text("Cerrar sesión", style: AppTheme.title2),
           ],
         ),
-        content: Text("¿Estás seguro de que deseas cerrar sesión?", style: AppTheme.body2),
+        content: Text(
+          "¿Estás seguro de que deseas cerrar sesión?",
+          style: AppTheme.body2,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar"),
+          ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
@@ -130,13 +144,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  ImageProvider _getProfileImage() {
-    if (perfil != null && perfil!["fotoPerfil"] != null && perfil!["fotoPerfil"].toString().isNotEmpty) {
-      return AssetImage(perfil!["fotoPerfil"]);
-    }
-    return const AssetImage("assets/images/admin.jpg");
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -157,7 +164,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           child: SafeArea(
             child: Padding(
-              padding: EdgeInsets.symmetric(horizontal: isSmall ? 8.0 : 16.0, vertical: isSmall ? 8.0 : 12.0),
+              padding: EdgeInsets.symmetric(
+                horizontal: isSmall ? 8.0 : 16.0,
+                vertical: isSmall ? 8.0 : 12.0,
+              ),
               child: Row(
                 children: [
                   AppTheme.buildSmallLogo(
@@ -165,7 +175,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     onTap: () {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content: Text("CardioCare - Panel de Administración"),
+                          content: Text(
+                              "CardioCare - Panel de Administración"),
                           behavior: SnackBarBehavior.floating,
                           duration: Duration(seconds: 2),
                         ),
@@ -201,11 +212,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                   ),
-                  _buildAppBarButton(Icons.edit_outlined, editarPerfil, isSmall: isSmall),
+                  _buildAppBarButton(
+                    Icons.edit_outlined,
+                    editarPerfil,
+                    isSmall: isSmall,
+                  ),
                   const SizedBox(width: 4),
-                  _buildAppBarButton(Icons.settings_outlined, openConfiguracion, isSmall: isSmall),
+                  _buildAppBarButton(
+                    Icons.settings_outlined,
+                    openConfiguracion,
+                    isSmall: isSmall,
+                  ),
                   const SizedBox(width: 4),
-                  _buildAppBarButton(Icons.logout, logout, isSmall: isSmall),
+                  _buildAppBarButton(
+                    Icons.logout,
+                    logout,
+                    isSmall: isSmall,
+                  ),
                 ],
               ),
             ),
@@ -219,7 +242,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               color: AppTheme.primary,
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.only(bottom: 20.0),
+                padding: const EdgeInsets.only(bottom: 20.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -253,12 +276,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==============================================
-  // 🧩 WIDGET DE BOTÓN DE LA BARRA
+  // 🧩 BOTÓN DE LA BARRA
   // ==============================================
-  Widget _buildAppBarButton(IconData icon, VoidCallback onPressed, {required bool isSmall}) {
+  Widget _buildAppBarButton(
+    IconData icon,
+    VoidCallback onPressed, {
+    required bool isSmall,
+  }) {
     final size = isSmall ? 20.0 : 24.0;
     final padding = isSmall ? 6.0 : 8.0;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.2),
@@ -272,8 +299,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
           minWidth: isSmall ? 32.0 : 40.0,
           minHeight: isSmall ? 32.0 : 40.0,
         ),
-        tooltip: icon == Icons.edit_outlined ? "Editar perfil" : 
-                 icon == Icons.settings_outlined ? "Configuración" : "Cerrar sesión",
+        tooltip: icon == Icons.edit_outlined
+            ? "Editar perfil"
+            : icon == Icons.settings_outlined
+                ? "Configuración"
+                : "Cerrar sesión",
       ),
     );
   }
@@ -285,7 +315,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSmall = _isSmallScreen(context);
     final nombreCompleto = perfil?["nombre"]?.toString() ?? widget.nombre;
-    final inicial = nombreCompleto.isNotEmpty ? nombreCompleto[0].toUpperCase() : 'A';
+    final inicial = nombreCompleto.isNotEmpty
+        ? nombreCompleto[0].toUpperCase()
+        : 'A';
     final correo = perfil?["correo"] ?? "Administrador del sistema";
 
     return Container(
@@ -304,7 +336,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             height: isSmall ? 56.0 : 70.0,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
+              border: Border.all(
+                color: AppTheme.primary.withOpacity(0.3),
+                width: 2,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: AppTheme.primary.withOpacity(0.3),
@@ -321,7 +356,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    decoration: BoxDecoration(gradient: AppTheme.primaryGradient),
+                    decoration: const BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                    ),
                     child: Center(
                       child: Text(
                         inicial,
@@ -364,10 +401,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: isSmall ? 8.0 : 12.0, vertical: isSmall ? 4.0 : 6.0),
+            padding: EdgeInsets.symmetric(
+              horizontal: isSmall ? 8.0 : 12.0,
+              vertical: isSmall ? 4.0 : 6.0,
+            ),
             decoration: BoxDecoration(
               color: AppTheme.success.withOpacity(0.1),
-              border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+              border: Border.all(
+                color: AppTheme.success.withOpacity(0.3),
+              ),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -399,12 +441,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==============================================
-  // 📊 TARJETA DE INFORMACIÓN - CORREGIDA
+  // 📊 TARJETA DE INFORMACIÓN
   // ==============================================
   Widget _buildInfoCard() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isSmall = _isSmallScreen(context);
-    
+
     return Container(
       padding: EdgeInsets.all(isSmall ? 14.0 : 20.0),
       decoration: BoxDecoration(
@@ -414,7 +456,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
       child: Column(
         children: [
-          // ✅ HEADER CORREGIDO - Sin overflow
           Row(
             children: [
               Container(
@@ -423,7 +464,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   color: AppTheme.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.analytics_outlined, color: AppTheme.primary, size: 22),
+                child: const Icon(
+                  Icons.analytics_outlined,
+                  color: AppTheme.primary,
+                  size: 22,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -436,9 +481,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              // ✅ Badge más compacto
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: AppTheme.success.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
@@ -457,6 +504,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const SizedBox(height: 14),
           const Divider(height: 1, color: AppTheme.gray200),
           const SizedBox(height: 14),
+          // ✅ Primera fila: Médicos y Pacientes
           Row(
             children: [
               Expanded(
@@ -465,6 +513,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   "Médicos",
                   "${medicos.length}",
                   isSmall,
+                  _primary,
                 ),
               ),
               const SizedBox(width: 10),
@@ -474,28 +523,32 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   "Pacientes",
                   "${pacientes.length}",
                   isSmall,
+                  _success,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 10),
+          // ✅ Segunda fila: Cuidadores y Total
           Row(
             children: [
               Expanded(
                 child: _infoRow(
-                  Icons.analytics_outlined,
-                  "Total usuarios",
-                  "${medicos.length + pacientes.length}",
+                  Icons.people_outline,
+                  "Cuidadores",
+                  "${cuidadores.length}",
                   isSmall,
+                  _cuidador,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _infoRow(
-                  Icons.admin_panel_settings_outlined,
-                  "Admin",
-                  perfil?["nombre"]?.toString().split(" ").first ?? widget.nombre,
+                  Icons.analytics_outlined,
+                  "Total usuarios",
+                  "${medicos.length + pacientes.length + cuidadores.length}",
                   isSmall,
+                  _info,
                 ),
               ),
             ],
@@ -505,10 +558,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value, bool isSmall) {
+  Widget _infoRow(
+    IconData icon,
+    String label,
+    String value,
+    bool isSmall,
+    Color color,
+  ) {
     return Row(
       children: [
-        Icon(icon, color: AppTheme.primary, size: isSmall ? 16.0 : 18.0),
+        Icon(icon, color: color, size: isSmall ? 16.0 : 18.0),
         const SizedBox(width: 8),
         Expanded(
           child: Column(
@@ -545,7 +604,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _buildAccionesGrid() {
     final isSmall = _isSmallScreen(context);
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     final items = [
       _AccionItem(
         "Usuarios",
@@ -653,7 +712,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final iconSize = isSmall ? 24.0 : 28.0;
     final fontSize = isSmall ? 12.0 : 14.0;
     final padding = isSmall ? 10.0 : 14.0;
-    
+
     return GestureDetector(
       onTap: item.onTap,
       child: Container(
@@ -699,7 +758,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget _buildCTACard() {
     final isSmall = _isSmallScreen(context);
     final screenWidth = MediaQuery.of(context).size.width;
-    
+
     return Container(
       padding: EdgeInsets.all(isSmall ? 14.0 : 20.0),
       decoration: BoxDecoration(
@@ -753,7 +812,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: editarPerfil,
-                  icon: Icon(Icons.edit_outlined, size: isSmall ? 14.0 : 16.0),
+                  icon: Icon(
+                    Icons.edit_outlined,
+                    size: isSmall ? 14.0 : 16.0,
+                  ),
                   label: Text(
                     "Editar perfil",
                     style: TextStyle(
@@ -765,8 +827,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             ),
           ),
-          if (screenWidth > 400)
-            const SizedBox(width: 10),
+          if (screenWidth > 400) const SizedBox(width: 10),
           if (screenWidth > 400)
             Icon(
               Icons.admin_panel_settings_outlined,
@@ -784,5 +845,6 @@ class _AccionItem {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+
   const _AccionItem(this.title, this.icon, this.color, this.onTap);
 }

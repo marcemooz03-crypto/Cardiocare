@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cardio_app/accesibility_provider.dart';
+import 'package:cardio_app/app.theme.dart';
 import '../services/tratamiento_service.dart';
 
 class AsignarMedicamentoScreen extends StatefulWidget {
@@ -17,79 +20,107 @@ class AsignarMedicamentoScreen extends StatefulWidget {
 class _AsignarMedicamentoScreenState
     extends State<AsignarMedicamentoScreen> {
   final TratamientoService service = TratamientoService();
+  final _formKey = GlobalKey<FormState>();
 
-  // Controladores con nombres más descriptivos
-  final _medicamentoIdController = TextEditingController();
+  // Dropdown de medicamentos disponibles
+  List<Map<String, dynamic>> _medicamentosDisponibles = [];
+  int? _idMedicamentoSeleccionado;
+  bool _cargandoMedicamentos = true;
+  String? _errorMedicamentos;
+
+  // Controladores
   final _dosisController = TextEditingController();
   final _frecuenciaController = TextEditingController();
-  
-  // Focus nodes para mejor navegación
-  final _medicamentoIdFocus = FocusNode();
+
   final _dosisFocus = FocusNode();
   final _frecuenciaFocus = FocusNode();
-  
-  // Estado de carga y validación
+
   bool _isLoading = false;
-  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarMedicamentosDisponibles();
+  }
 
   @override
   void dispose() {
-    // Limpieza de recursos
-    _medicamentoIdController.dispose();
     _dosisController.dispose();
     _frecuenciaController.dispose();
-    _medicamentoIdFocus.dispose();
     _dosisFocus.dispose();
     _frecuenciaFocus.dispose();
     super.dispose();
   }
 
-  // Validadores mejorados
-  String? _validateMedicamentoId(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'El ID del medicamento es requerido';
+  // ==========================================
+  // 📦 CARGAR MEDICAMENTOS DISPONIBLES
+  // ==========================================
+  Future<void> _cargarMedicamentosDisponibles() async {
+    setState(() {
+      _cargandoMedicamentos = true;
+      _errorMedicamentos = null;
+    });
+
+    try {
+      final data = await service.getMedicamentosDisponibles();
+      if (!mounted) return;
+      setState(() {
+        _medicamentosDisponibles = data;
+        _cargandoMedicamentos = false;
+      });
+      print("✅ Medicamentos disponibles: ${_medicamentosDisponibles.length}");
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _errorMedicamentos = "No se pudieron cargar los medicamentos";
+        _cargandoMedicamentos = false;
+      });
+      print("❌ Error cargando medicamentos: $e");
     }
-    if (int.tryParse(value) == null) {
-      return 'Ingrese un ID válido (solo números)';
-    }
-    if (int.parse(value) <= 0) {
-      return 'El ID debe ser un número positivo';
+  }
+
+  // ==========================================
+  // ✔️ VALIDADORES
+  // ==========================================
+  String? _validateMedicamento(int? value) {
+    if (value == null) {
+      return 'Selecciona un medicamento';
     }
     return null;
   }
 
   String? _validateDosis(String? value) {
-    if (value == null || value.isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return 'La dosis es requerida';
     }
-    if (value.length > 50) {
+    if (value.trim().length > 50) {
       return 'La dosis es demasiado larga';
     }
     return null;
   }
 
   String? _validateFrecuencia(String? value) {
-    if (value == null || value.isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return 'La frecuencia es requerida';
     }
-    if (value.length > 50) {
+    if (value.trim().length > 50) {
       return 'La frecuencia es demasiado larga';
     }
     return null;
   }
 
+  // ==========================================
+  // 💾 ASIGNAR MEDICAMENTO
+  // ==========================================
   Future<void> _asignarMedicamento() async {
-    // Validar formulario antes de continuar
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isLoading = true);
 
     try {
-      final medicamentoId = int.parse(_medicamentoIdController.text);
-      
       final response = await service.agregarMedicamento(
         idTratamiento: widget.idTratamiento,
-        idMedicamento: medicamentoId,
+        idMedicamento: _idMedicamentoSeleccionado!,
         dosis: _dosisController.text.trim(),
         frecuencia: _frecuenciaController.text.trim(),
       );
@@ -97,11 +128,13 @@ class _AsignarMedicamentoScreenState
       if (!mounted) return;
 
       final isSuccess = response["ok"] == true;
-      
+
       _showSnackBar(
-        message: isSuccess 
-            ? "Medicamento asignado exitosamente 💊" 
-            : response["message"] ?? "Error al asignar el medicamento",
+        message: isSuccess
+            ? "Medicamento asignado exitosamente 💊"
+            : (response["message"] ??
+                response["error"]?.toString() ??
+                "Error al asignar el medicamento"),
         isError: !isSuccess,
       );
 
@@ -124,85 +157,77 @@ class _AsignarMedicamentoScreenState
   void _showSnackBar({required String message, required bool isError}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 12),
+            Expanded(child: Text(message)),
+          ],
+        ),
+        backgroundColor: isError ? AppTheme.danger : AppTheme.success,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(12),
         ),
         duration: const Duration(seconds: 3),
-        action: isError ? null : SnackBarAction(
-          label: 'OK',
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
 
   void _clearForm() {
-    _medicamentoIdController.clear();
+    setState(() {
+      _idMedicamentoSeleccionado = null;
+    });
     _dosisController.clear();
     _frecuenciaController.clear();
-    
-    // Poner foco al primer campo después de limpiar
-    _medicamentoIdFocus.requestFocus();
+    _dosisFocus.requestFocus();
   }
 
+  // ==========================================
+  // 🏗 BUILD
+  // ==========================================
   @override
   Widget build(BuildContext context) {
+    final accessibility = Provider.of<AccessibilityProvider>(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
       appBar: AppBar(
-        title: const Text(
+        title: Text(
           "Asignar medicamento",
-          style: TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 20 * accessibility.fontScale,
+          ),
         ),
         centerTitle: true,
         elevation: 0,
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Mejores campos de entrada con validación
-              TextFormField(
-                controller: _medicamentoIdController,
-                focusNode: _medicamentoIdFocus,
-                keyboardType: TextInputType.number,
-                textInputAction: TextInputAction.next,
-                validator: _validateMedicamentoId,
-                autovalidateMode: AutovalidateMode.onUserInteraction,
-                decoration: InputDecoration(
-                  labelText: "ID del Medicamento",
-                  hintText: "Ej: 12345",
-                  prefixIcon: const Icon(Icons.medication),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Colors.blue, width: 2),
-                  ),
-                  errorBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Colors.red),
-                  ),
-                ),
-              ),
-              
+              // ─────────────────────────────
+              // 💊 Dropdown de medicamentos
+              // ─────────────────────────────
+              _buildMedicamentoDropdown(accessibility, isDark),
+
               const SizedBox(height: 16),
-              
+
+              // ─────────────────────────────
+              // 💧 Dosis
+              // ─────────────────────────────
               TextFormField(
                 controller: _dosisController,
                 focusNode: _dosisFocus,
-                keyboardType: TextInputType.text,
                 textInputAction: TextInputAction.next,
                 validator: _validateDosis,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -213,23 +238,19 @@ class _AsignarMedicamentoScreenState
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Colors.blue, width: 2),
-                  ),
+                  filled: true,
+                  fillColor: isDark ? AppTheme.gray800 : Colors.white,
                 ),
               ),
-              
+
               const SizedBox(height: 16),
-              
+
+              // ─────────────────────────────
+              // ⏱ Frecuencia
+              // ─────────────────────────────
               TextFormField(
                 controller: _frecuenciaController,
                 focusNode: _frecuenciaFocus,
-                keyboardType: TextInputType.text,
                 textInputAction: TextInputAction.done,
                 validator: _validateFrecuencia,
                 autovalidateMode: AutovalidateMode.onUserInteraction,
@@ -241,29 +262,22 @@ class _AsignarMedicamentoScreenState
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Colors.blue, width: 2),
-                  ),
+                  filled: true,
+                  fillColor: isDark ? AppTheme.gray800 : Colors.white,
                 ),
               ),
-              
+
               const SizedBox(height: 24),
-              
-              // Botón mejorado con loading indicator
+
+              // ─────────────────────────────
+              // 💾 Botón asignar
+              // ─────────────────────────────
               ElevatedButton(
                 onPressed: _isLoading ? null : _asignarMedicamento,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                style: AppTheme.primaryButtonStyle.copyWith(
+                  padding: WidgetStateProperty.all(
+                    const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  backgroundColor: Colors.blue.shade700,
-                  foregroundColor: Colors.white,
                 ),
                 child: _isLoading
                     ? const SizedBox(
@@ -274,21 +288,23 @@ class _AsignarMedicamentoScreenState
                           strokeWidth: 2,
                         ),
                       )
-                    : const Text(
+                    : Text(
                         "Asignar medicamento",
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 16 * accessibility.fontScale,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
               ),
-              
-              const Spacer(),
-              
-              // Card informativa opcional
+
+              const SizedBox(height: 20),
+
+              // ─────────────────────────────
+              // ℹ️ Card informativa
+              // ─────────────────────────────
               Card(
                 elevation: 0,
-                color: Colors.blue.shade50,
+                color: AppTheme.info.withOpacity(0.08),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -296,14 +312,14 @@ class _AsignarMedicamentoScreenState
                   padding: const EdgeInsets.all(12),
                   child: Row(
                     children: [
-                      Icon(Icons.info_outline, color: Colors.blue.shade700),
+                      Icon(Icons.info_outline, color: AppTheme.info),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          "Ingresa el ID del medicamento que deseas asignar al tratamiento actual.",
+                          "Selecciona el medicamento y completa dosis y frecuencia.",
                           style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.blue.shade700,
+                            fontSize: 12 * accessibility.fontScale,
+                            color: AppTheme.info,
                           ),
                         ),
                       ),
@@ -315,6 +331,126 @@ class _AsignarMedicamentoScreenState
           ),
         ),
       ),
+    );
+  }
+
+  // ==========================================
+  // 🧩 DROPDOWN DE MEDICAMENTOS
+  // ==========================================
+  Widget _buildMedicamentoDropdown(
+    AccessibilityProvider accessibility,
+    bool isDark,
+  ) {
+    if (_cargandoMedicamentos) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.gray800 : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? AppTheme.gray600 : AppTheme.gray300,
+          ),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Text(
+              "Cargando medicamentos...",
+              style: TextStyle(
+                fontSize: 14 * accessibility.fontScale,
+                color: isDark ? AppTheme.gray300 : AppTheme.gray500,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_errorMedicamentos != null) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.danger.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppTheme.danger.withOpacity(0.3)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.error_outline, color: AppTheme.danger),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _errorMedicamentos!,
+                style: TextStyle(
+                  fontSize: 14 * accessibility.fontScale,
+                  color: AppTheme.danger,
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: _cargarMedicamentosDisponibles,
+              child: const Text("Reintentar"),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_medicamentosDisponibles.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? AppTheme.gray800 : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isDark ? AppTheme.gray600 : AppTheme.gray300,
+          ),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, color: AppTheme.info),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                "No hay medicamentos disponibles en el sistema",
+                style: TextStyle(
+                  fontSize: 14 * accessibility.fontScale,
+                  color: isDark ? AppTheme.gray300 : AppTheme.gray500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<int>(
+      value: _idMedicamentoSeleccionado,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: "Medicamento *",
+        prefixIcon: const Icon(Icons.medication),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        filled: true,
+        fillColor: isDark ? AppTheme.gray800 : Colors.white,
+      ),
+      items: _medicamentosDisponibles.map((m) {
+        final id = int.tryParse(m["idMedicamento"].toString());
+        final nombre = m["nombre"]?.toString() ?? "Medicamento";
+        return DropdownMenuItem<int>(
+          value: id,
+          child: Text(nombre, overflow: TextOverflow.ellipsis),
+        );
+      }).toList(),
+      onChanged: (v) => setState(() => _idMedicamentoSeleccionado = v),
+      validator: _validateMedicamento,
     );
   }
 }

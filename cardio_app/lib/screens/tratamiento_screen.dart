@@ -39,7 +39,10 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   List<Map<String, dynamic>> _medicamentos = [];
   List<Map<String, dynamic>> _sintomas = [];
   int? _medicamentoSeleccionadoId;
+
+  // ✅ SÍNTOMA OPCIONAL → puede ser null
   int? _sintomaSeleccionadoId;
+
   String _estado = "Activo";
   bool _isLoading = false;
   bool _isLoadingData = true;
@@ -80,19 +83,22 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
 
   Future<void> _cargarDatosIniciales() async {
     setState(() => _isLoadingData = true);
-    
+
     try {
       final resultados = await Future.wait([
         service.getMedicamentosDisponibles(),
         service.getSintomas(),
       ]);
-      
+
       if (mounted) {
         setState(() {
           _medicamentos = resultados[0];
           _sintomas = resultados[1];
           _isLoadingData = false;
         });
+
+        print("✅ Medicamentos: ${_medicamentos.length}");
+        print("✅ Síntomas: ${_sintomas.length}");
       }
     } catch (e) {
       if (mounted) {
@@ -161,12 +167,21 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   // ==============================================
   // 📅 SELECCIONAR FECHA
   // ==============================================
-  Future<void> _seleccionarFecha(TextEditingController controller, bool isInicio) async {
+  Future<void> _seleccionarFecha(
+    TextEditingController controller,
+    bool isInicio,
+  ) async {
     final DateTime now = DateTime.now();
+
+    // ✅ Permitir fechas pasadas (por si el médico registra un tratamiento ya iniciado)
+    final DateTime initial = isInicio
+        ? (_fechaInicio ?? now)
+        : (_fechaFin ?? _fechaInicio ?? now);
+
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: isInicio ? now : (_fechaInicio ?? now),
-      firstDate: isInicio ? now : (_fechaInicio ?? now),
+      initialDate: initial,
+      firstDate: DateTime(2000), // ✅ permite fechas pasadas
       lastDate: DateTime(now.year + 5),
       builder: (context, child) {
         return Theme(
@@ -180,7 +195,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
         );
       },
     );
-    
+
     if (picked != null && mounted) {
       setState(() {
         if (isInicio) {
@@ -199,7 +214,10 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   }
 
   String _formatFecha(DateTime date) {
-    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const meses = [
+      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+    ];
     return "${date.day} ${meses[date.month - 1]}, ${date.year}";
   }
 
@@ -211,6 +229,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   // 📨 MENSAJES
   // ==============================================
   void _mostrarMensaje(String mensaje, {bool esError = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -240,17 +259,14 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   // ==============================================
   Future<void> _guardar() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     final fechaError = _validateFechas();
     if (fechaError != null) {
       _mostrarMensaje(fechaError, esError: true);
       return;
     }
-    
-    if (_sintomaSeleccionadoId == null) {
-      _mostrarMensaje("Debe seleccionar un síntoma asociado", esError: true);
-      return;
-    }
+
+    // ✅ YA NO se exige síntoma. Solo se envía si fue seleccionado.
 
     setState(() => _isLoading = true);
 
@@ -258,7 +274,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
       final tratamientoData = {
         "idPaciente": widget.idPaciente,
         "idMedico": widget.idMedico,
-        "idSintoma": _sintomaSeleccionadoId,
+        "idSintoma": _sintomaSeleccionadoId, // 👈 puede ser null
         "descripcion": _descripcionController.text.trim(),
         "fechaInicio": _convertirFechaParaAPI(_fechaInicio!),
         "fechaFin": _convertirFechaParaAPI(_fechaFin!),
@@ -266,10 +282,12 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
         "observaciones": _observacionesController.text.trim(),
       };
 
+      print("📦 ENVIANDO TRATAMIENTO: $tratamientoData");
+
       final response = await service.crearTratamiento(tratamientoData);
-      
+
       if (!mounted) return;
-      
+
       final isSuccess = response["ok"] == true;
 
       if (isSuccess && _medicamentoSeleccionadoId != null) {
@@ -286,7 +304,9 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
         Navigator.pop(context, true);
       } else {
         _mostrarMensaje(
-          response["message"] ?? "Error al registrar el tratamiento",
+          response["message"] ??
+              response["error"]?.toString() ??
+              "Error al registrar el tratamiento",
           esError: true,
         );
       }
@@ -423,11 +443,11 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: AppTheme.primary),
+          const Icon(Icons.info_outline, color: AppTheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              "Los campos con * son obligatorios",
+              "Los campos con * son obligatorios. El síntoma es opcional.",
               style: TextStyle(
                 fontSize: 14 * accessibility.fontScale,
                 color: AppTheme.primary,
@@ -443,7 +463,10 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   // ==============================================
   // 📝 TARJETA DE INFORMACIÓN DEL TRATAMIENTO
   // ==============================================
-  Widget _buildInformacionTratamientoCard(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildInformacionTratamientoCard(
+    AccessibilityProvider accessibility,
+    bool isDark,
+  ) {
     return _buildSectionCard(
       icon: Icons.medical_information,
       title: "Información del Tratamiento",
@@ -470,17 +493,20 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
           ),
         ),
         const SizedBox(height: 16),
+
+        // ✅ SÍNTOMA OPCIONAL (SIN *)
         _buildDropdownField(
           value: _sintomaSeleccionadoId,
           items: _sintomas,
-          label: "Síntoma asociado *",
-          hint: "Seleccione un síntoma",
+          label: "Síntoma asociado (opcional)", // 👈 sin *
+          hint: "Sin síntoma",
           icon: Icons.healing,
           displayField: "titulo",
           valueField: "idSintoma",
           onChanged: (v) => setState(() => _sintomaSeleccionadoId = v),
           accessibility: accessibility,
           isDark: isDark,
+          permitirNull: true, // 👈 permite "Sin síntoma"
         ),
       ],
     );
@@ -521,7 +547,10 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   // ==============================================
   // 📝 TARJETA DE OBSERVACIONES
   // ==============================================
-  Widget _buildObservacionesCard(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildObservacionesCard(
+    AccessibilityProvider accessibility,
+    bool isDark,
+  ) {
     return _buildSectionCard(
       icon: Icons.notes,
       title: "Observaciones",
@@ -552,7 +581,10 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   // ==============================================
   // 💊 TARJETA DE MEDICAMENTO
   // ==============================================
-  Widget _buildMedicamentoCard(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildMedicamentoCard(
+    AccessibilityProvider accessibility,
+    bool isDark,
+  ) {
     return _buildSectionCard(
       icon: Icons.medication,
       title: "Medicamento (Opcional)",
@@ -563,14 +595,15 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
         _buildDropdownField(
           value: _medicamentoSeleccionadoId,
           items: _medicamentos,
-          label: "Medicamento",
-          hint: "Seleccione un medicamento (opcional)",
+          label: "Medicamento (opcional)",
+          hint: "Sin medicamento",
           icon: Icons.medication,
           displayField: "nombre",
           valueField: "idMedicamento",
           onChanged: (v) => setState(() => _medicamentoSeleccionadoId = v),
           accessibility: accessibility,
           isDark: isDark,
+          permitirNull: true,
         ),
         if (_medicamentoSeleccionadoId != null) ...[
           const SizedBox(height: 16),
@@ -655,7 +688,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   // ==============================================
   // 🧩 WIDGETS REUTILIZABLES
   // ==============================================
-  
+
   Widget _buildSectionCard({
     required IconData icon,
     required String title,
@@ -738,16 +771,24 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
         fontSize: 14 * accessibility.fontScale,
         color: isDark ? AppTheme.gray500 : AppTheme.gray400,
       ),
-      prefixIcon: Icon(icon, size: 20, color: isDark ? AppTheme.gray400 : AppTheme.gray500),
+      prefixIcon: Icon(
+        icon,
+        size: 20,
+        color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+      ),
       filled: true,
       fillColor: isDark ? AppTheme.gray700 : AppTheme.gray50,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
+        borderSide: BorderSide(
+          color: isDark ? AppTheme.gray600 : AppTheme.gray300,
+        ),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
+        borderSide: BorderSide(
+          color: isDark ? AppTheme.gray600 : AppTheme.gray300,
+        ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -783,28 +824,44 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
           fontSize: 14 * accessibility.fontScale,
           color: isDark ? AppTheme.gray400 : AppTheme.gray500,
         ),
-        prefixIcon: const Icon(Icons.calendar_today, size: 20, color: AppTheme.primary),
-        suffixIcon: const Icon(Icons.arrow_drop_down, size: 24, color: AppTheme.primary),
+        prefixIcon: const Icon(
+          Icons.calendar_today,
+          size: 20,
+          color: AppTheme.primary,
+        ),
+        suffixIcon: const Icon(
+          Icons.arrow_drop_down,
+          size: 24,
+          color: AppTheme.primary,
+        ),
         filled: true,
         fillColor: isDark ? AppTheme.gray700 : AppTheme.gray50,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
+          borderSide: BorderSide(
+            color: isDark ? AppTheme.gray600 : AppTheme.gray300,
+          ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
+          borderSide: BorderSide(
+            color: isDark ? AppTheme.gray600 : AppTheme.gray300,
+          ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppTheme.primary, width: 1.5),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     );
   }
 
-  Widget _buildEstadoField(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildEstadoField(
+    AccessibilityProvider accessibility,
+    bool isDark,
+  ) {
     final estados = {
       "Activo": {"icon": Icons.play_circle, "color": AppTheme.success},
       "Finalizado": {"icon": Icons.check_circle, "color": AppTheme.info},
@@ -815,7 +872,9 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.gray700 : AppTheme.gray50,
-        border: Border.all(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
+        border: Border.all(
+          color: isDark ? AppTheme.gray600 : AppTheme.gray300,
+        ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
@@ -835,7 +894,11 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
               value: entry.key,
               child: Row(
                 children: [
-                  Icon(entry.value["icon"] as IconData?, size: 20, color: entry.value["color"]as Color?),
+                  Icon(
+                    entry.value["icon"] as IconData?,
+                    size: 20,
+                    color: entry.value["color"] as Color?,
+                  ),
                   const SizedBox(width: 10),
                   Text(
                     entry.key,
@@ -853,6 +916,13 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
+  // ==============================================
+  // 🔽 DROPDOWN GENÉRICO
+  // ==============================================
+  // ✅ CORREGIDO:
+  // - Acepta `int?` (permite null)
+  // - Si `permitirNull = true`, agrega opción "Sin X"
+  // - El validator SOLO se activa si el label tiene "*"
   Widget _buildDropdownField({
     required int? value,
     required List<Map<String, dynamic>> items,
@@ -864,17 +934,23 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     required void Function(int?) onChanged,
     required AccessibilityProvider accessibility,
     required bool isDark,
+    bool permitirNull = false, // 👈 nuevo parámetro
   }) {
+    final esObligatorio = label.contains('*');
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.gray700 : AppTheme.gray50,
-        border: Border.all(color: isDark ? AppTheme.gray600 : AppTheme.gray300),
+        border: Border.all(
+          color: isDark ? AppTheme.gray600 : AppTheme.gray300,
+        ),
         borderRadius: BorderRadius.circular(12),
       ),
       child: DropdownButtonHideUnderline(
-        child: DropdownButtonFormField<int>(
+        child: DropdownButtonFormField<int?>(
           value: value,
+          isExpanded: true,
           hint: Text(
             hint,
             style: TextStyle(
@@ -882,7 +958,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
               color: isDark ? AppTheme.gray400 : AppTheme.gray500,
             ),
           ),
-          isExpanded: true,
           decoration: InputDecoration(
             labelText: label,
             labelStyle: TextStyle(
@@ -896,23 +971,50 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
             fontSize: 16 * accessibility.fontScale,
             color: isDark ? Colors.white : AppTheme.gray700,
           ),
-          items: items.map((item) {
-            final id = item[valueField];
-            final nombre = item[displayField]?.toString() ?? "";
-            return DropdownMenuItem<int>(
-              value: id,
-              child: Text(
-                nombre,
-                style: TextStyle(
-                  fontSize: 16 * accessibility.fontScale,
+          items: [
+            // ✅ Opción "Sin X" si se permite null
+            if (permitirNull)
+              DropdownMenuItem<int?>(
+                value: null,
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.block,
+                      size: 18,
+                      color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      hint,
+                      style: TextStyle(
+                        fontSize: 16 * accessibility.fontScale,
+                        color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            );
-          }).toList(),
+            // Opciones normales
+            ...items.map((item) {
+              final id = int.tryParse(item[valueField]?.toString() ?? '');
+              final nombre = item[displayField]?.toString() ?? "";
+              return DropdownMenuItem<int?>(
+                value: id,
+                child: Text(
+                  nombre,
+                  style: TextStyle(
+                    fontSize: 16 * accessibility.fontScale,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }).toList(),
+          ],
           onChanged: onChanged,
-          validator: label.contains("*") && value == null
-              ? (_) => "Este campo es obligatorio"
+          // ✅ Validator SOLO si el campo tiene *
+          validator: esObligatorio
+              ? (_) => value == null ? "Este campo es obligatorio" : null
               : null,
         ),
       ),

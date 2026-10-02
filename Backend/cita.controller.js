@@ -1,10 +1,42 @@
 const db = require('./db');
 
 // ============================
-// 🟢 CREAR CITA (CORREGIDO)
+// 🔧 HELPERS
+// ============================
+
+const ESTADOS_PERMITIDOS = [
+  'Pendiente',
+  'Confirmada',
+  'Aprobada',
+  'Rechazada',
+  'Cancelada',
+  'Completada'
+];
+
+const MAPA_ESTADOS = {
+  'Pendiente de confirmación': 'Pendiente',
+  'Pendiente de confirmacion': 'Pendiente',
+  'Confirmada': 'Confirmada',
+  'Aprobada': 'Aprobada',
+  'Rechazada': 'Rechazada',
+  'Cancelada': 'Cancelada',
+  'Completada': 'Completada'
+};
+
+/**
+ * Normaliza el estado: convierte textos largos a cortos y valida
+ * @returns {string|null} estado válido o null si no es permitido
+ */
+function normalizarEstado(estado, defaultValue = 'Pendiente') {
+  let estadoFinal = estado || defaultValue;
+  estadoFinal = MAPA_ESTADOS[estadoFinal] || estadoFinal;
+  return ESTADOS_PERMITIDOS.includes(estadoFinal) ? estadoFinal : null;
+}
+
+// ============================
+// 🟢 CREAR CITA
 // ============================
 exports.crearCita = (req, res) => {
-
   const {
     idPaciente,
     idProfesional,
@@ -13,33 +45,18 @@ exports.crearCita = (req, res) => {
     estado
   } = req.body;
 
-  // 🔥 NORMALIZAR EL ESTADO PARA EVITAR ERROR "Data too long"
-  const estadosPermitidos = [
-    'Pendiente',
-    'Confirmada',
-    'Aprobada',
-    'Rechazada',
-    'Cancelada',
-    'Completada'
-  ];
+  // ✅ Validación de campos obligatorios
+  if (!idPaciente || !idProfesional || !fecha || !motivo) {
+    return res.status(400).json({
+      ok: false,
+      message: "Faltan datos: idPaciente, idProfesional, fecha y motivo son obligatorios",
+      recibido: { idPaciente, idProfesional, fecha, motivo }
+    });
+  }
 
-  // Si no viene estado, usar 'Pendiente'
-  let estadoFinal = estado || 'Pendiente';
-  
-  // Si el estado viene con texto largo, mapearlo al corto
-  const mapaEstados = {
-    'Pendiente de confirmación': 'Pendiente',
-    'Pendiente de confirmacion': 'Pendiente',
-    'Confirmada': 'Confirmada',
-    'Aprobada': 'Aprobada',
-    'Rechazada': 'Rechazada',
-    'Cancelada': 'Cancelada',
-    'Completada': 'Completada'
-  };
-
-  estadoFinal = mapaEstados[estadoFinal] || estadoFinal;
-
-  if (!estadosPermitidos.includes(estadoFinal)) {
+  // ✅ Normalizar estado
+  let estadoFinal = normalizarEstado(estado, 'Pendiente');
+  if (!estadoFinal) {
     estadoFinal = 'Pendiente';
   }
 
@@ -49,33 +66,32 @@ exports.crearCita = (req, res) => {
     VALUES (?, ?, ?, ?, ?)
   `;
 
-  db.query(sql, [
-    idPaciente,
-    idProfesional,
-    fecha,
-    motivo,
-    estadoFinal
-  ], (err, result) => {
+  db.query(
+    sql,
+    [idPaciente, idProfesional, fecha, motivo, estadoFinal],
+    (err, result) => {
+      if (err) {
+        console.log("❌ Error creando cita:", err);
+        return res.status(500).json({
+          ok: false,
+          error: err.sqlMessage || err.message
+        });
+      }
 
-    if (err) {
-      console.log("❌ Error creando cita:", err);
-      return res.status(500).json({ ok: false, error: err });
+      res.status(201).json({
+        ok: true,
+        idCita: result.insertId,
+        message: "Cita creada correctamente",
+        estado: estadoFinal
+      });
     }
-
-    res.status(201).json({
-      ok: true,
-      idCita: result.insertId,
-      message: "Cita creada correctamente",
-      estado: estadoFinal
-    });
-  });
+  );
 };
 
 // ============================
 // 📅 CITA POR PACIENTE
 // ============================
 exports.getByPaciente = (req, res) => {
-
   const { idPaciente } = req.params;
 
   if (!idPaciente) {
@@ -85,18 +101,31 @@ exports.getByPaciente = (req, res) => {
     });
   }
 
+  // ✅ JOIN con profesionalsalud para traer nombre del médico
   const sql = `
-    SELECT *
-    FROM cita
-    WHERE idPaciente = ?
-    ORDER BY fecha DESC
+    SELECT
+      c.idCita,
+      c.idPaciente,
+      c.idProfesional,
+      c.fecha,
+      c.motivo,
+      c.estado,
+      p.nombre       AS medicoNombre,
+      p.especialidad AS medicoEspecialidad
+    FROM cita c
+    LEFT JOIN profesionalsalud p
+      ON p.idProfesional = c.idProfesional
+    WHERE c.idPaciente = ?
+    ORDER BY c.fecha DESC
   `;
 
   db.query(sql, [idPaciente], (err, result) => {
-
     if (err) {
       console.log("❌ Error obteniendo citas por paciente:", err);
-      return res.status(500).json({ ok: false, error: err });
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
+      });
     }
 
     // ✅ Devuelve el array directamente (como espera el frontend)
@@ -105,11 +134,10 @@ exports.getByPaciente = (req, res) => {
 };
 
 // ============================
-// 📅 CITA POR MÉDICO (CORREGIDO)
+// 📅 CITA POR MÉDICO
 // ============================
 exports.getByMedico = (req, res) => {
-
-  const idProfesional = req.params.idProfesional;
+  const { idProfesional } = req.params;
 
   if (!idProfesional) {
     return res.status(400).json({
@@ -118,21 +146,36 @@ exports.getByMedico = (req, res) => {
     });
   }
 
+  // ✅ JOIN con paciente y usuario para traer nombre del paciente
   const sql = `
-    SELECT *
-    FROM cita
-    WHERE idProfesional = ?
-    ORDER BY fecha DESC
+    SELECT
+      c.idCita,
+      c.idPaciente,
+      c.idProfesional,
+      c.fecha,
+      c.motivo,
+      c.estado,
+      u.nombre        AS pacienteNombre,
+      pa.idUsuario    AS pacienteIdUsuario
+    FROM cita c
+    LEFT JOIN paciente pa
+      ON pa.idPaciente = c.idPaciente
+    LEFT JOIN usuario u
+      ON u.idUsuario = pa.idUsuario
+    WHERE c.idProfesional = ?
+    ORDER BY c.fecha DESC
   `;
 
   db.query(sql, [idProfesional], (err, result) => {
-
     if (err) {
       console.log("❌ Error obteniendo citas por médico:", err);
-      return res.status(500).json({ ok: false, error: err });
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
+      });
     }
 
-    console.log("📥 CITAS DB =>", result);
+    console.log("📥 CITAS DB =>", result.length, "citas");
 
     // ✅ Devuelve el array directamente (como espera el frontend)
     res.json(result);
@@ -143,7 +186,6 @@ exports.getByMedico = (req, res) => {
 // ❌ CANCELAR CITA
 // ============================
 exports.cancelarCita = (req, res) => {
-
   const { idCita } = req.params;
 
   if (!idCita) {
@@ -160,10 +202,12 @@ exports.cancelarCita = (req, res) => {
   `;
 
   db.query(sql, [idCita], (err, result) => {
-
     if (err) {
       console.log("❌ Error cancelando cita:", err);
-      return res.status(500).json({ ok: false, error: err });
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
+      });
     }
 
     if (result.affectedRows === 0) {
@@ -182,10 +226,9 @@ exports.cancelarCita = (req, res) => {
 };
 
 // ============================
-// ✏️ ACTUALIZAR ESTADO
+// ✏️ ACTUALIZAR ESTADO (CON VALIDACIÓN)
 // ============================
 exports.actualizarEstadoCita = (req, res) => {
-
   const { idCita } = req.params;
   const { estado } = req.body;
 
@@ -203,33 +246,12 @@ exports.actualizarEstadoCita = (req, res) => {
     });
   }
 
-  const estadosPermitidos = [
-    'Pendiente',
-    'Confirmada',
-    'Aprobada',
-    'Rechazada',
-    'Cancelada',
-    'Completada'
-  ];
+  const estadoFinal = normalizarEstado(estado);
 
-  let estadoFinal = estado;
-  
-  const mapaEstados = {
-    'Pendiente de confirmación': 'Pendiente',
-    'Pendiente de confirmacion': 'Pendiente',
-    'Confirmada': 'Confirmada',
-    'Aprobada': 'Aprobada',
-    'Rechazada': 'Rechazada',
-    'Cancelada': 'Cancelada',
-    'Completada': 'Completada'
-  };
-
-  estadoFinal = mapaEstados[estadoFinal] || estadoFinal;
-
-  if (!estadosPermitidos.includes(estadoFinal)) {
+  if (!estadoFinal) {
     return res.status(400).json({
       ok: false,
-      message: `Estado no válido. Estados permitidos: ${estadosPermitidos.join(', ')}`
+      message: `Estado no válido. Estados permitidos: ${ESTADOS_PERMITIDOS.join(', ')}`
     });
   }
 
@@ -240,10 +262,12 @@ exports.actualizarEstadoCita = (req, res) => {
   `;
 
   db.query(sql, [estadoFinal, idCita], (err, result) => {
-
     if (err) {
       console.log("❌ Error actualizando estado:", err);
-      return res.status(500).json({ ok: false, error: err });
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
+      });
     }
 
     if (result.affectedRows === 0) {
@@ -263,7 +287,7 @@ exports.actualizarEstadoCita = (req, res) => {
 };
 
 // ============================
-// ✏️ EDITAR CITA
+// ✏️ EDITAR CITA (REESCRITA LIMPIA)
 // ============================
 exports.editarCita = (req, res) => {
   const { idCita } = req.params;
@@ -276,14 +300,50 @@ exports.editarCita = (req, res) => {
     });
   }
 
-  req.params.idCita = idCita;
-  req.body.estado = estado;
-  
-  exports.actualizarEstadoCita(req, res);
+  if (!estado) {
+    return res.status(400).json({
+      ok: false,
+      message: "El estado es requerido"
+    });
+  }
+
+  const estadoFinal = normalizarEstado(estado);
+
+  if (!estadoFinal) {
+    return res.status(400).json({
+      ok: false,
+      message: `Estado no válido. Estados permitidos: ${ESTADOS_PERMITIDOS.join(', ')}`
+    });
+  }
+
+  const sql = `UPDATE cita SET estado = ? WHERE idCita = ?`;
+
+  db.query(sql, [estadoFinal, idCita], (err, result) => {
+    if (err) {
+      console.log("❌ Error editando cita:", err);
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
+      });
+    }
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        ok: false,
+        message: "Cita no encontrada"
+      });
+    }
+
+    res.json({
+      ok: true,
+      message: "Cita actualizada correctamente",
+      estado: estadoFinal
+    });
+  });
 };
 
 // ============================
-// 📊 ACTUALIZAR ESTADO (VERSIÓN SIMPLIFICADA)
+// 📊 ACTUALIZAR ESTADO (VERSIÓN SIMPLIFICADA - CON VALIDACIÓN)
 // ============================
 exports.actualizarEstado = (req, res) => {
   const { idCita } = req.params;
@@ -296,16 +356,28 @@ exports.actualizarEstado = (req, res) => {
     });
   }
 
+  const estadoFinal = normalizarEstado(estado);
+
+  if (!estadoFinal) {
+    return res.status(400).json({
+      ok: false,
+      message: `Estado no válido. Estados permitidos: ${ESTADOS_PERMITIDOS.join(', ')}`
+    });
+  }
+
   const sql = `
     UPDATE cita
     SET estado = ?
     WHERE idCita = ?
   `;
 
-  db.query(sql, [estado, idCita], (err, result) => {
+  db.query(sql, [estadoFinal, idCita], (err, result) => {
     if (err) {
       console.log("❌ Error actualizando estado:", err);
-      return res.status(500).json({ ok: false, error: err });
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
+      });
     }
 
     if (result.affectedRows === 0) {
@@ -318,6 +390,7 @@ exports.actualizarEstado = (req, res) => {
     res.json({
       ok: true,
       message: "Estado actualizado correctamente",
+      estado: estadoFinal,
       affected: result.affectedRows
     });
   });
@@ -344,7 +417,10 @@ exports.eliminarCita = (req, res) => {
   db.query(sql, [idCita], (err, result) => {
     if (err) {
       console.log("❌ ERROR ELIMINAR =>", err);
-      return res.status(500).json({ ok: false, error: err });
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
+      });
     }
 
     if (result.affectedRows === 0) {
@@ -366,7 +442,6 @@ exports.eliminarCita = (req, res) => {
 // ✅ APROBAR CITA
 // ============================
 exports.aprobarCita = (req, res) => {
-
   const { idCita } = req.params;
 
   if (!idCita) {
@@ -383,12 +458,11 @@ exports.aprobarCita = (req, res) => {
   `;
 
   db.query(sql, [idCita], (err, result) => {
-
     if (err) {
       console.log("❌ Error aprobando cita:", err);
       return res.status(500).json({
         ok: false,
-        error: err
+        error: err.sqlMessage || err.message
       });
     }
 
@@ -411,7 +485,6 @@ exports.aprobarCita = (req, res) => {
 // ❌ RECHAZAR CITA
 // ============================
 exports.rechazarCita = (req, res) => {
-
   const { idCita } = req.params;
 
   if (!idCita) {
@@ -428,12 +501,11 @@ exports.rechazarCita = (req, res) => {
   `;
 
   db.query(sql, [idCita], (err, result) => {
-
     if (err) {
       console.log("❌ Error rechazando cita:", err);
       return res.status(500).json({
         ok: false,
-        error: err
+        error: err.sqlMessage || err.message
       });
     }
 
@@ -453,22 +525,40 @@ exports.rechazarCita = (req, res) => {
 };
 
 // ============================
-// 📊 OBTENER ESTADÍSTICAS DE CITAS
+// 📊 OBTENER ESTADÍSTICAS DE CITAS (CON FILTROS OPCIONALES)
 // ============================
 exports.obtenerEstadisticas = (req, res) => {
+  const { idProfesional, idPaciente } = req.query;
 
-  const sql = `
-    SELECT 
-      estado,
-      COUNT(*) as total
+  let sql = `
+    SELECT estado, COUNT(*) as total
     FROM cita
-    GROUP BY estado
   `;
+  const params = [];
+  const condiciones = [];
 
-  db.query(sql, (err, result) => {
+  if (idProfesional) {
+    condiciones.push("idProfesional = ?");
+    params.push(idProfesional);
+  }
+  if (idPaciente) {
+    condiciones.push("idPaciente = ?");
+    params.push(idPaciente);
+  }
+
+  if (condiciones.length > 0) {
+    sql += " WHERE " + condiciones.join(" AND ");
+  }
+
+  sql += " GROUP BY estado";
+
+  db.query(sql, params, (err, result) => {
     if (err) {
       console.log("❌ Error obteniendo estadísticas:", err);
-      return res.status(500).json({ ok: false, error: err });
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
+      });
     }
 
     res.json({

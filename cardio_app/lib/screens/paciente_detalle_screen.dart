@@ -1,5 +1,6 @@
 import 'package:cardio_app/Screens/tratamiento_screen.dart';
 import 'package:cardio_app/app.theme.dart';
+import 'package:cardio_app/screens/agendar_cita_medico_screen.dart';
 import 'package:cardio_app/services/adherencia_service.dart';
 import 'package:cardio_app/services/cita_service.dart';
 import 'package:flutter/material.dart';
@@ -3006,55 +3007,97 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   // ─── CITAS ───
-  Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.list_alt, size: 24),
-              label: Text(
-                "Ver / Gestionar citas",
-                style: TextStyle(
-                  fontSize: 16 * accessibility.fontScale,
-                  fontWeight: FontWeight.w600,
+  // ─── CITAS ───
+Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
+  return Column(
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+        child: Row(
+          children: [
+            // ✅ NUEVO: Botón para AGENDAR cita como médico
+            Expanded(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.add, size: 22),
+                label: Text(
+                  "Agendar",
+                  style: TextStyle(
+                    fontSize: 14 * accessibility.fontScale,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-              style: AppTheme.secondaryButtonStyle.copyWith(
-                padding: WidgetStateProperty.all(
-                  const EdgeInsets.symmetric(vertical: 16),
+                style: AppTheme.primaryButtonStyle.copyWith(
+                  padding: WidgetStateProperty.all(
+                    const EdgeInsets.symmetric(vertical: 14),
+                  ),
                 ),
-              ),
-              onPressed: () {
-                loadCitas();
-                Navigator.push(
+                onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => CitasScreen(citas: citas, esMedico: true)),
-                );
-              },
+                  MaterialPageRoute(
+                    builder: (_) => AgendarCitaMedicoScreen(
+                      idPaciente: widget.idPaciente,
+                      idProfesional: widget.idMedico,
+                      nombrePaciente: widget.nombre,
+                    ),
+                  ),
+                ).then((agendada) {
+                  if (agendada == true) loadCitas(); // recargar
+                }),
+              ),
             ),
-          ),
-        ),
-        Expanded(
-          child: citas.isEmpty
-              ? _buildEmptyPage(
-                  "Sin citas registradas",
-                  Icons.event_busy,
-                  "Este paciente no tiene citas programadas.",
-                  isDark,
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: citas.length,
-                  itemBuilder: (_, i) => _buildCitaCard(citas[i], accessibility, isDark),
-                ),
-        ),
-      ],
-    );
-  }
+            const SizedBox(width: 10),
 
+            // Botón existente: ver/gestionar
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.list_alt, size: 22),
+                label: Text(
+                  "Gestionar",
+                  style: TextStyle(
+                    fontSize: 14 * accessibility.fontScale,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: AppTheme.secondaryButtonStyle.copyWith(
+                  padding: WidgetStateProperty.all(
+                    const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                ),
+                onPressed: () {
+                  loadCitas();
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CitasScreen(
+                        citas: citas,
+                        esMedico: true,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      Expanded(
+        child: citas.isEmpty
+            ? _buildEmptyPage(
+                "Sin citas registradas",
+                Icons.event_busy,
+                "Este paciente no tiene citas programadas.\nUsa 'Agendar' para crear una.",
+                isDark,
+              )
+            : ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: citas.length,
+                itemBuilder: (_, i) =>
+                    _buildCitaCard(citas[i], accessibility, isDark),
+              ),
+      ),
+    ],
+  );
+}
   Widget _buildCitaCard(Map<String, dynamic> c, AccessibilityProvider accessibility, bool isDark) {
     final estado = c["estado"]?.toString().toLowerCase() ?? "pendiente";
     final estadoColor = estado == "aprobada" ? AppTheme.success :
