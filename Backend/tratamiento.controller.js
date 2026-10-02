@@ -5,8 +5,9 @@ const db = require('./db');
 // ======================================================
 exports.crearTratamiento = (req, res) => {
   const {
-    idPaciente,
-    idSintoma,        // 👈 puede venir null / undefined
+    idUsuario,        // ✅ nuevo: el front envía idUsuario (el correcto)
+    idPaciente,       // ⚠️ compatibilidad: por si el front envía idPaciente
+    idSintoma,
     fechaInicio,
     fechaFin,
     descripcion,
@@ -15,11 +16,15 @@ exports.crearTratamiento = (req, res) => {
 
   console.log("📦 CREAR TRATAMIENTO - BODY:", req.body);
 
-  // ✅ Validación mínima: paciente y descripción son obligatorios
-  if (!idPaciente || !descripcion) {
+  // ✅ Priorizamos idUsuario. Si no viene, usamos idPaciente.
+  //    En ambos casos, el valor que se inserta en la columna `idPaciente`
+  //    (que tiene la FK a usuario.idUsuario) DEBE ser un idUsuario.
+  const idUsuarioFinal = idUsuario ?? idPaciente;
+
+  if (!idUsuarioFinal || !descripcion) {
     return res.status(400).json({
       ok: false,
-      message: "idPaciente y descripcion son obligatorios"
+      message: "idUsuario y descripcion son obligatorios"
     });
   }
 
@@ -42,8 +47,8 @@ exports.crearTratamiento = (req, res) => {
       fechaInicio || null,
       fechaFin || null,
       descripcion,
-      idSintoma || null,      // 👈 null si no se seleccionó síntoma
-      idPaciente,
+      idSintoma || null,
+      idUsuarioFinal,        // ✅ aquí va el idUsuario (aunque la columna se llame idPaciente)
       estado || 'Activo'
     ],
     (err, result) => {
@@ -96,10 +101,14 @@ exports.obtenerTodos = (req, res) => {
 };
 
 // ======================================================
-// 👤 OBTENER POR PACIENTE (CON SÍNTOMA)
+// 👤 OBTENER POR PACIENTE
+// ⚠️ IMPORTANTE: el path param `idPaciente` en realidad debe ser un `idUsuario`
+//    porque la columna `tratamiento.idPaciente` guarda un idUsuario.
 // ======================================================
 exports.obtenerPorPaciente = (req, res) => {
   const { idPaciente } = req.params;
+
+  console.log("🔍 obtenerPorPaciente - id recibido:", idPaciente);
 
   const sql = `
     SELECT
