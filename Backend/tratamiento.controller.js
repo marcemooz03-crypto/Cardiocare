@@ -162,6 +162,11 @@ exports.crearTratamiento = (req, res) => {
 
     // 2️⃣ INSERTAR TRATAMIENTO (usando el idPaciente REAL de la tabla paciente)
     const insertar = () => {
+      console.log(
+        `🔎 TRATAMIENTO ids => body.idUsuario: ${idUsuario}, body.idPaciente: ${idPaciente} | ` +
+        `paciente.idPaciente: ${paciente.idPaciente}, paciente.idUsuario: ${paciente.idUsuario} | ` +
+        `se inserta en tratamiento.idPaciente: ${paciente.idUsuario}`
+      );
       const sql = `
         INSERT INTO tratamiento
         (
