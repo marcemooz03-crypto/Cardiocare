@@ -28,6 +28,8 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
   DateTime? _fechaSeleccionada;
   TimeOfDay? _horaSeleccionada;
 
+  static const double _kMaxFormWidth = 700;
+
   static const List<Map<String, dynamic>> _categorias = [
     {'nombre': 'Alimentación', 'icono': Icons.restaurant, 'color': Color(0xFFF59E0B)},
     {'nombre': 'Ejercicio', 'icono': Icons.fitness_center, 'color': Color(0xFF10B981)},
@@ -145,6 +147,54 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
     }
   }
 
+  // Chip compacto de categoría
+  Widget _buildCategoriaChip(Map<String, dynamic> cat) {
+    final nombre = cat['nombre'] as String;
+    final color = cat['color'] as Color;
+    final icono = cat['icono'] as IconData;
+    final sel = _categoriaSeleccionada == nombre;
+
+    return GestureDetector(
+      onTap: () => setState(() => _categoriaSeleccionada = nombre),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: sel ? color : color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: sel ? color : color.withOpacity(0.3),
+            width: 1,
+          ),
+          boxShadow: sel
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(0.25),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icono, size: 16, color: sel ? Colors.white : color),
+            const SizedBox(width: 6),
+            Text(
+              nombre,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                color: sel ? Colors.white : AppTheme.gray700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final categoriaActual = _categorias.firstWhere(
@@ -165,332 +215,275 @@ class _CrearRecomendacionScreenState extends State<CrearRecomendacionScreen> {
             ),
           ),
           child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: IconButton(
+                      icon: const Icon(Icons.arrow_back,
+                          color: Colors.white, size: 26),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                  const Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "Nueva Recomendación",
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          "Comparte indicaciones con tu paciente",
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 48),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: _kMaxFormWidth),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-                          onPressed: () => Navigator.pop(context),
-                        ),
+                // Tarjeta de título
+                _TarjetaModerna(
+                  icon: Icons.title,
+                  color: AppTheme.primary,
+                  title: "Título de la recomendación",
+                  child: TextField(
+                    controller: _tituloController,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: AppTheme.gray700,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: "Ej: Realizar caminata diaria",
+                      hintStyle: TextStyle(
+                        color: AppTheme.gray400,
+                        fontSize: 14,
                       ),
-                      const Expanded(
-                        child: Column(
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Tarjeta de categoría (chips compactos)
+                _TarjetaModerna(
+                  icon: Icons.category,
+                  color: colorCategoria,
+                  title: "Categoría",
+                  subtitle: "Selecciona el tipo de recomendación",
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _categorias.map(_buildCategoriaChip).toList(),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Tarjeta de descripción
+                _TarjetaModerna(
+                  icon: Icons.description,
+                  color: AppTheme.info,
+                  title: "Descripción detallada",
+                  subtitle: "Explica claramente la recomendación",
+                  child: TextField(
+                    controller: _descripcionController,
+                    maxLines: 6,
+                    textCapitalization: TextCapitalization.sentences,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.4,
+                      color: AppTheme.gray700,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: "Describe en detalle la recomendación médica...",
+                      hintStyle: TextStyle(
+                        color: AppTheme.gray400,
+                        fontSize: 14,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Tarjeta de fecha programada
+                _TarjetaModerna(
+                  icon: Icons.schedule,
+                  color: AppTheme.warning,
+                  title: "Programar recordatorio (opcional)",
+                  subtitle:
+                      "Establece una fecha y hora para recordar esta recomendación",
+                  child: Column(
+                    children: [
+                      SwitchListTile(
+                        value: _fechaProgramada,
+                        onChanged: (value) {
+                          setState(() {
+                            _fechaProgramada = value;
+                            if (!value) {
+                              _fechaSeleccionada = null;
+                              _horaSeleccionada = null;
+                            }
+                          });
+                        },
+                        title: Text(
+                          "Programar recordatorio",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.gray700,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Recibirás una notificación en la fecha seleccionada",
+                          style: TextStyle(
+                            color: AppTheme.gray500,
+                            fontSize: 12,
+                          ),
+                        ),
+                        activeColor: AppTheme.warning,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      if (_fechaProgramada) ...[
+                        const SizedBox(height: 16),
+                        Row(
                           children: [
-                            Text(
-                              "Nueva Recomendación",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
+                            Expanded(
+                              child: _BotonOpcion(
+                                icon: Icons.calendar_today,
+                                label: _fechaSeleccionada != null
+                                    ? "${_fechaSeleccionada!.day}/${_fechaSeleccionada!.month}/${_fechaSeleccionada!.year}"
+                                    : "Seleccionar fecha",
+                                onTap: _seleccionarFecha,
+                                color: AppTheme.warning,
                               ),
                             ),
-                            SizedBox(height: 4),
-                            Text(
-                              "Comparte indicaciones con tu paciente",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 12,
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _BotonOpcion(
+                                icon: Icons.access_time,
+                                label: _horaSeleccionada != null
+                                    ? _horaSeleccionada!.format(context)
+                                    : "Seleccionar hora",
+                                onTap: _seleccionarHora,
+                                color: AppTheme.warning,
                               ),
                             ),
                           ],
                         ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 24),
+
+                // Botón guardar
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    icon: _loading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.save, size: 20),
+                    label: Text(
+                      _loading ? "Guardando..." : "Crear recomendación",
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
                       ),
-                      const SizedBox(width: 48),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    onPressed: _loading ? null : _guardar,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Mensaje informativo
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.info.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppTheme.info.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: AppTheme.info,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          "La recomendación será visible para el paciente en su perfil",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: AppTheme.info,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
           ),
-        ),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Tarjeta de título
-            _TarjetaModerna(
-              icon: Icons.title,
-              color: AppTheme.primary,
-              title: "Título de la recomendación",
-              child: TextField(
-                controller: _tituloController,
-                textCapitalization: TextCapitalization.sentences,
-                style: TextStyle(
-                  fontSize: 16,
-                  color: AppTheme.gray700,
-                ),
-                decoration: InputDecoration(
-                  hintText: "Ej: Realizar caminata diaria",
-                  hintStyle: TextStyle(
-                    color: AppTheme.gray400,
-                    fontSize: 14,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Tarjeta de categoría
-            _TarjetaModerna(
-              icon: Icons.category,
-              color: colorCategoria,
-              title: "Categoría",
-              subtitle: "Selecciona el tipo de recomendación",
-              child: Column(
-                children: [
-                  GridView.count(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 1.1,
-                    children: _categorias.map((cat) {
-                      final nombre = cat['nombre'] as String;
-                      final color = cat['color'] as Color;
-                      final icono = cat['icono'] as IconData;
-                      final sel = _categoriaSeleccionada == nombre;
-                      return GestureDetector(
-                        onTap: () => setState(() => _categoriaSeleccionada = nombre),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          decoration: BoxDecoration(
-                            gradient: sel
-                                ? LinearGradient(
-                                    begin: Alignment.topLeft,
-                                    end: Alignment.bottomRight,
-                                    colors: [color, color.withOpacity(0.8)],
-                                  )
-                                : null,
-                            color: sel ? null : Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: sel ? color : AppTheme.gray200,
-                              width: sel ? 0 : 1.5,
-                            ),
-                            boxShadow: sel
-                                ? [
-                                    BoxShadow(
-                                      color: color.withOpacity(0.3),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ]
-                                : null,
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                icono,
-                                size: 32,
-                                color: sel ? Colors.white : color,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                nombre,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: sel ? Colors.white : AppTheme.gray700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Tarjeta de descripción
-            _TarjetaModerna(
-              icon: Icons.description,
-              color: AppTheme.info,
-              title: "Descripción detallada",
-              subtitle: "Explica claramente la recomendación",
-              child: TextField(
-                controller: _descripcionController,
-                maxLines: 6,
-                textCapitalization: TextCapitalization.sentences,
-                style: TextStyle(
-                  fontSize: 15,
-                  height: 1.4,
-                  color: AppTheme.gray700,
-                ),
-                decoration: InputDecoration(
-                  hintText: "Describe en detalle la recomendación médica...",
-                  hintStyle: TextStyle(
-                    color: AppTheme.gray400,
-                    fontSize: 14,
-                  ),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Tarjeta de fecha programada
-            _TarjetaModerna(
-              icon: Icons.schedule,
-              color: AppTheme.warning,
-              title: "Programar recordatorio (opcional)",
-              subtitle: "Establece una fecha y hora para recordar esta recomendación",
-              child: Column(
-                children: [
-                  SwitchListTile(
-                    value: _fechaProgramada,
-                    onChanged: (value) {
-                      setState(() => _fechaProgramada = value);
-                      if (!value) {
-                        setState(() {
-                          _fechaSeleccionada = null;
-                          _horaSeleccionada = null;
-                        });
-                      }
-                    },
-                    title: Text(
-                      "Programar recordatorio",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppTheme.gray700,
-                      ),
-                    ),
-                    subtitle: Text(
-                      "Recibirás una notificación en la fecha seleccionada",
-                      style: TextStyle(
-                        color: AppTheme.gray500,
-                        fontSize: 12,
-                      ),
-                    ),
-                    activeColor: AppTheme.warning,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  if (_fechaProgramada) ...[
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _BotonOpcion(
-                            icon: Icons.calendar_today,
-                            label: _fechaSeleccionada != null
-                                ? "${_fechaSeleccionada!.day}/${_fechaSeleccionada!.month}/${_fechaSeleccionada!.year}"
-                                : "Seleccionar fecha",
-                            onTap: _seleccionarFecha,
-                            color: AppTheme.warning,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _BotonOpcion(
-                            icon: Icons.access_time,
-                            label: _horaSeleccionada != null
-                                ? _horaSeleccionada!.format(context)
-                                : "Seleccionar hora",
-                            onTap: _seleccionarHora,
-                            color: AppTheme.warning,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Botón guardar
-            SizedBox(
-              width: double.infinity,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                height: 56,
-                child: ElevatedButton.icon(
-                  icon: _loading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.save, size: 22),
-                  label: Text(
-                    _loading ? "Guardando..." : "Crear recomendación",
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                  ),
-                  onPressed: _loading ? null : _guardar,
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // Mensaje informativo
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppTheme.info.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppTheme.info.withOpacity(0.2),
-                ),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline,
-                    color: AppTheme.info,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "La recomendación será visible para el paciente en su perfil",
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppTheme.info,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );
@@ -516,6 +509,7 @@ class _TarjetaModerna extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,

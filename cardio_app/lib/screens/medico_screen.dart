@@ -1,5 +1,5 @@
 // ==============================================
-// MEDICO_DASHBOARD - CON MIS HORARIOS
+// MEDICO_DASHBOARD - CON MIS HORARIOS Y CHATS
 // ==============================================
 
 import 'package:cardio_app/app.theme.dart';
@@ -14,7 +14,8 @@ import '../services/notificacion_service.dart';
 
 import 'login_screen.dart';
 import 'paciente_detalle_screen.dart';
-import 'mis_horarios_screen.dart'; // ✅ NUEVO
+import 'mis_horarios_screen.dart';
+import 'chat_paciente_screen.dart'; // ✅ NUEVO: lista de chats con pacientes
 
 class MedicoDashboard extends StatefulWidget {
   final int idUsuario;
@@ -290,6 +291,33 @@ class _MedicoDashboardState extends State<MedicoDashboard>
     );
   }
 
+  // ==============================================
+  // 💬 ABRIR LISTA DE CHATS (UNO POR PACIENTE)
+  // ==============================================
+  void abrirChats() {
+    final idProfesional = safeId(medico?["idProfesional"]);
+    if (idProfesional == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Cargando perfil del médico..."),
+          backgroundColor: AppTheme.info,
+        ),
+      );
+      return;
+    }
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ChatPacientesScreen(
+          idUsuario: widget.idUsuario,
+          idProfesional: idProfesional,
+          pacientes: pacientes,
+        ),
+      ),
+    );
+  }
+
   void logout() {
     showDialog(
       context: context,
@@ -422,7 +450,14 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                     isSmall: isSmall,
                   ),
                   const SizedBox(width: 4),
-                  // 🕐 Mis Horarios ✅ NUEVO
+                  // 💬 Chats ✅ NUEVO
+                  _buildAppBarButton(
+                    Icons.chat_bubble_outline,
+                    abrirChats,
+                    isSmall: isSmall,
+                  ),
+                  const SizedBox(width: 4),
+                  // 🕐 Mis Horarios
                   _buildAppBarButton(
                     Icons.schedule_outlined,
                     abrirMisHorarios,
@@ -502,7 +537,7 @@ class _MedicoDashboardState extends State<MedicoDashboard>
   }
 
   // ==============================================
-  // 🚀 ACCIONES RÁPIDAS (NUEVO)
+  // 🚀 ACCIONES RÁPIDAS
   // ==============================================
   Widget _buildAccionesRapidas(
       AccessibilityProvider accessibility, bool isDark) {
@@ -510,6 +545,12 @@ class _MedicoDashboardState extends State<MedicoDashboard>
     final safeFontScale = _getSafeFontScale(accessibility);
 
     final acciones = [
+      {
+        "label": "Chats", // ✅ NUEVO
+        "icon": Icons.chat_bubble_outline,
+        "color": AppTheme.success,
+        "onTap": abrirChats,
+      },
       {
         "label": "Mis Horarios",
         "icon": Icons.schedule_outlined,
