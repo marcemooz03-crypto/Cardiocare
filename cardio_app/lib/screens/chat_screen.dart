@@ -7,13 +7,14 @@ class ChatScreen extends StatefulWidget {
   final int idConversacion;
   final int idUsuario;
   final String nombre;
+  final String? especialista;   // 👈 opcional
 
   const ChatScreen({
     super.key,
     required this.idConversacion,
     required this.idUsuario,
     required this.nombre,
-    required String especialista,
+    this.especialista,
   });
 
   @override
@@ -31,13 +32,12 @@ class _ChatScreenState extends State<ChatScreen> {
   bool enviando = false;
   Timer? _timer;
 
-  // 🔥 GUARDAMOS EL NOMBRE DEL MÉDICO PARA MOSTRARLO
   String _nombreMedico = "";
 
   @override
   void initState() {
     super.initState();
-    _nombreMedico = widget.nombre; // Guardamos el nombre del médico
+    _nombreMedico = widget.nombre;
     _loadMensajes();
     _timer = Timer.periodic(
       const Duration(seconds: 3),
@@ -88,7 +88,6 @@ class _ChatScreenState extends State<ChatScreen> {
         return fa.compareTo(fb);
       });
 
-      // ✅ PROTECCIÓN CONTRA DUPLICADOS
       if (lista.length != mensajes.length) {
         setState(() {
           mensajes = lista;
@@ -170,7 +169,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final f = DateTime.parse(fecha.toString()).toLocal();
       final hoy = DateTime.now();
       final ayer = hoy.subtract(const Duration(days: 1));
-      
+
       if (f.year == hoy.year && f.month == hoy.month && f.day == hoy.day) {
         return "Hoy";
       } else if (f.year == ayer.year && f.month == ayer.month && f.day == ayer.day) {
@@ -186,9 +185,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   bool _esMio(Map<String, dynamic> m) {
     final idRemitente = int.tryParse(m["idRemitente"]?.toString() ?? "0");
-    
-    // 🔥 VERIFICACIÓN: Si el remitente es el ID del paciente, es MÍO.
-    // Si es OTRO número (el médico), NO es mío.
     return idRemitente == widget.idUsuario;
   }
 
@@ -211,7 +207,6 @@ class _ChatScreenState extends State<ChatScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               child: Row(
                 children: [
-                  // ✅ Botón regreso
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
@@ -223,7 +218,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  // ✅ Inicial del nombre (Avatar del médico)
                   Container(
                     width: 50,
                     height: 50,
@@ -275,7 +269,6 @@ class _ChatScreenState extends State<ChatScreen> {
                       ],
                     ),
                   ),
-                  // ✅ Menú de opciones
                   Container(
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
@@ -331,7 +324,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             const SizedBox(height: 20),
-            // ✅ Opción de eliminar
             ListTile(
               leading: Container(
                 padding: const EdgeInsets.all(14),
@@ -441,14 +433,13 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // ✅ Icono más grande
           Container(
             padding: const EdgeInsets.all(36),
             decoration: BoxDecoration(
               color: AppTheme.gray200,
               shape: BoxShape.circle,
             ),
-            child: Icon(
+            child: const Icon(
               Icons.chat_bubble_outline,
               size: 72,
               color: AppTheme.gray400,
@@ -481,7 +472,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final contenido = m["contenido"]?.toString() ?? "";
     final hora = _formatHora(m["fecha"]);
     final fecha = _formatFechaSeparador(m["fecha"]);
-    
+
     bool mostrarFecha = false;
     if (index == 0) {
       mostrarFecha = true;
@@ -492,7 +483,6 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     }
 
-    // ✅ Lógica de WhatsApp: Avatar solo aparece en el primer mensaje de un bloque
     bool showAvatar = true;
     if (index > 0) {
       final prev = mensajes[index - 1];
@@ -513,25 +503,21 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             child: Text(
               fecha,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 15,
                 color: AppTheme.gray500,
                 fontWeight: FontWeight.w500,
               ),
             ),
           ),
-        // ✅ Usamos un Row con espacio fijo para el avatar
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
           child: Row(
             mainAxisAlignment: esMio ? MainAxisAlignment.end : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Espacio para el avatar si es mío y no se muestra
-              if (esMio && !showAvatar)
-                const SizedBox(width: 44), // Ancho del avatar + margen
-              
-              // AVATAR DEL MÉDICO (solo para el primer mensaje del bloque del médico)
+              if (esMio && !showAvatar) const SizedBox(width: 44),
+
               if (!esMio && showAvatar)
                 Padding(
                   padding: const EdgeInsets.only(right: 10),
@@ -545,7 +531,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                     child: Center(
                       child: Text(
-                        // ✅ Se usa la inicial del médico (widget.nombre)
                         _nombreMedico.isNotEmpty ? _nombreMedico[0].toUpperCase() : "M",
                         style: TextStyle(
                           color: AppTheme.primary,
@@ -556,13 +541,11 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ),
                 ),
-              
-              // BURBUJA
+
               Flexible(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    // ✅ Colores tipo WhatsApp
                     color: esMio ? const Color(0xFFDCF8C6) : Colors.white,
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(20),
@@ -582,7 +565,6 @@ class _ChatScreenState extends State<ChatScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // ✅ Texto siempre en negro
                       Text(
                         contenido,
                         style: const TextStyle(
@@ -612,7 +594,6 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ),
 
-              // AVATAR DEL PACIENTE (para mensajes propios, solo el primero del bloque)
               if (esMio && showAvatar)
                 Padding(
                   padding: const EdgeInsets.only(left: 10),
@@ -624,7 +605,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       color: AppTheme.primary.withOpacity(0.15),
                       border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
                     ),
-                    child: Center(
+                    child: const Center(
                       child: Text(
                         "P",
                         style: TextStyle(
@@ -646,24 +627,23 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildInputBar() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: const BorderRadius.only(
+        borderRadius: BorderRadius.only(
           topLeft: Radius.circular(28),
           topRight: Radius.circular(28),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: Color(0x14000000),
             blurRadius: 12,
-            offset: const Offset(0, -6),
+            offset: Offset(0, -6),
           ),
         ],
       ),
       child: SafeArea(
         child: Row(
           children: [
-            // ✅ Campo de texto
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -679,14 +659,14 @@ class _ChatScreenState extends State<ChatScreen> {
                     fontSize: 18,
                     color: AppTheme.gray700,
                   ),
-                  decoration: InputDecoration(
+                  decoration: const InputDecoration(
                     hintText: "Escribe un mensaje...",
                     hintStyle: TextStyle(
                       color: AppTheme.gray400,
                       fontSize: 17,
                     ),
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
+                    contentPadding: EdgeInsets.symmetric(
                       horizontal: 22,
                       vertical: 16,
                     ),
@@ -696,7 +676,6 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
             ),
             const SizedBox(width: 14),
-            // ✅ Botón enviar
             GestureDetector(
               onTap: _enviarMensaje,
               child: Container(

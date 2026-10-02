@@ -57,7 +57,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   static const Color _warning = AppTheme.warning;
   static const Color _danger = AppTheme.danger;
   static const Color _info = AppTheme.info;
-  static const Color _cuidador = Color(0xFF8B5CF6); // ✅ Color para cuidador
+  static const Color _cuidador = Color(0xFF8B5CF6);
   static const Color _textSub = AppTheme.gray500;
   static const Color _border = AppTheme.gray300;
 
@@ -65,11 +65,11 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   void initState() {
     super.initState();
     tab = widget.initialTab;
-    
+
     if (tab >= 0 && tab < 6) {
       _tabController.index = tab;
     }
-    
+
     loadAll();
   }
 
@@ -85,7 +85,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   // =====================================================
   Future<void> loadAll({bool forceConfig = false}) async {
     try {
-      setState(() => loading = true);
+      if (mounted) setState(() => loading = true);
 
       final futures = await Future.wait([
         service.getMedicos(),
@@ -93,7 +93,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
         service.getLogs(),
         service.getAlertas(),
         service.getAsignaciones(),
-        service.getCuidadores(), // ✅ NUEVO
+        service.getCuidadores(),
         if (!configLoaded || forceConfig) service.getConfig(),
       ]);
 
@@ -103,34 +103,40 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       final pacientesData = List<Map<String, dynamic>>.from(futures[1] as List);
       final logsData = List<Map<String, dynamic>>.from(futures[2] as List);
       final alertasData = List<Map<String, dynamic>>.from(futures[3] as List);
-      final asignacionesData = List<Map<String, dynamic>>.from(futures[4] as List);
-      final cuidadoresData = List<Map<String, dynamic>>.from(futures[5] as List);
+      final asignacionesData =
+          List<Map<String, dynamic>>.from(futures[4] as List);
+      final cuidadoresData =
+          List<Map<String, dynamic>>.from(futures[5] as List);
 
       // ✅ Combinar todos los usuarios con sus roles
-      final usuariosCombinados = [
+      final usuariosCombinados = <Map<String, dynamic>>[
         ...medicosData.map((m) => {
-          ...m,
-          "rol": "medico",
-          "rolLabel": "Médico",
-          "idUsuario": m["idUsuario"],
-        }),
+              ...m,
+              "rol": "medico",
+              "rolLabel": "Médico",
+              "idUsuario": m["idUsuario"],
+            }),
         ...pacientesData.map((p) => {
-          ...p,
-          "rol": "paciente",
-          "rolLabel": "Paciente",
-          "idUsuario": p["idUsuario"],
-        }),
+              ...p,
+              "rol": "paciente",
+              "rolLabel": "Paciente",
+              "idUsuario": p["idUsuario"],
+            }),
         ...cuidadoresData.map((c) => {
-          ...c,
-          "rol": "cuidador",
-          "rolLabel": "Cuidador",
-          "idUsuario": c["idUsuario"],
-        }),
+              ...c,
+              "rol": "cuidador",
+              "rolLabel": "Cuidador",
+              "idUsuario": c["idUsuario"] ??
+                  c["cuidador_idUsuario"] ??
+                  c["idCuidador"],
+            }),
       ];
 
-      usuariosCombinados.sort((a, b) => 
-        (a["nombre"] ?? "").toString().compareTo((b["nombre"] ?? "").toString())
-      );
+      usuariosCombinados.sort((a, b) => (a["nombre"] ?? "")
+          .toString()
+          .compareTo((b["nombre"] ?? "").toString()));
+
+      if (!mounted) return;
 
       setState(() {
         medicos = medicosData;
@@ -147,17 +153,24 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
           alertasActivas = config["alertas_activas"] == "true";
           mantenimientoActivo = config["modo_mantenimiento"] == "true";
           denegacionActiva = config["denegacion_accesos"] == "true";
-          sesionTimeout = int.tryParse(config["sesion_timeout"]?.toString() ?? "30") ?? 30;
+          sesionTimeout =
+              int.tryParse(config["sesion_timeout"]?.toString() ?? "30") ??
+                  30;
           configLoaded = true;
         }
 
         loading = false;
       });
+
+      // ✅ Reaplicar filtro de búsqueda actual
+      if (buscarCtrl.text.isNotEmpty) {
+        filtrarUsuarios(buscarCtrl.text);
+      }
     } catch (e) {
       debugPrint("❌ ERROR loadAll => $e");
       if (mounted) {
         setState(() => loading = false);
-        _snack("Error cargando datos", isError: true);
+        _snack("Error cargando datos: $e", isError: true);
       }
     }
   }
@@ -168,17 +181,21 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       usuariosFiltrados = usuarios.where((u) {
         final nombre = (u["nombre"] ?? "").toString().toLowerCase();
         final correo = (u["correo"] ?? "").toString().toLowerCase();
-        final rol = (u["rolLabel"] ?? u["rol"] ?? "").toString().toLowerCase();
-        return nombre.contains(texto) || correo.contains(texto) || rol.contains(texto);
+        final rol =
+            (u["rolLabel"] ?? u["rol"] ?? "").toString().toLowerCase();
+        return nombre.contains(texto) ||
+            correo.contains(texto) ||
+            rol.contains(texto);
       }).toList();
     });
   }
 
   void _crearUsuario() => _showUsuarioForm(null);
-  void _editarUsuario(Map<String, dynamic> usuario) => _showUsuarioForm(usuario);
+  void _editarUsuario(Map<String, dynamic> usuario) =>
+      _showUsuarioForm(usuario);
 
   // =====================================================
-  // ✅ DROPDOWN DE ROLES (CON CUIDADOR)
+  // ✅ DROPDOWN DE ROLES
   // =====================================================
   List<DropdownMenuItem<String>> _buildRolItems() {
     return [
@@ -206,7 +223,6 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
           Text("Paciente"),
         ]),
       ),
-      // ✅ NUEVO: CUIDADOR
       const DropdownMenuItem(
         value: "cuidador",
         child: Row(children: [
@@ -222,12 +238,14 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   // ✅ FORMULARIO DE USUARIO
   // =====================================================
   void _showUsuarioForm(Map<String, dynamic>? usuario) {
-    final nombreCtrl = TextEditingController(text: usuario?["nombre"] ?? "");
-    final correoCtrl = TextEditingController(text: usuario?["correo"] ?? "");
+    final nombreCtrl =
+        TextEditingController(text: usuario?["nombre"] ?? "");
+    final correoCtrl =
+        TextEditingController(text: usuario?["correo"] ?? "");
     final passCtrl = TextEditingController();
-    
+
     String rolSel = usuario?["rol"] ?? "paciente";
-    
+
     final int? idUsuarioEditar = usuario != null
         ? int.tryParse(usuario["idUsuario"]?.toString() ?? "")
         : null;
@@ -316,7 +334,9 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                           prefixIcon: Icon(Icons.assignment_ind, size: 20),
                         ),
                         items: _buildRolItems(),
-                        onChanged: (v) => setModal(() => rolSel = v!),
+                        onChanged: (v) {
+                          if (v != null) setModal(() => rolSel = v);
+                        },
                       ),
                     ),
                   ),
@@ -326,8 +346,12 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                     height: 52,
                     child: ElevatedButton.icon(
                       style: AppTheme.primaryButtonStyle,
-                      icon: Icon(usuario == null ? Icons.person_add : Icons.save),
-                      label: Text(usuario == null ? "Crear usuario" : "Guardar cambios"),
+                      icon: Icon(usuario == null
+                          ? Icons.person_add
+                          : Icons.save),
+                      label: Text(usuario == null
+                          ? "Crear usuario"
+                          : "Guardar cambios"),
                       onPressed: () async {
                         if (nombreCtrl.text.trim().isEmpty ||
                             correoCtrl.text.trim().isEmpty) {
@@ -371,7 +395,8 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                           isError: resultado["success"] != true,
                         );
 
-                        if (resultado["success"] == true) loadAll();
+                        // ✅ Recargar SIEMPRE después de crear/editar
+                        await loadAll(forceConfig: true);
                       },
                     ),
                   ),
@@ -486,7 +511,8 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       return;
     }
 
-    final resultado = await service.asignar(selectedPaciente!, selectedMedico!);
+    final resultado =
+        await service.asignar(selectedPaciente!, selectedMedico!);
 
     _snack(
       resultado["success"] == true
@@ -500,14 +526,16 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
         selectedMedico = null;
         selectedPaciente = null;
       });
-      await loadAll();
+      await loadAll(forceConfig: true);
     }
   }
 
   // =====================================================
-  // ✅ CAMBIAR ROL
+  // ✅ CAMBIAR ROL (con recarga)
   // =====================================================
   Future<void> cambiarRol(int idUsuario, String rol) async {
+    print("🔄 cambiarRol → idUsuario=$idUsuario, rol=$rol");
+
     final resultado = await service.cambiarRol(idUsuario, rol);
 
     _snack(
@@ -517,7 +545,8 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       isError: resultado["success"] != true,
     );
 
-    if (resultado["success"] == true) await loadAll();
+    // ✅ Recargar SIEMPRE después de cambiar el rol
+    await loadAll(forceConfig: true);
   }
 
   Future<void> eliminarUsuario(int idUsuario, String nombre) async {
@@ -526,7 +555,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       return;
     }
     final ok = await service.eliminarUsuario(idUsuario);
-    if (ok) await loadAll();
+    if (ok) await loadAll(forceConfig: true);
     _snack(ok ? "✓ Usuario eliminado" : "✗ Error al eliminar", isError: !ok);
   }
 
@@ -535,8 +564,18 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     try {
       final f = DateTime.parse(fecha.toString()).toLocal();
       final meses = [
-        'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-        'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+        'Ene',
+        'Feb',
+        'Mar',
+        'Abr',
+        'May',
+        'Jun',
+        'Jul',
+        'Ago',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dic'
       ];
       return "${f.day} ${meses[f.month - 1]}, ${f.year} • ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}";
     } catch (_) {
@@ -568,9 +607,6 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     }
   }
 
-  // =====================================================
-  // ✅ DATOS DEL ROL
-  // =====================================================
   Map<String, dynamic> _getRolData(String rol) {
     switch (rol) {
       case "admin":
@@ -632,7 +668,9 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                               Text(
                                 "Panel Administrador",
                                 style: TextStyle(
-                                  color: isDark ? Colors.white : AppTheme.gray700,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppTheme.gray700,
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -661,7 +699,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                             Icons.refresh,
                             color: isDark ? Colors.white : AppTheme.gray700,
                           ),
-                          onPressed: () => loadAll(forceConfig: false),
+                          onPressed: () => loadAll(forceConfig: true),
                         ),
                         IconButton(
                           icon: Icon(
@@ -720,7 +758,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
               child: loading
                   ? const Center(child: CircularProgressIndicator())
                   : RefreshIndicator(
-                      onRefresh: loadAll,
+                      onRefresh: () => loadAll(forceConfig: true),
                       color: AppTheme.primary,
                       child: TabBarView(
                         controller: _tabController,
@@ -781,7 +819,6 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
             ),
           ),
         ),
-        // ✅ Resumen por rol
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
@@ -892,7 +929,6 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                           Text("Cambiar a Paciente"),
                         ]),
                       ),
-                      // ✅ NUEVO: Cambiar a Cuidador
                       const PopupMenuItem(
                         value: "cuidador",
                         child: Row(children: [
@@ -968,7 +1004,6 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Formulario
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
@@ -1025,10 +1060,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
               ],
             ),
           ),
-
           const SizedBox(height: 20),
-
-          // Lista de asignaciones
           Row(
             children: [
               const Icon(Icons.list_alt, color: _primary, size: 24),
@@ -1052,9 +1084,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
               ),
             ],
           ),
-
           const SizedBox(height: 12),
-
           if (asignaciones.isEmpty)
             Container(
               padding: const EdgeInsets.all(32),
@@ -1099,11 +1129,13 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: _primary.withOpacity(0.1),
-                      child: const Icon(Icons.link, color: _primary, size: 20),
+                      child: const Icon(Icons.link,
+                          color: _primary, size: 20),
                     ),
                     title: Text(
                       "$nombreMedico → $nombrePaciente",
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+                      style:
+                          const TextStyle(fontWeight: FontWeight.w600),
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Column(
@@ -1162,7 +1194,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                                     .eliminarAsignacion(idAsignacion);
                                 if (ok) {
                                   _snack("✓ Asignación eliminada");
-                                  await loadAll();
+                                  await loadAll(forceConfig: true);
                                 } else {
                                   _snack("✗ Error al eliminar",
                                       isError: true);

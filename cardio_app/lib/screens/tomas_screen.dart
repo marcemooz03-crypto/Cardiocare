@@ -31,70 +31,15 @@ class _TomasScreenState extends State<TomasScreen> {
     _iniciar();
   }
 
-  // ✅ AHORA: Solo carga tomas, NO las regenera automáticamente
+  // ✅ Solo carga tomas (no regenera)
   Future<void> _iniciar() async {
     try {
       setState(() => loading = true);
       await _cargarRecordatorios();
-      // ✅ SOLO CARGAR TOMAS, NO REGENERAR
       await _cargarTomas();
     } catch (e) {
       debugPrint("❌ ERROR iniciar => $e");
       if (mounted) setState(() => loading = false);
-    }
-  }
-
-  // ✅ NUEVO: Regenerar tomas manualmente (con confirmación)
-  Future<void> _regenerarTomas() async {
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.refresh, color: AppTheme.warning, size: 28),
-            const SizedBox(width: 12),
-            Text("Regenerar tomas", style: AppTheme.title2),
-          ],
-        ),
-        content: Text(
-          "¿Regenerar todas las tomas de hoy?\n\n"
-          "Esto eliminará las tomas actuales y creará nuevas basadas en los recordatorios activos.",
-          style: AppTheme.body2,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancelar", style: TextStyle(color: AppTheme.gray500)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: AppTheme.warningButtonStyle,
-            child: const Text("Regenerar"),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmar != true || !mounted) return;
-
-    try {
-      setState(() => loading = true);
-      
-      // ✅ Eliminar tomas de hoy
-      await _tomaService.eliminarTomasHoy(widget.idPaciente);
-      
-      // ✅ Generar nuevas tomas
-      await _tomaService.generarHoy(widget.idPaciente);
-      
-      // ✅ Cargar las nuevas tomas
-      await _cargarTomas();
-      
-      _mostrarMensaje("Tomas regeneradas correctamente", AppTheme.success);
-    } catch (e) {
-      debugPrint("❌ ERROR regenerarTomas => $e");
-      _mostrarMensaje("Error al regenerar tomas", AppTheme.danger);
-      setState(() => loading = false);
     }
   }
 
@@ -134,14 +79,16 @@ class _TomasScreenState extends State<TomasScreen> {
           toma["estado"] = estado;
         });
         _mostrarMensaje(
-          estado == "Tomado" 
-              ? "Medicamento registrado como tomado" 
-              : estado == "Omitido" 
+          estado == "Tomado"
+              ? "Medicamento registrado como tomado"
+              : estado == "Omitido"
                   ? "Medicamento marcado como omitido"
                   : "Estado reiniciado",
-          estado == "Tomado" ? AppTheme.success : 
-          estado == "Omitido" ? AppTheme.warning : 
-          AppTheme.info,
+          estado == "Tomado"
+              ? AppTheme.success
+              : estado == "Omitido"
+                  ? AppTheme.warning
+                  : AppTheme.info,
         );
       }
     } catch (e) {
@@ -186,11 +133,11 @@ class _TomasScreenState extends State<TomasScreen> {
 
     try {
       setState(() => loading = true);
-      
+
       for (var id in _tomasSeleccionadas) {
         await _tomaService.eliminarToma(id);
       }
-      
+
       await _cargarTomas();
       _mostrarMensaje(
         "${_tomasSeleccionadas.length} toma(s) eliminada(s)",
@@ -202,7 +149,7 @@ class _TomasScreenState extends State<TomasScreen> {
       debugPrint("❌ ERROR eliminar tomas => $e");
       _mostrarMensaje("Error al eliminar las tomas", AppTheme.danger);
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -273,9 +220,11 @@ class _TomasScreenState extends State<TomasScreen> {
         content: Row(
           children: [
             Icon(
-              color == AppTheme.success ? Icons.check_circle : 
-              color == AppTheme.warning ? Icons.warning_amber_rounded :
-              Icons.info_outline,
+              color == AppTheme.success
+                  ? Icons.check_circle
+                  : color == AppTheme.warning
+                      ? Icons.warning_amber_rounded
+                      : Icons.info_outline,
               color: Colors.white,
               size: 24,
             ),
@@ -355,20 +304,7 @@ class _TomasScreenState extends State<TomasScreen> {
                       ],
                     ),
                   ),
-                  // ✅ Botón para regenerar tomas
-                  if (!loading && tomas.isNotEmpty)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: const Icon(Icons.refresh, color: Colors.white, size: 26),
-                        onPressed: _regenerarTomas,
-                        tooltip: "Regenerar tomas",
-                      ),
-                    ),
-                  // ✅ Botón para modo selección
+                  // ✅ Solo botón de modo selección (regenerar eliminado)
                   if (!loading && tomas.isNotEmpty)
                     Container(
                       decoration: BoxDecoration(
@@ -417,36 +353,14 @@ class _TomasScreenState extends State<TomasScreen> {
                           const SizedBox(height: 24),
                           _buildHeader(tomas.length),
                           const SizedBox(height: 16),
-                          tomas.isEmpty 
-                              ? _buildEmptyState() 
+                          tomas.isEmpty
+                              ? _buildEmptyState()
                               : _buildMedicamentosList(),
                           const SizedBox(height: 30),
-                          // ✅ Botón para regenerar tomas al final (si está vacío)
-                          if (tomas.isEmpty && recordatorios.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 16),
-                              child: OutlinedButton.icon(
-                                onPressed: _regenerarTomas,
-                                icon: const Icon(Icons.refresh, size: 20),
-                                label: const Text("Regenerar tomas"),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: AppTheme.primary,
-                                  side: const BorderSide(color: AppTheme.primary),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                              ),
-                            ),
                         ],
                       ),
                     ),
                   ),
-                  // ✅ Barra de acciones en modo selección
                   if (_modoSeleccion && _tomasSeleccionadas.isNotEmpty)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -479,22 +393,22 @@ class _TomasScreenState extends State<TomasScreen> {
                                 if (_tomasSeleccionadas.length == tomas.length) {
                                   _tomasSeleccionadas.clear();
                                 } else {
-                                  _tomasSeleccionadas = tomas.map((t) => 
-                                    int.parse(t["idToma"].toString())
+                                  _tomasSeleccionadas = tomas.map((t) =>
+                                      int.parse(t["idToma"].toString())
                                   ).toSet();
                                 }
                               });
                             },
                             icon: Icon(
-                              _tomasSeleccionadas.length == tomas.length 
-                                ? Icons.deselect 
-                                : Icons.select_all,
+                              _tomasSeleccionadas.length == tomas.length
+                                  ? Icons.deselect
+                                  : Icons.select_all,
                               color: AppTheme.primary,
                             ),
                             label: Text(
-                              _tomasSeleccionadas.length == tomas.length 
-                                ? "Deseleccionar" 
-                                : "Seleccionar todo",
+                              _tomasSeleccionadas.length == tomas.length
+                                  ? "Deseleccionar"
+                                  : "Seleccionar todo",
                               style: const TextStyle(color: AppTheme.primary),
                             ),
                           ),
@@ -522,7 +436,7 @@ class _TomasScreenState extends State<TomasScreen> {
   Widget _buildProgressCard(int pendientes, int tomadas, int porcentaje) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppTheme.gray800 : Colors.white;
-    
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -576,9 +490,6 @@ class _TomasScreenState extends State<TomasScreen> {
   }
 
   Widget _buildStatItem(String label, String value, IconData icon, Color color) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : AppTheme.gray700;
-    
     return Expanded(
       child: Column(
         children: [
@@ -617,13 +528,12 @@ class _TomasScreenState extends State<TomasScreen> {
   Widget _buildHeader(int count) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : AppTheme.gray700;
-    final isSmall = MediaQuery.of(context).size.width < 360; // Detectar pantalla pequeña
-    
+    final isSmall = MediaQuery.of(context).size.width < 360;
+
     return Row(
       children: [
         Icon(Icons.list_alt, color: AppTheme.primary, size: 24),
         const SizedBox(width: 8),
-        // ✅ CORREGIDO: Usamos Flexible para evitar overflow
         Flexible(
           child: Text(
             "Medicamentos de hoy",
@@ -632,7 +542,7 @@ class _TomasScreenState extends State<TomasScreen> {
               fontWeight: FontWeight.bold,
               color: textColor,
             ),
-            overflow: TextOverflow.ellipsis, // Si es muy largo, se corta
+            overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
         ),
@@ -654,7 +564,6 @@ class _TomasScreenState extends State<TomasScreen> {
             ),
           )
         else
-          // ✅ CORREGIDO: Usamos FittedBox para que se achique si no cabe
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Container(
@@ -681,7 +590,7 @@ class _TomasScreenState extends State<TomasScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? AppTheme.gray800 : Colors.white;
     final textColor = isDark ? Colors.white : AppTheme.gray700;
-    
+
     return Container(
       padding: const EdgeInsets.all(40),
       decoration: BoxDecoration(
@@ -704,8 +613,8 @@ class _TomasScreenState extends State<TomasScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            recordatorios.isEmpty 
-                ? "Sin recordatorios activos" 
+            recordatorios.isEmpty
+                ? "Sin recordatorios activos"
                 : "¡Sin medicamentos por hoy!",
             style: TextStyle(
               fontSize: 18,
@@ -774,9 +683,8 @@ class _TomasScreenState extends State<TomasScreen> {
     final Color estadoColor = estadoData["color"];
     final IconData estadoIcon = estadoData["icon"];
     final String estadoTexto = estadoData["label"];
-    
+
     final bgColor = isDark ? AppTheme.gray800 : Colors.white;
-    final textColor = isDark ? Colors.white : AppTheme.gray700;
 
     final estaSeleccionada = _tomasSeleccionadas.contains(idToma);
 
@@ -798,8 +706,8 @@ class _TomasScreenState extends State<TomasScreen> {
         duration: const Duration(milliseconds: 200),
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: estaSeleccionada 
-              ? AppTheme.primary.withOpacity(0.1) 
+          color: estaSeleccionada
+              ? AppTheme.primary.withOpacity(0.1)
               : bgColor,
           borderRadius: BorderRadius.circular(24),
           boxShadow: [
@@ -810,10 +718,10 @@ class _TomasScreenState extends State<TomasScreen> {
             ),
           ],
           border: Border.all(
-            color: estaSeleccionada 
-                ? AppTheme.primary 
-                : estado == "Pendiente" 
-                    ? AppTheme.warning.withOpacity(0.3) 
+            color: estaSeleccionada
+                ? AppTheme.primary
+                : estado == "Pendiente"
+                    ? AppTheme.warning.withOpacity(0.3)
                     : estadoColor.withOpacity(0.3),
             width: estaSeleccionada ? 2.5 : 1.5,
           ),
@@ -821,10 +729,10 @@ class _TomasScreenState extends State<TomasScreen> {
         child: Column(
           children: [
             _buildCardHeader(
-              numero, 
-              nombre, 
-              estadoIcon, 
-              estadoTexto, 
+              numero,
+              nombre,
+              estadoIcon,
+              estadoTexto,
               estadoColor,
               estaSeleccionada,
               idToma,
@@ -851,22 +759,22 @@ class _TomasScreenState extends State<TomasScreen> {
   }
 
   Widget _buildCardHeader(
-    int numero, 
-    String nombre, 
-    IconData estadoIcon, 
-    String estadoTexto, 
+    int numero,
+    String nombre,
+    IconData estadoIcon,
+    String estadoTexto,
     Color estadoColor,
     bool seleccionada,
     int idToma,
     Map<String, dynamic> t,
   ) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: seleccionada 
-            ? AppTheme.primary.withOpacity(0.15) 
+        color: seleccionada
+            ? AppTheme.primary.withOpacity(0.15)
             : estadoColor.withOpacity(isDark ? 0.15 : 0.08),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(23),
@@ -983,7 +891,7 @@ class _TomasScreenState extends State<TomasScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = isDark ? Colors.white : AppTheme.gray700;
     final subTextColor = isDark ? AppTheme.gray400 : AppTheme.gray500;
-    
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -1078,7 +986,7 @@ class _TomasScreenState extends State<TomasScreen> {
 
   Widget _buildCardActions(String estado, Map<String, dynamic> t, Color estadoColor) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Padding(
       padding: const EdgeInsets.all(16),
       child: estado == "Pendiente"

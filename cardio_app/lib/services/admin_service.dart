@@ -1,4 +1,5 @@
 // lib/services/admin_service.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:cardio_app/config/api_config.dart';
 import 'package:http/http.dart' as http;
@@ -11,10 +12,12 @@ class AdminService {
   // =========================
   Future<List<Map<String, dynamic>>> getLogs() async {
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/logs"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse("$baseUrl/logs"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -35,10 +38,12 @@ class AdminService {
   // =========================
   Future<List<Map<String, dynamic>>> getAlertas() async {
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/alertas"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse("$baseUrl/alertas"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -59,10 +64,12 @@ class AdminService {
   // =========================
   Future<bool> marcarAlertaLeida(int idAlerta) async {
     try {
-      final res = await http.put(
-        Uri.parse("$baseUrl/alertas/$idAlerta/atender"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .put(
+            Uri.parse("$baseUrl/alertas/$idAlerta/atender"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
       return res.statusCode == 200;
     } catch (e) {
       print("❌ ERROR marcarAlertaLeida: $e");
@@ -75,10 +82,12 @@ class AdminService {
   // =========================
   Future<bool> eliminarAlerta(int idAlerta) async {
     try {
-      final res = await http.delete(
-        Uri.parse("$baseUrl/alertas/$idAlerta"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .delete(
+            Uri.parse("$baseUrl/alertas/$idAlerta"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
       return res.statusCode == 200;
     } catch (e) {
       print("❌ ERROR eliminarAlerta: $e");
@@ -91,10 +100,12 @@ class AdminService {
   // =========================
   Future<Map<String, dynamic>> getConfig() async {
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/config"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse("$baseUrl/config"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -112,11 +123,13 @@ class AdminService {
   // =========================
   Future<bool> updateConfig(String clave, String valor) async {
     try {
-      final res = await http.post(
-        Uri.parse("$baseUrl/config"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"clave": clave, "valor": valor}),
-      );
+      final res = await http
+          .post(
+            Uri.parse("$baseUrl/config"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({"clave": clave, "valor": valor}),
+          )
+          .timeout(const Duration(seconds: 15));
       return res.statusCode == 200;
     } catch (e) {
       print("❌ ERROR updateConfig: $e");
@@ -136,18 +149,20 @@ class AdminService {
     required String nivel,
   }) async {
     try {
-      await http.post(
-        Uri.parse("$baseUrl/logs"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({
-          "accion": accion,
-          "descripcion": descripcion,
-          "usuario": usuario,
-          "idUsuario": idUsuario,
-          "modulo": modulo,
-          "nivel": nivel,
-        }),
-      );
+      await http
+          .post(
+            Uri.parse("$baseUrl/logs"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "accion": accion,
+              "descripcion": descripcion,
+              "usuario": usuario,
+              "idUsuario": idUsuario,
+              "modulo": modulo,
+              "nivel": nivel,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
     } catch (e) {
       print("❌ ERROR registrarLog: $e");
     }
@@ -158,10 +173,12 @@ class AdminService {
   // =========================
   Future<List<Map<String, dynamic>>> getMedicos() async {
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/medicos"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse("$baseUrl/medicos"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -182,10 +199,12 @@ class AdminService {
   // =========================
   Future<List<Map<String, dynamic>>> getPacientes() async {
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/pacientes"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse("$baseUrl/pacientes"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -206,10 +225,12 @@ class AdminService {
   // =========================
   Future<List<Map<String, dynamic>>> getUsuarios() async {
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/usuarios"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse("$baseUrl/usuario"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -230,10 +251,12 @@ class AdminService {
   // =========================
   Future<List<Map<String, dynamic>>> getCuidadores() async {
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/cuidadores"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse("$baseUrl/cuidadores"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -254,10 +277,12 @@ class AdminService {
   // =========================
   Future<List<Map<String, dynamic>>> getAsignaciones() async {
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/asignaciones"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse("$baseUrl/asignaciones"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -312,7 +337,6 @@ class AdminService {
 
   // ============================================================
   // 👤 CREAR USUARIO
-  // ✅ CORREGIDO: envía `rol` (string) Y `idRol` (int)
   // ============================================================
   Future<Map<String, dynamic>> crearUsuario({
     required String nombre,
@@ -323,22 +347,24 @@ class AdminService {
     try {
       final idRol = _rolToId(rol);
 
-      // ✅ Enviar AMBOS campos para cubrir cualquier backend
       final body = {
         "nombre": nombre,
         "correo": correo,
         "contrasena": password,
-        "rol": rol,        // string: "medico", "paciente", etc.
-        "idRol": idRol,    // int: 2, 3, 4, etc.
+        "rol": rol,
+        "idRol": idRol,
       };
 
       print("📦 CREAR USUARIO BODY: $body");
+      print("🌐 URL: $baseUrl/usuarios");
 
-      final res = await http.post(
-        Uri.parse("$baseUrl/usuarios"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
+      final res = await http
+          .post(
+            Uri.parse("$baseUrl/usuarios"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
 
       print("📥 CREAR USUARIO RESPONSE: ${res.statusCode} - ${res.body}");
 
@@ -355,7 +381,7 @@ class AdminService {
 
         return {
           "success": true,
-          "message": data["message"] ?? "Usuario creado exitosamente",
+          "message": data["message"] ?? data["msg"] ?? "Usuario creado exitosamente",
           "idUsuario": data["idUsuario"],
           "data": data,
         };
@@ -380,7 +406,7 @@ class AdminService {
 
   // ============================================================
   // ✏️ EDITAR USUARIO
-  // ✅ CORREGIDO: envía `rol` Y `idRol`
+  // ✅ Envía `idUsuario` también en el body por si el backend lo usa
   // ============================================================
   Future<Map<String, dynamic>> editarUsuario({
     required int idUsuario,
@@ -392,19 +418,23 @@ class AdminService {
       final idRol = _rolToId(rol);
 
       final body = {
+        "idUsuario": idUsuario,  // ✅ por si el backend lo requiere
         "nombre": nombre,
         "correo": correo,
-        "rol": rol,        // ✅ string
-        "idRol": idRol,    // ✅ int
+        "rol": rol,
+        "idRol": idRol,
       };
 
       print("📦 EDITAR USUARIO BODY: $body");
+      print("🌐 URL: $baseUrl/usuarios/$idUsuario");
 
-      final res = await http.put(
-        Uri.parse("$baseUrl/usuarios/$idUsuario"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
+      final res = await http
+          .put(
+            Uri.parse("$baseUrl/usuarios/$idUsuario"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
 
       print("📥 EDITAR USUARIO RESPONSE: ${res.statusCode} - ${res.body}");
 
@@ -444,10 +474,12 @@ class AdminService {
   // =========================
   Future<bool> eliminarUsuario(int idUsuario) async {
     try {
-      final res = await http.delete(
-        Uri.parse("$baseUrl/usuarios/$idUsuario"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .delete(
+            Uri.parse("$baseUrl/usuarios/$idUsuario"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         await _registrarLog(
@@ -468,28 +500,34 @@ class AdminService {
 
   // ============================================================
   // 🔄 CAMBIAR ROL
-  // ✅ CORREGIDO: envía `rol` Y `idRol`
+  // ✅ PATCH a /usuarios/:id/rol
   // ============================================================
   Future<Map<String, dynamic>> cambiarRol(int idUsuario, String rol) async {
     try {
       final idRol = _rolToId(rol);
 
       final body = {
-        "rol": rol,        // ✅ string
-        "idRol": idRol,    // ✅ int
+        "rol": rol,
+        "idRol": idRol,
       };
 
+      final url = "$baseUrl/usuarios/$idUsuario/rol";
       print("📦 CAMBIAR ROL BODY: $body");
+      print("🌐 URL: $url");
 
-      final res = await http.patch(
-        Uri.parse("$baseUrl/usuarios/$idUsuario/rol"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
+      final res = await http
+          .patch(
+            Uri.parse(url),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
 
       print("📥 CAMBIAR ROL RESPONSE: ${res.statusCode} - ${res.body}");
 
       if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+
         await _registrarLog(
           accion: "Rol cambiado",
           descripcion: "Usuario ID: $idUsuario → $rol",
@@ -499,8 +537,8 @@ class AdminService {
         );
 
         return {
-          "success": true,
-          "message": "Rol actualizado exitosamente",
+          "success": data["success"] == true || data["ok"] == true,
+          "message": data["message"] ?? data["msg"] ?? "Rol actualizado exitosamente",
         };
       }
 
@@ -509,6 +547,7 @@ class AdminService {
         "success": false,
         "message": errorData["message"] ??
             errorData["error"] ??
+            errorData["msg"] ??
             "Error al cambiar rol",
       };
     } catch (e) {
@@ -522,7 +561,6 @@ class AdminService {
 
   // ============================================================
   // 🔗 ASIGNAR MÉDICO A PACIENTE
-  // ✅ CORREGIDO: devuelve el `id` de la asignación
   // ============================================================
   Future<Map<String, dynamic>> asignar(int idPaciente, int idMedico) async {
     try {
@@ -533,11 +571,13 @@ class AdminService {
 
       print("📦 ASIGNAR BODY: $body");
 
-      final res = await http.post(
-        Uri.parse("$baseUrl/asignar"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
+      final res = await http
+          .post(
+            Uri.parse("$baseUrl/asignar"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
 
       print("📥 ASIGNAR RESPONSE: ${res.statusCode} - ${res.body}");
 
@@ -546,7 +586,7 @@ class AdminService {
         return {
           "success": data["ok"] == true || data["success"] == true,
           "message": data["message"] ?? data["msg"] ?? "Asignación creada",
-          "id": data["id"],   // ✅ nuevo
+          "id": data["id"],
         };
       }
 
@@ -567,10 +607,12 @@ class AdminService {
   // =========================
   Future<bool> eliminarAsignacion(int idMedicoPaciente) async {
     try {
-      final res = await http.delete(
-        Uri.parse("$baseUrl/asignaciones/$idMedicoPaciente"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .delete(
+            Uri.parse("$baseUrl/asignaciones/$idMedicoPaciente"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
       return res.statusCode == 200;
     } catch (e) {
       print("❌ ERROR eliminarAsignacion: $e");
@@ -580,17 +622,18 @@ class AdminService {
 
   // ============================================================
   // 👤 OBTENER PACIENTE POR USUARIO
-  // (El backend ya maneja paciente Y cuidador en esta ruta)
   // ============================================================
   Future<Map<String, dynamic>?> getPacientePorUsuario(int idUsuario) async {
     try {
       final url = "$baseUrl/paciente/usuario/$idUsuario";
       print("📡 GET PACIENTE POR USUARIO: $url");
 
-      final res = await http.get(
-        Uri.parse(url),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse(url),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       print("📥 GET PACIENTE RESPONSE: ${res.statusCode}");
 
@@ -609,18 +652,18 @@ class AdminService {
 
   // ============================================================
   // 👤 OBTENER PACIENTE POR CUIDADOR
-  // ✅ CORREGIDO: apunta a /paciente/usuario/:idUsuario
-  //    (el backend ya maneja cuidador en esa ruta)
   // ============================================================
   Future<Map<String, dynamic>?> getPacientePorCuidador(int idUsuario) async {
     try {
       final url = "$baseUrl/paciente/usuario/$idUsuario";
       print("📡 GET PACIENTE POR CUIDADOR: $url");
 
-      final res = await http.get(
-        Uri.parse(url),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse(url),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       print("📥 GET PACIENTE CUIDADOR RESPONSE: ${res.statusCode}");
 
@@ -642,10 +685,12 @@ class AdminService {
   // =========================
   Future<Map<String, dynamic>> getPerfilAdmin(int idUsuario) async {
     try {
-      final res = await http.get(
-        Uri.parse("$baseUrl/perfil/$idUsuario"),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse("$baseUrl/perfil/$idUsuario"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (res.statusCode == 200) {
         return jsonDecode(res.body);
@@ -659,7 +704,6 @@ class AdminService {
 
   // ============================================================
   // 👤 CREAR CUIDADOR
-  // ✅ CORREGIDO: devuelve `idUsuario` y `data` del backend
   // ============================================================
   Future<Map<String, dynamic>> crearCuidador({
     required String nombre,
@@ -679,11 +723,13 @@ class AdminService {
 
       print("📦 CREAR CUIDADOR BODY: $body");
 
-      final res = await http.post(
-        Uri.parse("$baseUrl/cuidadores"),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(body),
-      );
+      final res = await http
+          .post(
+            Uri.parse("$baseUrl/cuidadores"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
 
       print("📥 CREAR CUIDADOR RESPONSE: ${res.statusCode} - ${res.body}");
 
@@ -700,14 +746,12 @@ class AdminService {
 
         return {
           "success": true,
-          "message":
-              data["msg"] ?? data["message"] ?? "Cuidador creado exitosamente",
+          "message": data["msg"] ?? data["message"] ?? "Cuidador creado exitosamente",
           "idUsuario": data["idUsuario"],
           "data": data,
         };
       }
 
-      // ✅ Extraer mensaje del backend (msg / message / error)
       String errorMsg = "Error al crear cuidador";
       try {
         final errorData = jsonDecode(res.body);
@@ -732,30 +776,24 @@ class AdminService {
 
   // ============================================================
   // 👤 OBTENER CUIDADOR POR PACIENTE
-  // ✅ Maneja todos los formatos posibles del backend
   // ============================================================
   Future<Map<String, dynamic>?> getCuidador(int idPaciente) async {
     try {
       final url = "$baseUrl/cuidadores/paciente/$idPaciente";
       print("📡 GET CUIDADOR: $url");
 
-      final res = await http.get(
-        Uri.parse(url),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .get(
+            Uri.parse(url),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       print("📥 GET CUIDADOR RESPONSE: ${res.statusCode} - ${res.body}");
 
       if (res.statusCode != 200) return null;
 
       final data = jsonDecode(res.body);
-
-      // Casos posibles del backend:
-      // 1. {idCuidador, nombreCuidador, relacionCuidador, ...}   → devolver
-      // 2. {ok: false, message: "..."}                            → null
-      // 3. []                                                     → null
-      // 4. {data: {...}}                                          → devolver data
-      // 5. {cuidador: {...}}                                      → devolver cuidador
 
       if (data is Map) {
         if (data["ok"] == false) return null;
@@ -779,17 +817,18 @@ class AdminService {
 
   // ============================================================
   // 🗑️ ELIMINAR CUIDADOR POR PACIENTE
-  // ✅ Acepta 200 y 204
   // ============================================================
   Future<bool> eliminarCuidador(int idPaciente) async {
     try {
       final url = "$baseUrl/cuidadores/paciente/$idPaciente";
       print("📡 DELETE CUIDADOR: $url");
 
-      final res = await http.delete(
-        Uri.parse(url),
-        headers: {"Content-Type": "application/json"},
-      );
+      final res = await http
+          .delete(
+            Uri.parse(url),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
 
       print("📥 DELETE CUIDADOR RESPONSE: ${res.statusCode}");
 

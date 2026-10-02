@@ -1,6 +1,5 @@
-import 'package:cardio_app/Screens/tratamiento_screen.dart';
+import 'package:cardio_app/screens/tratamiento_screen.dart';
 import 'package:cardio_app/app.theme.dart';
-import 'package:cardio_app/screens/agendar_cita_medico_screen.dart';
 import 'package:cardio_app/services/adherencia_service.dart';
 import 'package:cardio_app/services/cita_service.dart';
 import 'package:flutter/material.dart';
@@ -24,6 +23,7 @@ import '../services/alerta_service.dart';
 import '../screens/editar_tratamiento.dart';
 import '../services/notificacion_service.dart';
 import '../services/metricas_service.dart';
+import 'agendar_cita_medico_screen.dart'; // ✅ NUEVO
 
 class PacienteDetalleScreen extends StatefulWidget {
   final int idPaciente;
@@ -78,9 +78,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   bool _cargandoMetricas = false;
   bool _cargandoAdherencia = false;
 
-  // ==============================================
-  // 🧭 TUTORIAL (Onboarding)
-  // ==============================================
   bool _mostrarTutorial = false;
   int _pasoTutorial = 0;
   final List<String> _pasosTutorial = [
@@ -103,12 +100,26 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
   ];
 
-  // Colores para las alertas
   static const Color _primary = AppTheme.primary;
   static const Color _success = AppTheme.success;
   static const Color _warning = AppTheme.warning;
   static const Color _danger = AppTheme.danger;
   static const Color _info = AppTheme.info;
+
+  // ==============================================
+  // 🖥️ CONSTANTES RESPONSIVE
+  // ==============================================
+  /// Ancho máximo del contenido principal para que no se estire en Windows
+  static const double _kMaxContentWidth = 1100;
+
+  /// Devuelve cuántas columnas usar en el grid de métricas
+  int _columnasMetricas(double width) {
+    if (width < 360) return 2;
+    if (width < 600) return 2;
+    if (width < 900) return 3;
+    if (width < 1200) return 4;
+    return 5;
+  }
 
   @override
   void initState() {
@@ -137,7 +148,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             const SizedBox(width: 16),
             Expanded(
               child: Text(msg,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w500)),
             ),
           ],
         ),
@@ -152,12 +164,34 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   // ==============================================
+  // 📅 AGENDAR CITA (MÉDICO)
+  // ==============================================
+  Future<void> _abrirAgendarCita() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AgendarCitaMedicoScreen(
+          idPaciente: widget.idPaciente,
+          idProfesional: widget.idMedico,
+          nombrePaciente: widget.nombre,
+        ),
+      ),
+    );
+
+    if (result == true && mounted) {
+      _snack("✅ Cita agendada correctamente");
+      await loadCitas();
+    }
+  }
+
+  // ==============================================
   // 💬 CHAT
   // ==============================================
   Future<void> iniciarChat() async {
     try {
-      print("🔍 Iniciando chat: paciente(idUsuario=${widget.idUsuarioPaciente}) con medico(idProfesional=${widget.idMedico})");
-      
+      print(
+          "🔍 Iniciando chat: paciente(idUsuario=${widget.idUsuarioPaciente}) con medico(idProfesional=${widget.idMedico})");
+
       idConversacion = await chatService.getOrCreateConversacion(
         widget.idUsuarioPaciente,
         widget.idMedico,
@@ -173,21 +207,22 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
   void abrirChat() async {
     try {
-      print("🔍 Abriendo chat: paciente(idUsuario=${widget.idUsuarioPaciente}) con medico(idProfesional=${widget.idMedico})");
-      
+      print(
+          "🔍 Abriendo chat: paciente(idUsuario=${widget.idUsuarioPaciente}) con medico(idProfesional=${widget.idMedico})");
+
       final convId = idConversacion ??
           await chatService.getOrCreateConversacion(
             widget.idUsuarioPaciente,
             widget.idMedico,
           );
-          
+
       if (convId == null) {
         _snack("No se pudo abrir el chat", isError: true);
         return;
       }
       idConversacion = convId;
       if (!mounted) return;
-      
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -224,11 +259,11 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       print("🔍 Cargando alertas para paciente: ${widget.idPaciente}");
       final data = await alertaService.getAlertas(widget.idPaciente);
       print("📦 Alertas encontradas: ${data.length}");
-      
+
       if (data.isNotEmpty) {
         print("📋 Primera alerta: ${data.first}");
       }
-      
+
       if (!mounted) return;
       setState(() => alertas = List<Map<String, dynamic>>.from(data));
     } catch (e) {
@@ -243,9 +278,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       if (ok && mounted) {
         setState(() {
           final index = alertas.indexWhere((a) =>
-            safeId(a["idAlerta"]) == idAlerta ||
-            safeId(a["id"]) == idAlerta
-          );
+              safeId(a["idAlerta"]) == idAlerta ||
+              safeId(a["id"]) == idAlerta);
           if (index != -1) {
             alertas[index]["estado"] = "ATENDIDA";
           }
@@ -264,21 +298,41 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   Map<String, dynamic> _getOrigenData(String origen) {
     switch (origen.toLowerCase()) {
       case 'sistema':
-        return {'label': 'Sistema', 'icon': Icons.computer, 'color': Colors.grey.shade600};
+        return {
+          'label': 'Sistema',
+          'icon': Icons.computer,
+          'color': Colors.grey.shade600
+        };
       case 'signo':
       case 'signos':
-        return {'label': 'Signos', 'icon': Icons.monitor_heart, 'color': _danger};
+        return {
+          'label': 'Signos',
+          'icon': Icons.monitor_heart,
+          'color': _danger
+        };
       case 'sintoma':
       case 'sintomas':
-        return {'label': 'Síntomas', 'icon': Icons.healing, 'color': _warning};
+        return {
+          'label': 'Síntomas',
+          'icon': Icons.healing,
+          'color': _warning
+        };
       case 'cita':
       case 'citas':
         return {'label': 'Citas', 'icon': Icons.event, 'color': _info};
       case 'admin':
-        return {'label': 'Admin', 'icon': Icons.admin_panel_settings, 'color': Colors.indigo};
+        return {
+          'label': 'Admin',
+          'icon': Icons.admin_panel_settings,
+          'color': Colors.indigo
+        };
       case 'paciente':
       default:
-        return {'label': 'Paciente', 'icon': Icons.person, 'color': Colors.green};
+        return {
+          'label': 'Paciente',
+          'icon': Icons.person,
+          'color': Colors.green
+        };
     }
   }
 
@@ -305,47 +359,52 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   // 📥 EXPORTAR DATOS DEL PACIENTE A CSV
   // ==============================================
   Future<void> _exportarPacienteCSV() async {
-    if (signos.isEmpty && sintomas.isEmpty && tratamientos.isEmpty &&
-        citas.isEmpty && alertas.isEmpty && recomendaciones.isEmpty) {
+    if (signos.isEmpty &&
+        sintomas.isEmpty &&
+        tratamientos.isEmpty &&
+        citas.isEmpty &&
+        alertas.isEmpty &&
+        recomendaciones.isEmpty) {
       _snack("No hay datos para exportar", isError: true);
       return;
     }
 
     setState(() => _exportando = true);
-    
+
     try {
       String csvContent = _buildCSVContent();
-      
+
       final directory = await getApplicationDocumentsDirectory();
       final fecha = DateTime.now().toIso8601String().split('T').first;
-      final fileName = "paciente_${widget.nombre.replaceAll(' ', '_')}_$fecha.csv";
+      final fileName =
+          "paciente_${widget.nombre.replaceAll(' ', '_')}_$fecha.csv";
       final path = "${directory.path}/$fileName";
-      
+
       print("📁 Guardando archivo en: $path");
-      
+
       final file = File(path);
       await file.writeAsString(csvContent);
-      
+
       if (await file.exists()) {
         _snack("Archivo guardado: $fileName");
         _mostrarDialogoArchivoGuardado(path, fileName);
       } else {
         _snack("Error al guardar el archivo", isError: true);
       }
-      
     } catch (e) {
       print("❌ Error exportando: $e");
       _snack("Error al exportar: ${e.toString()}", isError: true);
-      
+
       try {
         final directory = await getTemporaryDirectory();
         final fecha = DateTime.now().toIso8601String().split('T').first;
-        final fileName = "paciente_${widget.nombre.replaceAll(' ', '_')}_$fecha.csv";
+        final fileName =
+            "paciente_${widget.nombre.replaceAll(' ', '_')}_$fecha.csv";
         final path = "${directory.path}/$fileName";
-        
+
         final file = File(path);
         await file.writeAsString(_buildCSVContent());
-        
+
         _snack("Archivo guardado en temporal: $fileName");
         _mostrarDialogoArchivoGuardado(path, fileName);
       } catch (e2) {
@@ -359,7 +418,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
   void _mostrarDialogoArchivoGuardado(String path, String fileName) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -460,7 +519,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   String _buildCSVContent() {
     const String sep = ';';
     StringBuffer buffer = StringBuffer();
-    
+
     buffer.writeln('REPORTE DEL PACIENTE');
     buffer.writeln('Paciente${sep}${widget.nombre}');
     buffer.writeln('ID Paciente${sep}${widget.idPaciente}');
@@ -468,109 +527,100 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     buffer.writeln('Médico ID${sep}${widget.idMedico}');
     buffer.writeln('Fecha Exportación${sep}${DateTime.now().toString()}');
     buffer.writeln('');
-    
+
     buffer.writeln('SIGNOS VITALES');
-    buffer.writeln('Fecha${sep}Presión Sistólica (mmHg)${sep}Presión Diastólica (mmHg)${sep}Frecuencia Cardíaca (lpm)${sep}Saturación Oxígeno (%)');
+    buffer.writeln(
+        'Fecha${sep}Presión Sistólica (mmHg)${sep}Presión Diastólica (mmHg)${sep}Frecuencia Cardíaca (lpm)${sep}Saturación Oxígeno (%)');
     if (signos.isNotEmpty) {
       for (var s in signos) {
         buffer.writeln(
-          '${_formatFecha(s["fechaRegistro"])}${sep}'
-          '${s["presionSistolica"] ?? ""}${sep}'
-          '${s["presionDiastolica"] ?? ""}${sep}'
-          '${s["frecuenciaCardiaca"] ?? ""}${sep}'
-          '${s["saturacionOxigeno"] ?? ""}'
-        );
+            '${_formatFecha(s["fechaRegistro"])}${sep}'
+            '${s["presionSistolica"] ?? ""}${sep}'
+            '${s["presionDiastolica"] ?? ""}${sep}'
+            '${s["frecuenciaCardiaca"] ?? ""}${sep}'
+            '${s["saturacionOxigeno"] ?? ""}');
       }
     } else {
       buffer.writeln('No hay signos registrados');
     }
     buffer.writeln('Total${sep}${signos.length}');
     buffer.writeln('');
-    
+
     buffer.writeln('SÍNTOMAS');
     buffer.writeln('Fecha${sep}Título${sep}Descripción${sep}Prioridad');
     if (sintomas.isNotEmpty) {
       for (var s in sintomas) {
-        buffer.writeln(
-          '${_formatFecha(s["fecha"])}${sep}'
-          '${s["titulo"] ?? ""}${sep}'
-          '${s["descripcion"] ?? ""}${sep}'
-          '${s["prioridad"] ?? ""}'
-        );
+        buffer.writeln('${_formatFecha(s["fecha"])}${sep}'
+            '${s["titulo"] ?? ""}${sep}'
+            '${s["descripcion"] ?? ""}${sep}'
+            '${s["prioridad"] ?? ""}');
       }
     } else {
       buffer.writeln('No hay síntomas registrados');
     }
     buffer.writeln('Total${sep}${sintomas.length}');
     buffer.writeln('');
-    
+
     buffer.writeln('TRATAMIENTOS');
     buffer.writeln('Descripción${sep}Estado${sep}Fecha Inicio${sep}Fecha Fin');
     if (tratamientos.isNotEmpty) {
       for (var t in tratamientos) {
-        buffer.writeln(
-          '${t["descripcion"] ?? ""}${sep}'
-          '${t["estado"] ?? ""}${sep}'
-          '${_formatFecha(t["fechaInicio"])}${sep}'
-          '${_formatFecha(t["fechaFin"])}'
-        );
+        buffer.writeln('${t["descripcion"] ?? ""}${sep}'
+            '${t["estado"] ?? ""}${sep}'
+            '${_formatFecha(t["fechaInicio"])}${sep}'
+            '${_formatFecha(t["fechaFin"])}');
       }
     } else {
       buffer.writeln('No hay tratamientos registrados');
     }
     buffer.writeln('Total${sep}${tratamientos.length}');
     buffer.writeln('');
-    
+
     buffer.writeln('CITAS MÉDICAS');
     buffer.writeln('Motivo${sep}Fecha${sep}Estado');
     if (citas.isNotEmpty) {
       for (var c in citas) {
-        buffer.writeln(
-          '${c["motivo"] ?? ""}${sep}'
-          '${_formatFecha(c["fecha"])}${sep}'
-          '${c["estado"] ?? ""}'
-        );
+        buffer.writeln('${c["motivo"] ?? ""}${sep}'
+            '${_formatFecha(c["fecha"])}${sep}'
+            '${c["estado"] ?? ""}');
       }
     } else {
       buffer.writeln('No hay citas registradas');
     }
     buffer.writeln('Total${sep}${citas.length}');
     buffer.writeln('');
-    
+
     buffer.writeln('ALERTAS');
-    buffer.writeln('Tipo${sep}Nivel${sep}Estado${sep}Origen${sep}Descripción${sep}Fecha');
+    buffer.writeln(
+        'Tipo${sep}Nivel${sep}Estado${sep}Origen${sep}Descripción${sep}Fecha');
     if (alertas.isNotEmpty) {
       for (var a in alertas) {
-        buffer.writeln(
-          '${a["tipo"] ?? ""}${sep}'
-          '${a["nivel"] ?? ""}${sep}'
-          '${a["estado"] ?? ""}${sep}'
-          '${a["origen"] ?? ""}${sep}'
-          '${a["descripcion"] ?? ""}${sep}'
-          '${_formatFechaDetalle(a["fecha"])}'
-        );
+        buffer.writeln('${a["tipo"] ?? ""}${sep}'
+            '${a["nivel"] ?? ""}${sep}'
+            '${a["estado"] ?? ""}${sep}'
+            '${a["origen"] ?? ""}${sep}'
+            '${a["descripcion"] ?? ""}${sep}'
+            '${_formatFechaDetalle(a["fecha"])}');
       }
     } else {
       buffer.writeln('No hay alertas registradas');
     }
     buffer.writeln('Total${sep}${alertas.length}');
     buffer.writeln('');
-    
+
     buffer.writeln('RECOMENDACIONES MÉDICAS');
     buffer.writeln('Descripción${sep}Fecha');
     if (recomendaciones.isNotEmpty) {
       for (var r in recomendaciones) {
         buffer.writeln(
-          '${r["descripcion"] ?? ""}${sep}'
-          '${_formatFecha(r["fecha"])}'
-        );
+            '${r["descripcion"] ?? ""}${sep}${_formatFecha(r["fecha"])}');
       }
     } else {
       buffer.writeln('No hay recomendaciones registradas');
     }
     buffer.writeln('Total${sep}${recomendaciones.length}');
     buffer.writeln('');
-    
+
     buffer.writeln('ADHERENCIA AL TRATAMIENTO');
     if (adherencia != null) {
       buffer.writeln('Porcentaje${sep}${adherencia!["porcentaje"] ?? ""}');
@@ -580,11 +630,11 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       buffer.writeln('Citas médicas${sep}${adherencia!["citas"] ?? ""}');
       buffer.writeln('');
     }
-    
+
     buffer.writeln('FIN DEL REPORTE');
     buffer.writeln('Generado por${sep}CardioCare');
     buffer.writeln('Fecha${sep}${DateTime.now().toString()}');
-    
+
     return buffer.toString();
   }
 
@@ -594,16 +644,18 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   Future<void> loadSignos() async {
     try {
       print("🔍 Buscando signos para usuario: ${widget.idUsuarioPaciente}");
-      
+
       final data = await signosService.getSignos(widget.idUsuarioPaciente);
-      
+
       print("📦 Signos encontrados: ${data.length}");
-      
+
       if (!mounted) return;
       final lista = List<Map<String, dynamic>>.from(data);
       lista.sort((a, b) {
-        final fa = DateTime.tryParse(a["fechaRegistro"]?.toString() ?? "") ?? DateTime(2000);
-        final fb = DateTime.tryParse(b["fechaRegistro"]?.toString() ?? "") ?? DateTime(2000);
+        final fa = DateTime.tryParse(a["fechaRegistro"]?.toString() ?? "") ??
+            DateTime(2000);
+        final fb = DateTime.tryParse(b["fechaRegistro"]?.toString() ?? "") ??
+            DateTime(2000);
         return fb.compareTo(fa);
       });
       setState(() => signos = lista);
@@ -614,7 +666,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
   Future<void> loadSintomas() async {
     try {
-      final data = await sintomaService.getSintomasByUser(widget.idUsuarioPaciente);
+      final data =
+          await sintomaService.getSintomasByUser(widget.idUsuarioPaciente);
       final lista = List<Map<String, dynamic>>.from(data);
       lista.sort((a, b) => _cmpFecha(b["fecha"], a["fecha"]));
       if (!mounted) return;
@@ -667,9 +720,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       if (data != null && mounted) {
         setState(() => adherencia = data);
       }
-      
+
       await _cargarRecomendacionesAdherencia();
-      
     } catch (e) {
       debugPrint("❌ Error cargando datos de adherencia: $e");
     } finally {
@@ -766,7 +818,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   // ==============================================
-  // 📊 VISTA DE MÉTRICAS
+  // 📊 VISTA DE MÉTRICAS (RESPONSIVE)
   // ==============================================
   Widget _buildMetricasView(AccessibilityProvider accessibility, bool isDark) {
     if (_cargandoMetricas) {
@@ -782,24 +834,36 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       );
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildMetricasResumen(accessibility, isDark),
-          const SizedBox(height: 16),
-          _buildMetricasGrid(accessibility, isDark),
-          const SizedBox(height: 16),
-          _buildExportMetricasButton(accessibility, isDark),
-        ],
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double horizontalPad = screenWidth < 600 ? 16.0 : 24.0;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPad,
+            vertical: 16,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildMetricasResumen(accessibility, isDark),
+              const SizedBox(height: 16),
+              _buildMetricasGrid(accessibility, isDark, screenWidth),
+              const SizedBox(height: 16),
+              _buildExportMetricasButton(accessibility, isDark),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  Widget _buildMetricasResumen(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildMetricasResumen(
+      AccessibilityProvider accessibility, bool isDark) {
     final resumen = metricas['resumen'] as Map? ?? {};
-    
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -809,121 +873,273 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildResumenItem('Total', '${resumen['total_signos'] ?? 0}', 'Signos', accessibility),
-          _buildResumenItem('Total', '${resumen['total_tratamientos'] ?? 0}', 'Tratamientos', accessibility),
-          _buildResumenItem('Total', '${resumen['total_citas'] ?? 0}', 'Citas', accessibility),
-          _buildResumenItem('Total', '${resumen['total_alertas'] ?? 0}', 'Alertas', accessibility),
+          _buildResumenItem('Total', '${resumen['total_signos'] ?? 0}',
+              'Signos', accessibility),
+          _buildResumenItem('Total', '${resumen['total_tratamientos'] ?? 0}',
+              'Tratamientos', accessibility),
+          _buildResumenItem('Total', '${resumen['total_citas'] ?? 0}',
+              'Citas', accessibility),
+          _buildResumenItem('Total', '${resumen['total_alertas'] ?? 0}',
+              'Alertas', accessibility),
         ],
       ),
     );
   }
 
-  Widget _buildResumenItem(String label, String valor, String subtitulo, AccessibilityProvider accessibility) {
+  Widget _buildResumenItem(String label, String valor, String subtitulo,
+      AccessibilityProvider accessibility) {
     return Column(
       children: [
-        Text(valor, style: TextStyle(fontSize: 18 * accessibility.fontScale, fontWeight: FontWeight.bold, color: Colors.white)),
+        Text(valor,
+            style: TextStyle(
+                fontSize: 18 * accessibility.fontScale,
+                fontWeight: FontWeight.bold,
+                color: Colors.white)),
         const SizedBox(height: 4),
-        Text(subtitulo, style: TextStyle(fontSize: 11 * accessibility.fontScale, color: Colors.white70)),
+        Text(subtitulo,
+            style: TextStyle(
+                fontSize: 11 * accessibility.fontScale,
+                color: Colors.white70)),
       ],
     );
   }
 
-  Widget _buildMetricasGrid(AccessibilityProvider accessibility, bool isDark) {
+  // ==============================================
+  // ✅ MÉTRICAS GRID — RESPONSIVE
+  // ==============================================
+  Widget _buildMetricasGrid(
+    AccessibilityProvider accessibility,
+    bool isDark,
+    double screenWidth,
+  ) {
+    final int columnas = _columnasMetricas(screenWidth);
+    final bool esGrande = screenWidth >= 900;
+    final bool esMuyGrande = screenWidth >= 1200;
+
+    // Aspect ratio: más horizontal cuando más columnas hay
+    final double aspect = esMuyGrande
+        ? 1.7
+        : esGrande
+            ? 1.55
+            : (screenWidth < 360 ? 1.0 : 1.15);
+
+    final cards = <Widget>[
+      _buildMetricaCard(
+          'Cobertura atención',
+          _formatMetrica(metricas['cobertura_atencion']),
+          '%',
+          _getColorMetrica(metricas['cobertura_atencion'] ?? 0, 80.0),
+          Icons.health_and_safety,
+          accessibility,
+          isDark,
+          esGrande),
+      _buildMetricaCard(
+          'Cobertura programa',
+          _formatMetrica(metricas['cobertura_programa']),
+          '%',
+          _getColorMetrica(metricas['cobertura_programa'] ?? 0, 80.0),
+          Icons.assignment,
+          accessibility,
+          isDark,
+          esGrande),
+      _buildMetricaCard(
+          'Adherencia',
+          _formatMetrica(metricas['adherencia_tratamiento']),
+          '%',
+          _getColorMetrica(metricas['adherencia_tratamiento'] ?? 0, 80.0),
+          Icons.medication,
+          accessibility,
+          isDark,
+          esGrande),
+      _buildMetricaCard(
+          'SpO2 promedio',
+          _formatMetrica(metricas['spo2_promedio']),
+          '%',
+          _getColorMetrica(metricas['spo2_promedio'] ?? 0, 90.0),
+          Icons.air,
+          accessibility,
+          isDark,
+          esGrande),
+      _buildMetricaCard(
+          'Mejoría SpO2',
+          _formatMetrica(metricas['mejoria_spo2']),
+          '%',
+          _getColorMetrica(metricas['mejoria_spo2'] ?? 0, 50.0),
+          Icons.trending_up,
+          accessibility,
+          isDark,
+          esGrande),
+      _buildMetricaCard(
+          'Fumadores',
+          _formatMetrica(metricas['pacientes_fumadores']),
+          '%',
+          _getColorMetricaInversa(metricas['pacientes_fumadores'] ?? 0, 20.0),
+          Icons.smoke_free,
+          accessibility,
+          isDark,
+          esGrande),
+      _buildMetricaCard(
+          'Desmonte',
+          _formatMetrica(metricas['recomendaciones_desmonte'] ?? 0),
+          '',
+          _getColorMetrica(metricas['recomendaciones_desmonte'] ?? 0, 3.0),
+          Icons.note_add,
+          accessibility,
+          isDark,
+          esGrande),
+      _buildMetricaCard(
+          'Calidad registro',
+          _formatMetrica(metricas['calidad_registro']),
+          '%',
+          _getColorMetrica(metricas['calidad_registro'] ?? 0, 80.0),
+          Icons.verified,
+          accessibility,
+          isDark,
+          esGrande),
+    ];
+
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.4,
-      children: [
-        _buildMetricaCard('Cobertura atención', _formatMetrica(metricas['cobertura_atencion']), '%',
-            _getColorMetrica(metricas['cobertura_atencion'] ?? 0, 80.0), Icons.health_and_safety, accessibility, isDark),
-        _buildMetricaCard('Cobertura programa', _formatMetrica(metricas['cobertura_programa']), '%',
-            _getColorMetrica(metricas['cobertura_programa'] ?? 0, 80.0), Icons.assignment, accessibility, isDark),
-        _buildMetricaCard('Adherencia', _formatMetrica(metricas['adherencia_tratamiento']), '%',
-            _getColorMetrica(metricas['adherencia_tratamiento'] ?? 0, 80.0), Icons.medication, accessibility, isDark),
-        _buildMetricaCard('SpO2 promedio', _formatMetrica(metricas['spo2_promedio']), '%',
-            _getColorMetrica(metricas['spo2_promedio'] ?? 0, 90.0), Icons.air, accessibility, isDark),
-        _buildMetricaCard('Mejoría SpO2', _formatMetrica(metricas['mejoria_spo2']), '%',
-            _getColorMetrica(metricas['mejoria_spo2'] ?? 0, 50.0), Icons.trending_up, accessibility, isDark),
-        _buildMetricaCard('Fumadores', _formatMetrica(metricas['pacientes_fumadores']), '%',
-            _getColorMetricaInversa(metricas['pacientes_fumadores'] ?? 0, 20.0), Icons.smoke_free, accessibility, isDark),
-        _buildMetricaCard('Desmonte', _formatMetrica(metricas['recomendaciones_desmonte'] ?? 0), '',
-            _getColorMetrica(metricas['recomendaciones_desmonte'] ?? 0, 3.0), Icons.note_add, accessibility, isDark),
-        _buildMetricaCard('Calidad registro', _formatMetrica(metricas['calidad_registro']), '%',
-            _getColorMetrica(metricas['calidad_registro'] ?? 0, 80.0), Icons.verified, accessibility, isDark),
-      ],
+      crossAxisCount: columnas,
+      crossAxisSpacing: esGrande ? 14 : 12,
+      mainAxisSpacing: esGrande ? 14 : 12,
+      childAspectRatio: aspect,
+      children: cards,
     );
   }
 
-  Widget _buildMetricaCard(String titulo, String valor, String unidad, Color color, IconData icono,
-      AccessibilityProvider accessibility, bool isDark) {
+  // ==============================================
+  // ✅ MÉTRICA CARD — RESPONSIVE
+  // ==============================================
+  Widget _buildMetricaCard(
+    String titulo,
+    String valor,
+    String unidad,
+    Color color,
+    IconData icono,
+    AccessibilityProvider accessibility,
+    bool isDark,
+    bool esGrande,
+  ) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: EdgeInsets.all(esGrande ? 14 : 12),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.gray800 : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: isDark ? null : [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
-        border: Border.all(color: isDark ? AppTheme.gray600 : AppTheme.gray200, width: 1),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+        border: Border.all(
+          color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+          width: 1,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
-                child: Icon(icono, color: color, size: 18),
+                padding: EdgeInsets.all(esGrande ? 8 : 6),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(icono,
+                    color: color, size: esGrande ? 18 : 16),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(titulo,
-                  style: TextStyle(fontSize: 10 * accessibility.fontScale, fontWeight: FontWeight.w500,
-                      color: isDark ? AppTheme.gray300 : AppTheme.gray500),
-                  maxLines: 2, overflow: TextOverflow.ellipsis,
+                child: Text(
+                  titulo,
+                  style: TextStyle(
+                    fontSize:
+                        (esGrande ? 12 : 11) * accessibility.fontScale,
+                    fontWeight: FontWeight.w500,
+                    color: isDark ? AppTheme.gray300 : AppTheme.gray500,
+                    height: 1.2,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(valor,
-                style: TextStyle(fontSize: 24 * accessibility.fontScale, fontWeight: FontWeight.bold, color: color),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    valor,
+                    style: TextStyle(
+                      fontSize:
+                          (esGrande ? 22 : 20) * accessibility.fontScale,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                      height: 1.0,
+                    ),
+                    maxLines: 1,
+                  ),
+                  if (unidad.isNotEmpty) ...[
+                    const SizedBox(width: 2),
+                    Text(
+                      unidad,
+                      style: TextStyle(
+                        fontSize:
+                            (esGrande ? 13 : 12) *
+                                accessibility.fontScale,
+                        color:
+                            isDark ? AppTheme.gray400 : AppTheme.gray500,
+                      ),
+                      maxLines: 1,
+                    ),
+                  ],
+                ],
               ),
-              if (unidad.isNotEmpty) ...[
-                const SizedBox(width: 2),
-                Text(unidad,
-                  style: TextStyle(fontSize: 12 * accessibility.fontScale, color: isDark ? AppTheme.gray400 : AppTheme.gray500),
-                ),
-              ],
-            ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildExportMetricasButton(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildExportMetricasButton(
+      AccessibilityProvider accessibility, bool isDark) {
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton.icon(
         onPressed: _exportando ? null : _exportarMetricasCSV,
         icon: _exportando
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
             : const Icon(Icons.download, size: 22),
         label: Text('Exportar métricas a CSV',
-          style: TextStyle(fontSize: 16 * accessibility.fontScale, fontWeight: FontWeight.w600),
-        ),
+            style: TextStyle(
+                fontSize: 16 * accessibility.fontScale,
+                fontWeight: FontWeight.w600)),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppTheme.info,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
       ),
     );
@@ -936,25 +1152,25 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     }
 
     setState(() => _exportando = true);
-    
+
     try {
       String csvContent = _buildMetricasCSVContent();
-      
+
       final directory = await getApplicationDocumentsDirectory();
       final fecha = DateTime.now().toIso8601String().split('T').first;
-      final fileName = "metricas_${widget.nombre.replaceAll(' ', '_')}_$fecha.csv";
+      final fileName =
+          "metricas_${widget.nombre.replaceAll(' ', '_')}_$fecha.csv";
       final path = "${directory.path}/$fileName";
-      
+
       final file = File(path);
       await file.writeAsString(csvContent);
-      
+
       if (await file.exists()) {
         _snack("Métricas guardadas: $fileName");
         _mostrarDialogoArchivoGuardado(path, fileName);
       } else {
         _snack("Error al guardar métricas", isError: true);
       }
-      
     } catch (e) {
       print("❌ Error exportando métricas: $e");
       _snack("Error al exportar métricas", isError: true);
@@ -966,58 +1182,75 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   String _buildMetricasCSVContent() {
     const String sep = ';';
     StringBuffer buffer = StringBuffer();
-    
+
     buffer.writeln('=== MÉTRICAS DEL PACIENTE ===');
     buffer.writeln('Paciente${sep}${widget.nombre}');
     buffer.writeln('Fecha${sep}${DateTime.now().toString()}');
     buffer.writeln('');
-    
+
     buffer.writeln('=== INDICADORES ASISTENCIALES ===');
-    buffer.writeln('Cobertura de atención${sep}${_formatMetrica(metricas['cobertura_atencion'])}%');
-    buffer.writeln('Cobertura del programa${sep}${_formatMetrica(metricas['cobertura_programa'])}%');
-    buffer.writeln('Seguimientos realizados${sep}${metricas['seguimientos_realizados'] ?? 0}');
-    buffer.writeln('Tasa de continuidad${sep}${_formatMetrica(metricas['tasa_continuidad'])}%');
+    buffer.writeln(
+        'Cobertura de atención${sep}${_formatMetrica(metricas['cobertura_atencion'])}%');
+    buffer.writeln(
+        'Cobertura del programa${sep}${_formatMetrica(metricas['cobertura_programa'])}%');
+    buffer.writeln(
+        'Seguimientos realizados${sep}${metricas['seguimientos_realizados'] ?? 0}');
+    buffer.writeln(
+        'Tasa de continuidad${sep}${_formatMetrica(metricas['tasa_continuidad'])}%');
     buffer.writeln('');
-    
+
     buffer.writeln('=== ADHERENCIA ===');
-    buffer.writeln('Adherencia al tratamiento${sep}${_formatMetrica(metricas['adherencia_tratamiento'])}%');
-    buffer.writeln('Adherencia terapéutica (Oxígeno)${sep}${_formatMetrica(metricas['adherencia_oxigeno'])}%');
+    buffer.writeln(
+        'Adherencia al tratamiento${sep}${_formatMetrica(metricas['adherencia_tratamiento'])}%');
+    buffer.writeln(
+        'Adherencia terapéutica (Oxígeno)${sep}${_formatMetrica(metricas['adherencia_oxigeno'])}%');
     buffer.writeln('');
-    
+
     buffer.writeln('=== ESTADO RESPIRATORIO ===');
-    buffer.writeln('SpO2 promedio${sep}${_formatMetrica(metricas['spo2_promedio'])}%');
-    buffer.writeln('Mejoría de SpO2${sep}${_formatMetrica(metricas['mejoria_spo2'])}%');
+    buffer.writeln(
+        'SpO2 promedio${sep}${_formatMetrica(metricas['spo2_promedio'])}%');
+    buffer.writeln(
+        'Mejoría de SpO2${sep}${_formatMetrica(metricas['mejoria_spo2'])}%');
     buffer.writeln('');
-    
+
     buffer.writeln('=== FACTORES DE RIESGO ===');
-    buffer.writeln('Pacientes fumadores${sep}${_formatMetrica(metricas['pacientes_fumadores'])}%');
-    buffer.writeln('Consumo promedio cigarrillos${sep}${_formatMetrica(metricas['consumo_cigarrillos'])}');
+    buffer.writeln(
+        'Pacientes fumadores${sep}${_formatMetrica(metricas['pacientes_fumadores'])}%');
+    buffer.writeln(
+        'Consumo promedio cigarrillos${sep}${_formatMetrica(metricas['consumo_cigarrillos'])}');
     buffer.writeln('');
-    
+
     buffer.writeln('=== GESTIÓN TERAPÉUTICA ===');
-    buffer.writeln('Recomendaciones de desmonte${sep}${metricas['recomendaciones_desmonte'] ?? 0}');
-    buffer.writeln('Aptitud para concentrador portátil${sep}${_formatMetrica(metricas['aptitud_concentrador'])}%');
+    buffer.writeln(
+        'Recomendaciones de desmonte${sep}${metricas['recomendaciones_desmonte'] ?? 0}');
+    buffer.writeln(
+        'Aptitud para concentrador portátil${sep}${_formatMetrica(metricas['aptitud_concentrador'])}%');
     buffer.writeln('');
-    
+
     buffer.writeln('=== ESTADO CARDIOVASCULAR ===');
     final presion = metricas['presion_arterial_promedio'] as Map? ?? {};
-    buffer.writeln('Presión arterial sistólica promedio${sep}${_formatMetrica(presion['sistolica'])} mmHg');
-    buffer.writeln('Presión arterial diastólica promedio${sep}${_formatMetrica(presion['diastolica'])} mmHg');
+    buffer.writeln(
+        'Presión arterial sistólica promedio${sep}${_formatMetrica(presion['sistolica'])} mmHg');
+    buffer.writeln(
+        'Presión arterial diastólica promedio${sep}${_formatMetrica(presion['diastolica'])} mmHg');
     buffer.writeln('');
-    
+
     buffer.writeln('=== CALIDAD ===');
-    buffer.writeln('Calidad del registro${sep}${_formatMetrica(metricas['calidad_registro'])}%');
+    buffer.writeln(
+        'Calidad del registro${sep}${_formatMetrica(metricas['calidad_registro'])}%');
     buffer.writeln('');
-    
+
     buffer.writeln('=== RESUMEN ===');
     final resumen = metricas['resumen'] as Map? ?? {};
     buffer.writeln('Total signos${sep}${resumen['total_signos'] ?? 0}');
     buffer.writeln('Total síntomas${sep}${resumen['total_sintomas'] ?? 0}');
-    buffer.writeln('Total tratamientos${sep}${resumen['total_tratamientos'] ?? 0}');
+    buffer.writeln(
+        'Total tratamientos${sep}${resumen['total_tratamientos'] ?? 0}');
     buffer.writeln('Total citas${sep}${resumen['total_citas'] ?? 0}');
     buffer.writeln('Total alertas${sep}${resumen['total_alertas'] ?? 0}');
-    buffer.writeln('Total recomendaciones${sep}${resumen['total_recomendaciones'] ?? 0}');
-    
+    buffer.writeln(
+        'Total recomendaciones${sep}${resumen['total_recomendaciones'] ?? 0}');
+
     return buffer.toString();
   }
 
@@ -1048,57 +1281,85 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
     return Stack(
       children: [
-        ModalBarrier(color: Colors.black.withOpacity(0.6), dismissible: true, onDismiss: _cerrarTutorial),
+        ModalBarrier(
+            color: Colors.black.withOpacity(0.6),
+            dismissible: true,
+            onDismiss: _cerrarTutorial),
         Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).brightness == Brightness.dark ? AppTheme.gray800 : Colors.white,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 8))],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                        child: Text("Paso ${_pasoTutorial + 1} de ${_pasosTutorial.length}",
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.primary),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? AppTheme.gray800
+                      : Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  boxShadow: [
+                    BoxShadow(
+                        color: Colors.black.withOpacity(0.2),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8))
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                              color: AppTheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20)),
+                          child: Text(
+                              "Paso ${_pasoTutorial + 1} de ${_pasosTutorial.length}",
+                              style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primary)),
                         ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, size: 24),
-                        onPressed: _cerrarTutorial,
-                        tooltip: "Saltar tutorial",
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(_pasosTutorial[_pasoTutorial],
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500, height: 1.5),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(onPressed: _cerrarTutorial, child: const Text("Saltar tutorial")),
-                      ElevatedButton(
-                        onPressed: _siguientePasoTutorial,
-                        style: AppTheme.primaryButtonStyle.copyWith(
-                          padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 24, vertical: 12)),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 24),
+                          onPressed: _cerrarTutorial,
+                          tooltip: "Saltar tutorial",
                         ),
-                        child: Text(_pasoTutorial == _pasosTutorial.length - 1 ? "Finalizar" : "Siguiente"),
-                      ),
-                    ],
-                  ),
-                ],
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Text(_pasosTutorial[_pasoTutorial],
+                        style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w500,
+                            height: 1.5),
+                        textAlign: TextAlign.center),
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        TextButton(
+                            onPressed: _cerrarTutorial,
+                            child: const Text("Saltar tutorial")),
+                        ElevatedButton(
+                          onPressed: _siguientePasoTutorial,
+                          style: AppTheme.primaryButtonStyle.copyWith(
+                            padding: WidgetStateProperty.all(
+                                const EdgeInsets.symmetric(
+                                    horizontal: 24, vertical: 12)),
+                          ),
+                          child: Text(
+                              _pasoTutorial == _pasosTutorial.length - 1
+                                  ? "Finalizar"
+                                  : "Siguiente"),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1108,9 +1369,10 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   // ==============================================
-  // 📋 VISTA DE ADHERENCIA (SIN CONSISTENCIA)
+  // 📋 VISTA DE ADHERENCIA (RESPONSIVE)
   // ==============================================
-  Widget _buildAdherenciaView(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildAdherenciaView(
+      AccessibilityProvider accessibility, bool isDark) {
     if (_cargandoAdherencia) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -1124,13 +1386,18 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       );
     }
 
-    final porcentaje = double.tryParse(adherencia!["porcentaje"].toString()) ?? 0;
-    final Color color = porcentaje >= 80 ? AppTheme.success : porcentaje >= 50 ? AppTheme.warning : AppTheme.danger;
-    
+    final porcentaje =
+        double.tryParse(adherencia!["porcentaje"].toString()) ?? 0;
+    final Color color = porcentaje >= 80
+        ? AppTheme.success
+        : porcentaje >= 50
+            ? AppTheme.warning
+            : AppTheme.danger;
+
     String estadoSeguimiento;
     IconData estadoIcono;
     Color estadoColor;
-    
+
     if (porcentaje >= 80) {
       estadoSeguimiento = "✅ Siguiendo correctamente";
       estadoIcono = Icons.check_circle;
@@ -1145,216 +1412,238 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       estadoColor = AppTheme.danger;
     }
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // ==========================================
-          // 📊 CIRCULAR DE ADHERENCIA
-          // ==========================================
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [color.withOpacity(0.15), isDark ? AppTheme.gray800 : Colors.white],
-              ),
-              borderRadius: BorderRadius.circular(28),
-              boxShadow: isDark ? null : AppTheme.subtleShadow,
-            ),
-            child: Column(
-              children: [
-                Text(
-                  "Adherencia al Tratamiento",
-                  style: TextStyle(
-                    fontSize: 20 * accessibility.fontScale,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? AppTheme.white : AppTheme.gray700,
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double horizontalPad = screenWidth < 600 ? 16.0 : 24.0;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.symmetric(
+            horizontal: horizontalPad,
+            vertical: 16,
+          ),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      color.withOpacity(0.15),
+                      isDark ? AppTheme.gray800 : Colors.white
+                    ],
                   ),
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: isDark ? null : AppTheme.subtleShadow,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  "Seguimiento del paciente",
-                  style: TextStyle(
-                    fontSize: 15 * accessibility.fontScale,
-                    color: AppTheme.gray500,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 200,
-                  width: 200,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircularProgressIndicator(
-                        value: porcentaje / 100,
-                        strokeWidth: 16,
-                        backgroundColor: AppTheme.gray200,
-                        color: color,
+                child: Column(
+                  children: [
+                    Text(
+                      "Adherencia al Tratamiento",
+                      style: TextStyle(
+                        fontSize: 20 * accessibility.fontScale,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? AppTheme.white : AppTheme.gray700,
                       ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "Seguimiento del paciente",
+                      style: TextStyle(
+                        fontSize: 15 * accessibility.fontScale,
+                        color: AppTheme.gray500,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 200,
+                      width: 200,
+                      child: Stack(
+                        alignment: Alignment.center,
                         children: [
-                          Text(
-                            "${porcentaje.toInt()}%",
-                            style: TextStyle(
-                              fontSize: 44 * accessibility.fontScale,
-                              fontWeight: FontWeight.bold,
-                              color: color,
-                            ),
+                          CircularProgressIndicator(
+                            value: porcentaje / 100,
+                            strokeWidth: 16,
+                            backgroundColor: AppTheme.gray200,
+                            color: color,
                           ),
-                          const SizedBox(height: 6),
-                          Text(
-                            adherencia!["estado"] ?? "",
-                            style: TextStyle(
-                              color: AppTheme.gray500,
-                              fontSize: 16 * accessibility.fontScale,
-                              fontWeight: FontWeight.w500,
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "${porcentaje.toInt()}%",
+                                style: TextStyle(
+                                  fontSize: 44 * accessibility.fontScale,
+                                  fontWeight: FontWeight.bold,
+                                  color: color,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                adherencia!["estado"] ?? "",
+                                style: TextStyle(
+                                  color: AppTheme.gray500,
+                                  fontSize: 16 * accessibility.fontScale,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: estadoColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border:
+                            Border.all(color: estadoColor.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(estadoIcono, color: estadoColor, size: 28),
+                          const SizedBox(width: 12),
+                          Flexible(
+                            child: Text(
+                              estadoSeguimiento,
+                              style: TextStyle(
+                                fontSize: 16 * accessibility.fontScale,
+                                fontWeight: FontWeight.bold,
+                                color: estadoColor,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // ✅ INDICADOR DE SEGUIMIENTO
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: estadoColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: estadoColor.withOpacity(0.3)),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(estadoIcono, color: estadoColor, size: 28),
-                      const SizedBox(width: 12),
-                      Text(
-                        estadoSeguimiento,
-                        style: TextStyle(
-                          fontSize: 16 * accessibility.fontScale,
-                          fontWeight: FontWeight.bold,
-                          color: estadoColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                const SizedBox(height: 28),
-                
-                // ✅ DETALLE DE ADHERENCIA POR ÁREA
-                _adherenciaItem("Medicamentos", adherencia!["medicamentos"],
-                    Icons.medication_outlined, AppTheme.primary, accessibility),
-                const SizedBox(height: 14),
-                _adherenciaItem("Signos vitales", adherencia!["signos"],
-                    Icons.monitor_heart_outlined, AppTheme.danger, accessibility),
-                const SizedBox(height: 14),
-                _adherenciaItem("Citas médicas", adherencia!["citas"],
-                    Icons.event_outlined, AppTheme.success, accessibility),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
-          // ==========================================
-          // 💡 RECOMENDACIONES DE ADHERENCIA
-          // ==========================================
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.gray800 : Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: isDark ? null : AppTheme.subtleShadow,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppTheme.info.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.lightbulb_outline,
-                        color: AppTheme.info,
-                        size: 24,
-                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        "Recomendaciones de Adherencia",
-                        style: TextStyle(
-                          fontSize: 18 * accessibility.fontScale,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? AppTheme.white : AppTheme.gray700,
-                        ),
-                      ),
-                    ),
-                    if (_recomendacionesAdherencia.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppTheme.info,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          "${_recomendacionesAdherencia.length}",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ),
+                    const SizedBox(height: 28),
+                    _adherenciaItem(
+                        "Medicamentos",
+                        adherencia!["medicamentos"],
+                        Icons.medication_outlined,
+                        AppTheme.primary,
+                        accessibility),
+                    const SizedBox(height: 14),
+                    _adherenciaItem(
+                        "Signos vitales",
+                        adherencia!["signos"],
+                        Icons.monitor_heart_outlined,
+                        AppTheme.danger,
+                        accessibility),
+                    const SizedBox(height: 14),
+                    _adherenciaItem(
+                        "Citas médicas",
+                        adherencia!["citas"],
+                        Icons.event_outlined,
+                        AppTheme.success,
+                        accessibility),
                   ],
                 ),
-                const SizedBox(height: 12),
-                if (_recomendacionesAdherencia.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppTheme.gray700 : AppTheme.gray50,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.gray800 : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: isDark ? null : AppTheme.subtleShadow,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        Icon(
-                          Icons.check_circle_outline,
-                          size: 40,
-                          color: AppTheme.success,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "¡Excelente! No hay recomendaciones pendientes",
-                          style: TextStyle(
-                            fontSize: 15 * accessibility.fontScale,
-                            color: isDark ? AppTheme.gray400 : AppTheme.gray500,
-                            fontWeight: FontWeight.w500,
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: AppTheme.info.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          textAlign: TextAlign.center,
+                          child: const Icon(
+                            Icons.lightbulb_outline,
+                            color: AppTheme.info,
+                            size: 24,
+                          ),
                         ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            "Recomendaciones de Adherencia",
+                            style: TextStyle(
+                              fontSize: 18 * accessibility.fontScale,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  isDark ? AppTheme.white : AppTheme.gray700,
+                            ),
+                          ),
+                        ),
+                        if (_recomendacionesAdherencia.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: AppTheme.info,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              "${_recomendacionesAdherencia.length}",
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
-                  )
-                else
-                  ..._recomendacionesAdherencia.map((rec) => _buildRecomendacionAdherenciaCard(rec, accessibility, isDark)),
-              ],
-            ),
+                    const SizedBox(height: 12),
+                    if (_recomendacionesAdherencia.isEmpty)
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: isDark ? AppTheme.gray700 : AppTheme.gray50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.check_circle_outline,
+                              size: 40,
+                              color: AppTheme.success,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              "¡Excelente! No hay recomendaciones pendientes",
+                              style: TextStyle(
+                                fontSize: 15 * accessibility.fontScale,
+                                color: isDark
+                                    ? AppTheme.gray400
+                                    : AppTheme.gray500,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ..._recomendacionesAdherencia.map((rec) =>
+                          _buildRecomendacionAdherenciaCard(
+                              rec, accessibility, isDark)),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
           ),
-          
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
     );
   }
@@ -1367,11 +1656,11 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     final isSmall = _isSmallScreen(context);
     final prioridad = rec["prioridad"]?.toString().toUpperCase() ?? "MEDIA";
     final leida = rec["leida"] == true || rec["leida"] == 1;
-    
+
     Color priorityColor;
     IconData priorityIcon;
     String priorityLabel;
-    
+
     switch (prioridad) {
       case "ALTA":
       case "URGENTE":
@@ -1394,23 +1683,25 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       margin: const EdgeInsets.only(bottom: 12),
       padding: EdgeInsets.all(isSmall ? 12 : 16),
       decoration: BoxDecoration(
-        color: leida 
+        color: leida
             ? (isDark ? AppTheme.gray700.withOpacity(0.5) : AppTheme.gray50)
             : (isDark ? AppTheme.gray700 : Colors.white),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: leida 
+          color: leida
               ? (isDark ? AppTheme.gray600 : AppTheme.gray200)
               : priorityColor.withOpacity(0.3),
           width: leida ? 1 : 2,
         ),
-        boxShadow: leida ? null : [
-          BoxShadow(
-            color: priorityColor.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: leida
+            ? null
+            : [
+                BoxShadow(
+                  color: priorityColor.withOpacity(0.1),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1438,8 +1729,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                       rec["titulo"] ?? "Recomendación",
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
-                        fontSize: (isSmall ? 14 : 16) * accessibility.fontScale,
-                        color: leida 
+                        fontSize:
+                            (isSmall ? 14 : 16) * accessibility.fontScale,
+                        color: leida
                             ? (isDark ? AppTheme.gray400 : AppTheme.gray500)
                             : (isDark ? AppTheme.white : AppTheme.gray700),
                       ),
@@ -1448,7 +1740,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     Text(
                       rec["categoria"] ?? "General",
                       style: TextStyle(
-                        fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                        fontSize:
+                            (isSmall ? 11 : 13) * accessibility.fontScale,
                         color: priorityColor,
                         fontWeight: FontWeight.w500,
                       ),
@@ -1457,7 +1750,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: priorityColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
@@ -1465,7 +1759,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 child: Text(
                   priorityLabel,
                   style: TextStyle(
-                    fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                    fontSize:
+                        (isSmall ? 10 : 12) * accessibility.fontScale,
                     fontWeight: FontWeight.w600,
                     color: priorityColor,
                   ),
@@ -1473,13 +1768,15 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               ),
             ],
           ),
-          if (rec["descripcion"] != null && rec["descripcion"].toString().isNotEmpty) ...[
+          if (rec["descripcion"] != null &&
+              rec["descripcion"].toString().isNotEmpty) ...[
             const SizedBox(height: 10),
             Text(
               rec["descripcion"],
               style: TextStyle(
-                fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
-                color: leida 
+                fontSize:
+                    (isSmall ? 13 : 15) * accessibility.fontScale,
+                color: leida
                     ? (isDark ? AppTheme.gray500 : AppTheme.gray400)
                     : (isDark ? AppTheme.gray300 : AppTheme.gray600),
                 height: 1.4,
@@ -1498,7 +1795,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               Text(
                 _formatFecha(rec["fecha"] ?? rec["fechaRegistro"]),
                 style: TextStyle(
-                  fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                  fontSize:
+                      (isSmall ? 11 : 13) * accessibility.fontScale,
                   color: AppTheme.gray500,
                 ),
               ),
@@ -1508,7 +1806,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                   onPressed: () async {
                     final id = rec["idRecomendacion"] ?? rec["id"];
                     if (id != null) {
-                      final ok = await adherenciaService.marcarRecomendacionLeida(id);
+                      final ok =
+                          await adherenciaService.marcarRecomendacionLeida(id);
                       if (ok && mounted) {
                         _snack("✅ Recomendación marcada como leída");
                         await _cargarRecomendacionesAdherencia();
@@ -1517,14 +1816,16 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                   },
                   style: TextButton.styleFrom(
                     foregroundColor: AppTheme.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   child: Text(
                     "Marcar como leída",
                     style: TextStyle(
-                      fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                      fontSize:
+                          (isSmall ? 11 : 13) * accessibility.fontScale,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -1541,7 +1842,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     Text(
                       "Leída",
                       style: TextStyle(
-                        fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                        fontSize: (isSmall ? 11 : 13) *
+                            accessibility.fontScale,
                         color: AppTheme.success,
                         fontWeight: FontWeight.w500,
                       ),
@@ -1555,7 +1857,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  Widget _adherenciaItem(String titulo, dynamic valor, IconData icon, Color color, AccessibilityProvider accessibility) {
+  Widget _adherenciaItem(String titulo, dynamic valor, IconData icon,
+      Color color, AccessibilityProvider accessibility) {
     final porcentaje = double.tryParse(valor.toString()) ?? 0;
     return Container(
       padding: const EdgeInsets.all(16),
@@ -1604,61 +1907,73 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── RECOMENDACIONES ───
-  Widget _buildRecomendacionesView(AccessibilityProvider accessibility, bool isDark) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.add, size: 24),
-              label: Text(
-                "Agregar recomendación",
-                style: TextStyle(
-                  fontSize: 16 * accessibility.fontScale,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: AppTheme.primaryButtonStyle.copyWith(
-                padding: WidgetStateProperty.all(
-                  const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => CrearRecomendacionScreen(
-                      idPaciente: widget.idPaciente,
-                      idMedico: widget.idMedico,
+  // ─── RECOMENDACIONES (RESPONSIVE) ───
+  Widget _buildRecomendacionesView(
+      AccessibilityProvider accessibility, bool isDark) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double horizontalPad = screenWidth < 600 ? 16.0 : 24.0;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.add, size: 24),
+                  label: Text(
+                    "Agregar recomendación",
+                    style: TextStyle(
+                      fontSize: 16 * accessibility.fontScale,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ).then((_) => loadRecomendaciones());
-              },
-            ),
-          ),
-        ),
-        Expanded(
-          child: recomendaciones.isEmpty
-              ? _buildEmptyPage(
-                  "Sin recomendaciones médicas",
-                  Icons.lightbulb_outline,
-                  "No hay recomendaciones registradas.",
-                  isDark,
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: recomendaciones.length,
-                  itemBuilder: (_, i) => _buildRecomendacionCard(recomendaciones[i], accessibility, isDark),
+                  style: AppTheme.primaryButtonStyle.copyWith(
+                    padding: WidgetStateProperty.all(
+                      const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CrearRecomendacionScreen(
+                          idPaciente: widget.idPaciente,
+                          idMedico: widget.idMedico,
+                        ),
+                      ),
+                    ).then((_) => loadRecomendaciones());
+                  },
                 ),
+              ),
+            ),
+            Expanded(
+              child: recomendaciones.isEmpty
+                  ? _buildEmptyPage(
+                      "Sin recomendaciones médicas",
+                      Icons.lightbulb_outline,
+                      "No hay recomendaciones registradas.",
+                      isDark,
+                    )
+                  : ListView.builder(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPad),
+                      itemCount: recomendaciones.length,
+                      itemBuilder: (_, i) => _buildRecomendacionCard(
+                          recomendaciones[i], accessibility, isDark),
+                    ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
-  Widget _buildRecomendacionCard(Map<String, dynamic> r, AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildRecomendacionCard(
+      Map<String, dynamic> r, AccessibilityProvider accessibility, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(18),
@@ -1666,7 +1981,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         color: isDark ? AppTheme.gray800 : Colors.white,
         borderRadius: BorderRadius.circular(18),
         boxShadow: isDark ? null : AppTheme.subtleShadow,
-        border: Border.all(color: isDark ? AppTheme.gray600 : AppTheme.gray200.withOpacity(0.5)),
+        border: Border.all(
+            color:
+                isDark ? AppTheme.gray600 : AppTheme.gray200.withOpacity(0.5)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1705,7 +2022,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today, size: 16, color: AppTheme.gray500),
+                    const Icon(Icons.calendar_today,
+                        size: 16, color: AppTheme.gray500),
                     const SizedBox(width: 6),
                     Text(
                       _formatFecha(r["fecha"]),
@@ -1739,208 +2057,231 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       );
     }
 
-    return RefreshIndicator(
-      onRefresh: loadAlertas,
-      color: AppTheme.primary,
-      child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: alertas.length,
-        itemBuilder: (_, i) {
-          final a = alertas[i];
-          
-          final id = safeId(a["idAlerta"] ?? a["id"] ?? a["alerta_id"]);
-          final nivel = (a["nivel"] ?? a["severidad"] ?? "Bajo").toString();
-          final estado = (a["estado"] ?? a["status"] ?? "PENDIENTE").toString();
-          final origen = (a["origen"] ?? a["tipo"] ?? "sistema").toString();
-          final descripcion = a["descripcion"]?.toString() ?? 
-                              a["mensaje"]?.toString() ?? 
-                              a["texto"]?.toString() ?? 
-                              "Sin descripción";
-          final fecha = a["fecha"] ?? 
-                       a["fechaRegistro"] ?? 
-                       a["created_at"] ?? 
-                       a["timestamp"];
-          final nombrePaciente = a["nombre_origen"]?.toString() ?? 
-                                 a["nombre_paciente"]?.toString() ?? 
-                                 a["paciente_nombre"]?.toString() ?? 
-                                 widget.nombre;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double horizontalPad = screenWidth < 600 ? 12.0 : 24.0;
 
-          final origenData = _getOrigenData(origen);
-          final Color origenColor = origenData['color'] as Color;
-          final String origenLabel = origenData['label'] as String;
-          final IconData origenIcon = origenData['icon'] as IconData;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+        child: RefreshIndicator(
+          onRefresh: loadAlertas,
+          color: AppTheme.primary,
+          child: ListView.builder(
+            padding: EdgeInsets.symmetric(
+                horizontal: horizontalPad, vertical: 12),
+            itemCount: alertas.length,
+            itemBuilder: (_, i) {
+              final a = alertas[i];
 
-          Color nivelColor;
-          IconData nivelIcon;
-          switch (nivel.toLowerCase()) {
-            case "alto":
-            case "critico":
-            case "critical":
-              nivelColor = _danger;
-              nivelIcon = Icons.warning_amber_rounded;
-              break;
-            case "medio":
-            case "media":
-            case "medium":
-              nivelColor = _warning;
-              nivelIcon = Icons.warning_amber_outlined;
-              break;
-            default:
-              nivelColor = _info;
-              nivelIcon = Icons.info_outline;
-          }
+              final id =
+                  safeId(a["idAlerta"] ?? a["id"] ?? a["alerta_id"]);
+              final nivel =
+                  (a["nivel"] ?? a["severidad"] ?? "Bajo").toString();
+              final estado =
+                  (a["estado"] ?? a["status"] ?? "PENDIENTE").toString();
+              final origen =
+                  (a["origen"] ?? a["tipo"] ?? "sistema").toString();
+              final descripcion = a["descripcion"]?.toString() ??
+                  a["mensaje"]?.toString() ??
+                  a["texto"]?.toString() ??
+                  "Sin descripción";
+              final fecha = a["fecha"] ??
+                  a["fechaRegistro"] ??
+                  a["created_at"] ??
+                  a["timestamp"];
+              final nombrePaciente = a["nombre_origen"]?.toString() ??
+                  a["nombre_paciente"]?.toString() ??
+                  a["paciente_nombre"]?.toString() ??
+                  widget.nombre;
 
-          final bool estaAtendida = estado.toUpperCase() == "ATENDIDA";
+              final origenData = _getOrigenData(origen);
+              final Color origenColor = origenData['color'] as Color;
+              final String origenLabel = origenData['label'] as String;
+              final IconData origenIcon = origenData['icon'] as IconData;
 
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.gray800 : Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: isDark ? null : AppTheme.subtleShadow,
-              border: Border.all(
-                color: nivelColor.withOpacity(0.2),
-                width: 1,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: nivelColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Icon(nivelIcon, color: nivelColor, size: 20),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            a["tipo"]?.toString() ?? "Alerta",
-                            style: TextStyle(
-                              fontSize: 14 * accessibility.fontScale,
-                              fontWeight: FontWeight.w600,
-                              color: isDark ? AppTheme.white : AppTheme.gray700,
-                            ),
-                          ),
-                          Text(
-                            "👤 $nombrePaciente",
-                            style: TextStyle(
-                              fontSize: 11 * accessibility.fontScale,
-                              color: AppTheme.gray500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: estaAtendida
-                            ? _success.withOpacity(0.1)
-                            : _warning.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            estaAtendida ? Icons.check_circle : Icons.pending,
-                            size: 12,
-                            color: estaAtendida ? _success : _warning,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            estaAtendida ? "Atendida" : "Pendiente",
-                            style: TextStyle(
-                              fontSize: 9 * accessibility.fontScale,
-                              fontWeight: FontWeight.w600,
-                              color: estaAtendida ? _success : _warning,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  descripcion,
-                  style: TextStyle(
-                    fontSize: 12 * accessibility.fontScale,
-                    color: isDark ? AppTheme.gray300 : AppTheme.gray500,
+              Color nivelColor;
+              IconData nivelIcon;
+              switch (nivel.toLowerCase()) {
+                case "alto":
+                case "critico":
+                case "critical":
+                  nivelColor = _danger;
+                  nivelIcon = Icons.warning_amber_rounded;
+                  break;
+                case "medio":
+                case "media":
+                case "medium":
+                  nivelColor = _warning;
+                  nivelIcon = Icons.warning_amber_outlined;
+                  break;
+                default:
+                  nivelColor = _info;
+                  nivelIcon = Icons.info_outline;
+              }
+
+              final bool estaAtendida = estado.toUpperCase() == "ATENDIDA";
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.gray800 : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: isDark ? null : AppTheme.subtleShadow,
+                  border: Border.all(
+                    color: nivelColor.withOpacity(0.2),
+                    width: 1,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 8),
-                Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.access_time, size: 12, color: AppTheme.gray400),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        _formatFechaDetalle(fecha),
-                        style: TextStyle(
-                          fontSize: 10 * accessibility.fontScale,
-                          color: AppTheme.gray400,
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: nivelColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(nivelIcon, color: nivelColor, size: 20),
                         ),
-                      ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                a["tipo"]?.toString() ?? "Alerta",
+                                style: TextStyle(
+                                  fontSize: 14 * accessibility.fontScale,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark
+                                      ? AppTheme.white
+                                      : AppTheme.gray700,
+                                ),
+                              ),
+                              Text(
+                                "👤 $nombrePaciente",
+                                style: TextStyle(
+                                  fontSize: 11 * accessibility.fontScale,
+                                  color: AppTheme.gray500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: estaAtendida
+                                ? _success.withOpacity(0.1)
+                                : _warning.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                estaAtendida
+                                    ? Icons.check_circle
+                                    : Icons.pending,
+                                size: 12,
+                                color: estaAtendida ? _success : _warning,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                estaAtendida ? "Atendida" : "Pendiente",
+                                style: TextStyle(
+                                  fontSize: 9 * accessibility.fontScale,
+                                  fontWeight: FontWeight.w600,
+                                  color: estaAtendida ? _success : _warning,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: origenColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
+                    const SizedBox(height: 8),
+                    Text(
+                      descripcion,
+                      style: TextStyle(
+                        fontSize: 12 * accessibility.fontScale,
+                        color:
+                            isDark ? AppTheme.gray300 : AppTheme.gray500,
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(origenIcon, size: 10, color: origenColor),
-                          const SizedBox(width: 3),
-                          Text(
-                            origenLabel,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.access_time,
+                            size: 12, color: AppTheme.gray400),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(
+                            _formatFechaDetalle(fecha),
                             style: TextStyle(
-                              fontSize: 9 * accessibility.fontScale,
-                              color: origenColor,
-                              fontWeight: FontWeight.w500,
+                              fontSize: 10 * accessibility.fontScale,
+                              color: AppTheme.gray400,
+                            ),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: origenColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(origenIcon, size: 10, color: origenColor),
+                              const SizedBox(width: 3),
+                              Text(
+                                origenLabel,
+                                style: TextStyle(
+                                  fontSize: 9 * accessibility.fontScale,
+                                  color: origenColor,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (!estaAtendida && id != null) ...[
+                          const SizedBox(width: 4),
+                          TextButton(
+                            onPressed: () => _marcarAlertaComoLeida(id),
+                            style: TextButton.styleFrom(
+                              foregroundColor: _success,
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              minimumSize: Size.zero,
+                              tapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              "Atender",
+                              style: TextStyle(
+                                fontSize: 10 * accessibility.fontScale,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ],
-                      ),
+                      ],
                     ),
-                    if (!estaAtendida && id != null) ...[
-                      const SizedBox(width: 4),
-                      TextButton(
-                        onPressed: () => _marcarAlertaComoLeida(id),
-                        style: TextButton.styleFrom(
-                          foregroundColor: _success,
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: Text(
-                          "Atender",
-                          style: TextStyle(
-                            fontSize: 10 * accessibility.fontScale,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
-              ],
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -1948,64 +2289,75 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   // ─── SIGNOS ───
   Widget _signosView(AccessibilityProvider accessibility) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double horizontalPad = screenWidth < 600 ? 16.0 : 24.0;
 
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (signos.isEmpty)
-            _buildEmpty("Sin signos registrados", Icons.monitor_heart, isDark)
-          else ...[
-            _buildSignosResumenGrande(accessibility, isDark),
-            const SizedBox(height: 24),
-            _buildGraficoInteligente(accessibility, isDark),
-            const SizedBox(height: 20),
-            _buildReferenciaSignos(accessibility),
-            const SizedBox(height: 24),
-          ],
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.add, size: 24),
-              label: Text(
-                "Registrar signos vitales",
-                style: TextStyle(
-                  fontSize: 16 * accessibility.fontScale,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: AppTheme.primaryButtonStyle.copyWith(
-                padding: WidgetStateProperty.all(
-                  const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CrearSignosScreen(
-                    idUsuario: widget.idUsuarioPaciente,
-                    idMedico: widget.idUsuario,
-                    esPaciente: false,
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.symmetric(
+              horizontal: horizontalPad, vertical: 16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (signos.isEmpty)
+                _buildEmpty(
+                    "Sin signos registrados", Icons.monitor_heart, isDark)
+              else ...[
+                _buildSignosResumenGrande(accessibility),
+                const SizedBox(height: 24),
+                _buildGraficoInteligente(accessibility, isDark),
+                const SizedBox(height: 20),
+                _buildReferenciaSignos(accessibility),
+                const SizedBox(height: 24),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.add, size: 24),
+                  label: Text(
+                    "Registrar signos vitales",
+                    style: TextStyle(
+                      fontSize: 16 * accessibility.fontScale,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
+                  style: AppTheme.primaryButtonStyle.copyWith(
+                    padding: WidgetStateProperty.all(
+                      const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CrearSignosScreen(
+                        idUsuario: widget.idUsuarioPaciente,
+                        idMedico: widget.idUsuario,
+                        esPaciente: false,
+                      ),
+                    ),
+                  ).then((_) async {
+                    await loadSignos();
+                    await loadAlertas();
+                  }),
                 ),
-              ).then((_) async {
-                await loadSignos();
-                await loadAlertas();
-              }),
-            ),
+              ),
+              if (signos.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                ...signos.map(
+                    (s) => _buildSignoCard(s, accessibility, isDark)),
+              ],
+            ],
           ),
-          if (signos.isNotEmpty) ...[
-            const SizedBox(height: 20),
-            ...signos.map((s) => _buildSignoCard(s, accessibility, isDark)),
-          ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildGraficoInteligente(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildGraficoInteligente(
+      AccessibilityProvider accessibility, bool isDark) {
     if (signos.isEmpty) return const SizedBox();
 
     List<double> sistolicas = [];
@@ -2013,9 +2365,12 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     List<double> frecuencias = [];
 
     for (var s in signos) {
-      sistolicas.add(double.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0);
-      diastolicas.add(double.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0);
-      frecuencias.add(double.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0);
+      sistolicas
+          .add(double.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0);
+      diastolicas.add(
+          double.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0);
+      frecuencias.add(
+          double.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0);
     }
 
     double getPercentile(List<double> values, double percentile) {
@@ -2036,23 +2391,27 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       double p5Fc = getPercentile(frecuencias, 0.05);
       double p95Fc = getPercentile(frecuencias, 0.95);
 
-      minY = [p5Sist, p5Fc].reduce((a,b) => a < b ? a : b) - 10;
-      maxY = [p95Sist, p95Fc].reduce((a,b) => a > b ? a : b) + 10;
+      minY = [p5Sist, p5Fc].reduce((a, b) => a < b ? a : b) - 10;
+      maxY = [p95Sist, p95Fc].reduce((a, b) => a > b ? a : b) + 10;
       minY = minY.clamp(40, 100);
       maxY = maxY.clamp(80, 200);
 
       for (var s in signos) {
-        int sist = int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
-        int fc = int.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
+        int sist =
+            int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
+        int fc =
+            int.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
         if (sist > 180 || sist < 80) {
           hasOutliers = true;
-          if (!outlierMessages.contains("Presión arterial fuera de rango")) {
+          if (!outlierMessages
+              .contains("Presión arterial fuera de rango")) {
             outlierMessages.add("Presión arterial fuera de rango");
           }
         }
         if (fc > 150 || fc < 40) {
           hasOutliers = true;
-          if (!outlierMessages.contains("Frecuencia cardiaca fuera de rango")) {
+          if (!outlierMessages
+              .contains("Frecuencia cardiaca fuera de rango")) {
             outlierMessages.add("Frecuencia cardiaca fuera de rango");
           }
         }
@@ -2076,7 +2435,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             children: [
               Row(
                 children: [
-                  const Icon(Icons.show_chart, size: 24, color: AppTheme.primary),
+                  const Icon(Icons.show_chart,
+                      size: 24, color: AppTheme.primary),
                   const SizedBox(width: 10),
                   Text(
                     "Historial de mediciones",
@@ -2093,9 +2453,12 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 spacing: 20,
                 runSpacing: 8,
                 children: [
-                  _leyenda(const Color(0xFFEF4444), "Sistólica (Presión)", accessibility),
-                  _leyenda(const Color(0xFF3B82F6), "Diastólica (Presión)", accessibility),
-                  _leyenda(const Color(0xFFEC4899), "FC (Frecuencia Cardiaca)", accessibility),
+                  _leyenda(const Color(0xFFEF4444), "Sistólica (Presión)",
+                      accessibility),
+                  _leyenda(const Color(0xFF3B82F6), "Diastólica (Presión)",
+                      accessibility),
+                  _leyenda(const Color(0xFFEC4899),
+                      "FC (Frecuencia Cardiaca)", accessibility),
                 ],
               ),
               const SizedBox(height: 20),
@@ -2107,8 +2470,10 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                       show: true,
                       drawVerticalLine: false,
                       horizontalInterval: (maxY - minY) / 4,
-                      getDrawingHorizontalLine: (value) =>
-                          FlLine(color: AppTheme.gray200, strokeWidth: 1, dashArray: [5, 5]),
+                      getDrawingHorizontalLine: (value) => FlLine(
+                          color: AppTheme.gray200,
+                          strokeWidth: 1,
+                          dashArray: [5, 5]),
                     ),
                     titlesData: FlTitlesData(
                       leftTitles: AxisTitles(
@@ -2116,13 +2481,13 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                           showTitles: true,
                           reservedSize: 50,
                           interval: (maxY - minY) / 4,
-                          getTitlesWidget: (value, meta) =>
-                              Text(value.toInt().toString(),
-                                style: TextStyle(
-                                  fontSize: 13 * accessibility.fontScale,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
+                          getTitlesWidget: (value, meta) => Text(
+                            value.toInt().toString(),
+                            style: TextStyle(
+                              fontSize: 13 * accessibility.fontScale,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
                       ),
                       bottomTitles: AxisTitles(
@@ -2131,7 +2496,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                           reservedSize: 50,
                           getTitlesWidget: (value, meta) {
                             final int index = value.toInt();
-                            if (index < 0 || index >= signos.length) return const SizedBox();
+                            if (index < 0 || index >= signos.length) {
+                              return const SizedBox();
+                            }
                             final fecha = signos[index]["fechaRegistro"];
                             if (fecha == null) return const SizedBox();
                             try {
@@ -2140,15 +2507,19 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                                 padding: const EdgeInsets.only(top: 10),
                                 child: Column(
                                   children: [
-                                    Text("${f.day}",
+                                    Text(
+                                      "${f.day}",
                                       style: TextStyle(
-                                        fontSize: 13 * accessibility.fontScale,
+                                        fontSize: 13 *
+                                            accessibility.fontScale,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
-                                    Text(_meses[f.month - 1],
+                                    Text(
+                                      _meses[f.month - 1],
                                       style: TextStyle(
-                                        fontSize: 11 * accessibility.fontScale,
+                                        fontSize: 11 *
+                                            accessibility.fontScale,
                                         color: AppTheme.gray500,
                                       ),
                                     ),
@@ -2156,19 +2527,25 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                                 ),
                               );
                             } catch (_) {
-                              return Text("${index + 1}",
-                                style: TextStyle(fontSize: 13 * accessibility.fontScale),
+                              return Text(
+                                "${index + 1}",
+                                style: TextStyle(
+                                    fontSize: 13 *
+                                        accessibility.fontScale),
                               );
                             }
                           },
                         ),
                       ),
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
+                      topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
                     ),
                     borderData: FlBorderData(
                       show: true,
-                      border: Border.all(color: AppTheme.gray200, width: 1.5),
+                      border:
+                          Border.all(color: AppTheme.gray200, width: 1.5),
                     ),
                     minY: minY,
                     maxY: maxY,
@@ -2180,11 +2557,18 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                           return touchedSpots.map((touchedSpot) {
                             final String nombre;
                             switch (touchedSpot.barIndex) {
-                              case 0: nombre = "Presión Sistólica"; break;
-                              case 1: nombre = "Presión Diastólica"; break;
-                              default: nombre = "Frecuencia Cardiaca";
+                              case 0:
+                                nombre = "Presión Sistólica";
+                                break;
+                              case 1:
+                                nombre = "Presión Diastólica";
+                                break;
+                              default:
+                                nombre = "Frecuencia Cardiaca";
                             }
-                            String unidad = touchedSpot.barIndex == 2 ? " lpm" : " mmHg";
+                            String unidad = touchedSpot.barIndex == 2
+                                ? " lpm"
+                                : " mmHg";
                             return LineTooltipItem(
                               "$nombre: ${touchedSpot.y.toInt()}$unidad",
                               const TextStyle(
@@ -2198,9 +2582,12 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                       ),
                     ),
                     lineBarsData: [
-                      _crearLineaConOutliers("presionSistolica", const Color(0xFFEF4444), false, minY, maxY),
-                      _crearLineaConOutliers("presionDiastolica", const Color(0xFF3B82F6), true, minY, maxY),
-                      _crearLineaConOutliers("frecuenciaCardiaca", const Color(0xFFEC4899), false, minY, maxY),
+                      _crearLineaConOutliers("presionSistolica",
+                          const Color(0xFFEF4444), false, minY, maxY),
+                      _crearLineaConOutliers("presionDiastolica",
+                          const Color(0xFF3B82F6), true, minY, maxY),
+                      _crearLineaConOutliers("frecuenciaCardiaca",
+                          const Color(0xFFEC4899), false, minY, maxY),
                     ],
                   ),
                 ),
@@ -2215,27 +2602,36 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             decoration: BoxDecoration(
               color: Colors.orange.shade50,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.orange.shade200, width: 1.5),
+              border:
+                  Border.all(color: Colors.orange.shade200, width: 1.5),
             ),
             child: Row(
               children: [
-                Icon(Icons.info_outline, size: 24, color: Colors.orange.shade700),
+                Icon(Icons.info_outline,
+                    size: 24, color: Colors.orange.shade700),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Valores fuera de rango detectados",
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.orange),
+                      const Text(
+                        "Valores fuera de rango detectados",
+                        style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.orange),
                       ),
                       const SizedBox(height: 4),
                       Wrap(
                         spacing: 10,
-                        children: outlierMessages.map((msg) =>
-                          Text("• $msg",
-                            style: TextStyle(fontSize: 13, color: Colors.orange.shade700),
-                          ),
-                        ).toList(),
+                        children: outlierMessages
+                            .map((msg) => Text(
+                                  "• $msg",
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.orange.shade700),
+                                ))
+                            .toList(),
                       ),
                     ],
                   ),
@@ -2248,12 +2644,14 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  LineChartBarData _crearLineaConOutliers(String key, Color color, bool dashed, double minY, double maxY) {
+  LineChartBarData _crearLineaConOutliers(
+      String key, Color color, bool dashed, double minY, double maxY) {
     List<FlSpot> spots = [];
     List<bool> isOutlier = [];
 
     for (int i = 0; i < signos.length; i++) {
-      double value = double.tryParse(signos[i][key]?.toString() ?? "0") ?? 0;
+      double value =
+          double.tryParse(signos[i][key]?.toString() ?? "0") ?? 0;
       bool outlier = value < minY || value > maxY;
       isOutlier.add(outlier);
       double displayValue = value.clamp(minY, maxY);
@@ -2288,18 +2686,23 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  Widget _buildSignosResumenGrande(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildSignosResumenGrande(AccessibilityProvider accessibility) {
     final s = signos.first;
-    final int sistolica = int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
-    final int diastolica = int.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0;
-    final int fc = int.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
-    final int spo2 = int.tryParse(s["saturacionOxigeno"]?.toString() ?? "0") ?? 0;
+    final int sistolica =
+        int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
+    final int diastolica =
+        int.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0;
+    final int fc =
+        int.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
+    final int spo2 =
+        int.tryParse(s["saturacionOxigeno"]?.toString() ?? "0") ?? 0;
 
     return Column(
       children: [
         Row(
           children: [
-            const Icon(Icons.calendar_today_outlined, size: 18, color: AppTheme.gray500),
+            const Icon(Icons.calendar_today_outlined,
+                size: 18, color: AppTheme.gray500),
             const SizedBox(width: 8),
             Text(
               "Última medición: ${_formatFecha(s["fechaRegistro"])}",
@@ -2323,7 +2726,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
           barra: _barraPresion(sistolica, accessibility),
           subtexto: "Normal: menos de 120/80",
           accessibility: accessibility,
-          isDark: isDark,
+          isDark: Theme.of(context).brightness == Brightness.dark,
         ),
         const SizedBox(height: 16),
         Row(
@@ -2339,7 +2742,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 valorColor: const Color(0xFFBE185D),
                 badge: _estadoBadgeFC(fc, accessibility),
                 accessibility: accessibility,
-                isDark: isDark,
+                isDark: Theme.of(context).brightness == Brightness.dark,
               ),
             ),
             const SizedBox(width: 14),
@@ -2354,7 +2757,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                 valorColor: const Color(0xFF0F766E),
                 badge: _estadoBadgeSpo2(spo2, accessibility),
                 accessibility: accessibility,
-                isDark: isDark,
+                isDark: Theme.of(context).brightness == Brightness.dark,
               ),
             ),
           ],
@@ -2522,26 +2925,52 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  Widget _estadoBadgePresion(int sistolica, AccessibilityProvider accessibility) {
-    if (sistolica < 120) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.12), AppTheme.success, accessibility);
-    if (sistolica < 130) return _badgeWidget("Un poco elevada", AppTheme.warning.withOpacity(0.12), AppTheme.warning, accessibility);
-    if (sistolica < 140) return _badgeWidget("Elevada", AppTheme.warning.withOpacity(0.15), AppTheme.warning, accessibility);
-    return _badgeWidget("Muy alta", AppTheme.danger.withOpacity(0.12), AppTheme.danger, accessibility);
+  Widget _estadoBadgePresion(
+      int sistolica, AccessibilityProvider accessibility) {
+    if (sistolica < 120) {
+      return _badgeWidget("Normal", AppTheme.success.withOpacity(0.12),
+          AppTheme.success, accessibility);
+    }
+    if (sistolica < 130) {
+      return _badgeWidget("Un poco elevada", AppTheme.warning.withOpacity(0.12),
+          AppTheme.warning, accessibility);
+    }
+    if (sistolica < 140) {
+      return _badgeWidget("Elevada", AppTheme.warning.withOpacity(0.15),
+          AppTheme.warning, accessibility);
+    }
+    return _badgeWidget("Muy alta", AppTheme.danger.withOpacity(0.12),
+        AppTheme.danger, accessibility);
   }
 
   Widget _estadoBadgeFC(int fc, AccessibilityProvider accessibility) {
-    if (fc >= 60 && fc <= 100) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.12), AppTheme.success, accessibility);
-    if (fc < 60) return _badgeWidget("Baja", AppTheme.warning.withOpacity(0.12), AppTheme.warning, accessibility);
-    return _badgeWidget("Alta", AppTheme.warning.withOpacity(0.15), AppTheme.warning, accessibility);
+    if (fc >= 60 && fc <= 100) {
+      return _badgeWidget("Normal", AppTheme.success.withOpacity(0.12),
+          AppTheme.success, accessibility);
+    }
+    if (fc < 60) {
+      return _badgeWidget("Baja", AppTheme.warning.withOpacity(0.12),
+          AppTheme.warning, accessibility);
+    }
+    return _badgeWidget("Alta", AppTheme.warning.withOpacity(0.15),
+        AppTheme.warning, accessibility);
   }
 
   Widget _estadoBadgeSpo2(int spo2, AccessibilityProvider accessibility) {
-    if (spo2 >= 95) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.12), AppTheme.success, accessibility);
-    if (spo2 >= 90) return _badgeWidget("Un poco bajo", AppTheme.warning.withOpacity(0.12), AppTheme.warning, accessibility);
-    return _badgeWidget("Muy bajo", AppTheme.danger.withOpacity(0.12), AppTheme.danger, accessibility);
+    if (spo2 >= 95) {
+      return _badgeWidget("Normal", AppTheme.success.withOpacity(0.12),
+          AppTheme.success, accessibility);
+    }
+    if (spo2 >= 90) {
+      return _badgeWidget("Un poco bajo", AppTheme.warning.withOpacity(0.12),
+          AppTheme.warning, accessibility);
+    }
+    return _badgeWidget("Muy bajo", AppTheme.danger.withOpacity(0.12),
+        AppTheme.danger, accessibility);
   }
 
-  Widget _badgeWidget(String texto, Color bg, Color fg, AccessibilityProvider accessibility) {
+  Widget _badgeWidget(String texto, Color bg, Color fg,
+      AccessibilityProvider accessibility) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
@@ -2562,7 +2991,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   Widget _barraPresion(int sistolica, AccessibilityProvider accessibility) {
     const double minVal = 80;
     const double maxVal = 180;
-    final double progreso = ((sistolica - minVal) / (maxVal - minVal)).clamp(0.0, 1.0);
+    final double progreso =
+        ((sistolica - minVal) / (maxVal - minVal)).clamp(0.0, 1.0);
 
     Color colorBarra;
     if (sistolica < 120) {
@@ -2580,9 +3010,18 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text("Baja", style: TextStyle(fontSize: 13 * accessibility.fontScale, color: AppTheme.gray500)),
-            Text("Normal", style: TextStyle(fontSize: 13 * accessibility.fontScale, color: AppTheme.gray500)),
-            Text("Alta", style: TextStyle(fontSize: 13 * accessibility.fontScale, color: AppTheme.gray500)),
+            Text("Baja",
+                style: TextStyle(
+                    fontSize: 13 * accessibility.fontScale,
+                    color: AppTheme.gray500)),
+            Text("Normal",
+                style: TextStyle(
+                    fontSize: 13 * accessibility.fontScale,
+                    color: AppTheme.gray500)),
+            Text("Alta",
+                style: TextStyle(
+                    fontSize: 13 * accessibility.fontScale,
+                    color: AppTheme.gray500)),
           ],
         ),
         const SizedBox(height: 8),
@@ -2599,12 +3038,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ==============================================
-  // 📖 REFERENCIA DE SIGNOS VITALES
-  // ==============================================
   Widget _buildReferenciaSignos(AccessibilityProvider accessibility) {
-    final isSmall = MediaQuery.of(context).size.width < 360;
-    
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2617,7 +3051,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         children: [
           Row(
             children: [
-              const Icon(Icons.info_outline, size: 20, color: AppTheme.primary),
+              const Icon(Icons.info_outline,
+                  size: 20, color: AppTheme.primary),
               const SizedBox(width: 8),
               Text(
                 "Valores de referencia",
@@ -2630,16 +3065,18 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             ],
           ),
           const SizedBox(height: 12),
-          _filaReferencia("Frecuencia cardíaca", "60-100 lpm", accessibility),
-          _filaReferencia("Presión arterial", "120/80 mmHg", accessibility),
+          _filaReferencia(
+              "Frecuencia cardíaca", "60-100 lpm", accessibility),
+          _filaReferencia(
+              "Presión arterial", "120/80 mmHg", accessibility),
           _filaReferencia("Saturación O₂", "95-100%", accessibility),
         ],
       ),
     );
   }
 
-  Widget _filaReferencia(String nombre, String valor, AccessibilityProvider accessibility) {
-    final isSmall = MediaQuery.of(context).size.width < 360;
+  Widget _filaReferencia(
+      String nombre, String valor, AccessibilityProvider accessibility) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -2666,7 +3103,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  Widget _leyenda(Color color, String label, AccessibilityProvider accessibility) {
+  Widget _leyenda(
+      Color color, String label, AccessibilityProvider accessibility) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -2680,7 +3118,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  Widget _buildSignoCard(Map<String, dynamic> s, AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildSignoCard(Map<String, dynamic> s,
+      AccessibilityProvider accessibility, bool isDark) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(18),
@@ -2688,7 +3127,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         color: isDark ? AppTheme.gray800 : Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: isDark ? null : AppTheme.subtleShadow,
-        border: Border.all(color: isDark ? AppTheme.gray600 : AppTheme.gray200.withOpacity(0.3)),
+        border: Border.all(
+            color:
+                isDark ? AppTheme.gray600 : AppTheme.gray200.withOpacity(0.3)),
       ),
       child: Row(
         children: [
@@ -2698,7 +3139,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               color: AppTheme.danger.withOpacity(0.12),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.favorite, color: AppTheme.danger, size: 26),
+            child:
+                const Icon(Icons.favorite, color: AppTheme.danger, size: 26),
           ),
           const SizedBox(width: 16),
           Expanded(
@@ -2718,8 +3160,10 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                   spacing: 10,
                   runSpacing: 6,
                   children: [
-                    _pill("FC ${s["frecuenciaCardiaca"]}", Colors.pink, accessibility),
-                    _pill("SpO2 ${s["saturacionOxigeno"]}%", Colors.teal, accessibility),
+                    _pill("FC ${s["frecuenciaCardiaca"]}", Colors.pink,
+                        accessibility),
+                    _pill("SpO2 ${s["saturacionOxigeno"]}%", Colors.teal,
+                        accessibility),
                   ],
                 ),
               ],
@@ -2737,7 +3181,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  Widget _pill(String text, Color color, AccessibilityProvider accessibility) {
+  Widget _pill(
+      String text, Color color, AccessibilityProvider accessibility) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -2765,344 +3210,390 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         isDark,
       );
     }
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: sintomas.length,
-      itemBuilder: (_, i) {
-        final s = sintomas[i];
-        final prioridad = s["prioridad"]?.toString() ?? "MEDIA";
-        final color = prioridad == "ALTA" ? AppTheme.danger :
-                       prioridad == "BAJA" ? AppTheme.success : AppTheme.warning;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            color: isDark ? AppTheme.gray800 : Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            boxShadow: isDark ? null : AppTheme.subtleShadow,
-            border: Border.all(color: color.withOpacity(0.2), width: 1.5),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 14,
-                height: 14,
-                margin: const EdgeInsets.only(top: 4),
-                decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                ),
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double horizontalPad = screenWidth < 600 ? 16.0 : 24.0;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+        child: ListView.builder(
+          padding: EdgeInsets.symmetric(
+              horizontal: horizontalPad, vertical: 16),
+          itemCount: sintomas.length,
+          itemBuilder: (_, i) {
+            final s = sintomas[i];
+            final prioridad = s["prioridad"]?.toString() ?? "MEDIA";
+            final color = prioridad == "ALTA"
+                ? AppTheme.danger
+                : prioridad == "BAJA"
+                    ? AppTheme.success
+                    : AppTheme.warning;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.gray800 : Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: isDark ? null : AppTheme.subtleShadow,
+                border:
+                    Border.all(color: color.withOpacity(0.2), width: 1.5),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 14,
+                    height: 14,
+                    margin: const EdgeInsets.only(top: 4),
+                    decoration: BoxDecoration(
+                      color: color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            s["titulo"] ?? "",
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 17 * accessibility.fontScale,
-                              color: isDark ? AppTheme.white : AppTheme.gray700,
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                s["titulo"] ?? "",
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 17 * accessibility.fontScale,
+                                  color: isDark
+                                      ? AppTheme.white
+                                      : AppTheme.gray700,
+                                ),
+                              ),
                             ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: color.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                prioridad,
+                                style: TextStyle(
+                                  fontSize: 13 * accessibility.fontScale,
+                                  color: color,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          s["descripcion"] ?? "",
+                          style: TextStyle(
+                            fontSize: 15 * accessibility.fontScale,
+                            color: isDark
+                                ? AppTheme.gray300
+                                : AppTheme.gray500,
+                            height: 1.4,
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: color.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Text(
-                            prioridad,
+                        if (s["fecha"] != null) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            _formatFecha(s["fecha"]),
                             style: TextStyle(
-                              fontSize: 13 * accessibility.fontScale,
-                              color: color,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 14 * accessibility.fontScale,
+                              color: AppTheme.gray500,
                             ),
                           ),
-                        ),
+                        ],
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      s["descripcion"] ?? "",
-                      style: TextStyle(
-                        fontSize: 15 * accessibility.fontScale,
-                        color: isDark ? AppTheme.gray300 : AppTheme.gray500,
-                        height: 1.4,
-                      ),
-                    ),
-                    if (s["fecha"] != null) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        _formatFecha(s["fecha"]),
-                        style: TextStyle(
-                          fontSize: 14 * accessibility.fontScale,
-                          color: AppTheme.gray500,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ),
     );
   }
 
   // ─── TRATAMIENTOS ───
-  Widget _tratamientosView(AccessibilityProvider accessibility, bool isDark) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              icon: const Icon(Icons.add, size: 24),
-              label: Text(
-                "Agregar tratamiento",
-                style: TextStyle(
-                  fontSize: 16 * accessibility.fontScale,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: AppTheme.successButtonStyle.copyWith(
-                padding: WidgetStateProperty.all(
-                  const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CrearTratamientoScreen(
-                    idPaciente: widget.idPaciente,
-                    idMedico: widget.idMedico,
-                  ),
-                ),
-              ).then((_) => loadTratamientos()),
-            ),
-          ),
-        ),
-        Expanded(
-          child: tratamientos.isEmpty
-              ? _buildEmptyPage(
-                  "Sin tratamientos asignados",
-                  Icons.medical_services_outlined,
-                  "No hay tratamientos asignados a este paciente.",
-                  isDark,
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  itemCount: tratamientos.length,
-                  itemBuilder: (_, i) {
-                    final t = tratamientos[i];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppTheme.gray800 : Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: isDark ? null : AppTheme.subtleShadow,
-                      ),
-                      child: FutureBuilder<List<Map<String, dynamic>>>(
-                        future: tratamientoService.getMedicamentos(
-                          int.parse(t["idTratamiento"].toString())
-                        ),
-                        builder: (ctx, snap) {
-                          final meds = snap.data ?? [];
-                          return ExpansionTile(
-                            tilePadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                            leading: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: AppTheme.success.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: const Icon(Icons.medication,
-                                  color: AppTheme.success, size: 26),
-                            ),
-                            title: Text(
-                              t["descripcion"] ?? "",
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 16 * accessibility.fontScale,
-                                color: isDark ? AppTheme.white : AppTheme.gray700,
-                              ),
-                            ),
-                            subtitle: Text(
-                              "${t["estado"] ?? "-"}  ·  ${_formatFecha(t["fechaInicio"])} → ${_formatFecha(t["fechaFin"])}",
-                              style: TextStyle(
-                                fontSize: 14 * accessibility.fontScale,
-                                color: AppTheme.gray500,
-                              ),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  iconSize: 26,
-                                  icon: const Icon(Icons.edit_outlined,
-                                      size: 26, color: Colors.blue),
-                                  tooltip: "Editar tratamiento",
-                                  onPressed: () => Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => EditarTratamientoScreen(tratamiento: t),
-                                    ),
-                                  ).then((actualizado) {
-                                    if (actualizado == true) loadTratamientos();
-                                  }),
-                                ),
-                                const Icon(Icons.expand_more,
-                                    size: 26, color: AppTheme.gray400),
-                              ],
-                            ),
-                            children: meds.isEmpty
-                                ? [
-                                    Padding(
-                                      padding: const EdgeInsets.all(18),
-                                      child: Text(
-                                        "Sin medicamentos asignados",
-                                        style: TextStyle(
-                                          fontSize: 15 * accessibility.fontScale,
-                                          color: AppTheme.gray500,
-                                        ),
-                                      ),
-                                    ),
-                                  ]
-                                : meds.map((m) => ListTile(
-                                    leading: const Icon(Icons.medication_liquid,
-                                        color: AppTheme.success, size: 24),
-                                    title: Text(
-                                      m["nombre"] ?? "",
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 15 * accessibility.fontScale,
-                                        color: isDark ? AppTheme.white : AppTheme.gray700,
-                                      ),
-                                    ),
-                                    subtitle: Text(
-                                      "${m["dosis"]} — Cada ${m["frecuencia"]}",
-                                      style: TextStyle(
-                                        fontSize: 14 * accessibility.fontScale,
-                                      ),
-                                    ),
-                                  )).toList(),
-                          );
-                        },
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
+  Widget _tratamientosView(
+      AccessibilityProvider accessibility, bool isDark) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double horizontalPad = screenWidth < 600 ? 16.0 : 24.0;
 
-  // ─── CITAS ───
-  // ─── CITAS ───
-Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
-  return Column(
-    children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-        child: Row(
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+        child: Column(
           children: [
-            // ✅ NUEVO: Botón para AGENDAR cita como médico
-            Expanded(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.add, size: 22),
-                label: Text(
-                  "Agendar",
-                  style: TextStyle(
-                    fontSize: 14 * accessibility.fontScale,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: AppTheme.primaryButtonStyle.copyWith(
-                  padding: WidgetStateProperty.all(
-                    const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => AgendarCitaMedicoScreen(
-                      idPaciente: widget.idPaciente,
-                      idProfesional: widget.idMedico,
-                      nombrePaciente: widget.nombre,
+            Padding(
+              padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 12),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.add, size: 24),
+                  label: Text(
+                    "Agregar tratamiento",
+                    style: TextStyle(
+                      fontSize: 16 * accessibility.fontScale,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
-                ).then((agendada) {
-                  if (agendada == true) loadCitas(); // recargar
-                }),
-              ),
-            ),
-            const SizedBox(width: 10),
-
-            // Botón existente: ver/gestionar
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.list_alt, size: 22),
-                label: Text(
-                  "Gestionar",
-                  style: TextStyle(
-                    fontSize: 14 * accessibility.fontScale,
-                    fontWeight: FontWeight.w600,
+                  style: AppTheme.successButtonStyle.copyWith(
+                    padding: WidgetStateProperty.all(
+                      const EdgeInsets.symmetric(vertical: 16),
+                    ),
                   ),
-                ),
-                style: AppTheme.secondaryButtonStyle.copyWith(
-                  padding: WidgetStateProperty.all(
-                    const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-                onPressed: () {
-                  loadCitas();
-                  Navigator.push(
+                  onPressed: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => CitasScreen(
-                        citas: citas,
-                        esMedico: true,
+                      builder: (_) => CrearTratamientoScreen(
+                        idPaciente: widget.idPaciente,
+                        idMedico: widget.idMedico,
                       ),
                     ),
-                  );
-                },
+                  ).then((_) => loadTratamientos()),
+                ),
               ),
+            ),
+            Expanded(
+              child: tratamientos.isEmpty
+                  ? _buildEmptyPage(
+                      "Sin tratamientos asignados",
+                      Icons.medical_services_outlined,
+                      "No hay tratamientos asignados a este paciente.",
+                      isDark,
+                    )
+                  : ListView.builder(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: horizontalPad),
+                      itemCount: tratamientos.length,
+                      itemBuilder: (_, i) {
+                        final t = tratamientos[i];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: isDark ? AppTheme.gray800 : Colors.white,
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: isDark ? null : AppTheme.subtleShadow,
+                          ),
+                          child: FutureBuilder<List<Map<String, dynamic>>>(
+                            future: tratamientoService.getMedicamentos(
+                                int.parse(t["idTratamiento"].toString())),
+                            builder: (ctx, snap) {
+                              final meds = snap.data ?? [];
+                              return ExpansionTile(
+                                tilePadding: const EdgeInsets.symmetric(
+                                    horizontal: 18, vertical: 10),
+                                leading: Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        AppTheme.success.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.medication,
+                                      color: AppTheme.success, size: 26),
+                                ),
+                                title: Text(
+                                  t["descripcion"] ?? "",
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 16 * accessibility.fontScale,
+                                    color: isDark
+                                        ? AppTheme.white
+                                        : AppTheme.gray700,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  "${t["estado"] ?? "-"}  ·  ${_formatFecha(t["fechaInicio"])} → ${_formatFecha(t["fechaFin"])}",
+                                  style: TextStyle(
+                                    fontSize: 14 * accessibility.fontScale,
+                                    color: AppTheme.gray500,
+                                  ),
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      iconSize: 26,
+                                      icon: const Icon(Icons.edit_outlined,
+                                          size: 26, color: Colors.blue),
+                                      tooltip: "Editar tratamiento",
+                                      onPressed: () => Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              EditarTratamientoScreen(
+                                                  tratamiento: t),
+                                        ),
+                                      ).then((actualizado) {
+                                        if (actualizado == true) {
+                                          loadTratamientos();
+                                        }
+                                      }),
+                                    ),
+                                    const Icon(Icons.expand_more,
+                                        size: 26, color: AppTheme.gray400),
+                                  ],
+                                ),
+                                children: meds.isEmpty
+                                    ? [
+                                        Padding(
+                                          padding:
+                                              const EdgeInsets.all(18),
+                                          child: Text(
+                                            "Sin medicamentos asignados",
+                                            style: TextStyle(
+                                              fontSize: 15 *
+                                                  accessibility.fontScale,
+                                              color: AppTheme.gray500,
+                                            ),
+                                          ),
+                                        ),
+                                      ]
+                                    : meds
+                                        .map((m) => ListTile(
+                                              leading: const Icon(
+                                                  Icons.medication_liquid,
+                                                  color: AppTheme.success,
+                                                  size: 24),
+                                              title: Text(
+                                                m["nombre"] ?? "",
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 15 *
+                                                      accessibility
+                                                          .fontScale,
+                                                  color: isDark
+                                                      ? AppTheme.white
+                                                      : AppTheme.gray700,
+                                                ),
+                                              ),
+                                              subtitle: Text(
+                                                "${m["dosis"]} — Cada ${m["frecuencia"]}",
+                                                style: TextStyle(
+                                                  fontSize: 14 *
+                                                      accessibility
+                                                          .fontScale,
+                                                ),
+                                              ),
+                                            ))
+                                        .toList(),
+                              );
+                            },
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
       ),
-      Expanded(
-        child: citas.isEmpty
-            ? _buildEmptyPage(
-                "Sin citas registradas",
-                Icons.event_busy,
-                "Este paciente no tiene citas programadas.\nUsa 'Agendar' para crear una.",
-                isDark,
-              )
-            : ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: citas.length,
-                itemBuilder: (_, i) =>
-                    _buildCitaCard(citas[i], accessibility, isDark),
+    );
+  }
+
+  // ─── CITAS ───
+  Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final double horizontalPad = screenWidth < 600 ? 16.0 : 24.0;
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: _kMaxContentWidth),
+        child: Column(
+          children: [
+            Padding(
+              padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 12),
+              child: Column(
+                children: [
+                  // ✅ NUEVO: Botón para agendar cita
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.add, size: 24),
+                      label: Text(
+                        "Agendar nueva cita",
+                        style: TextStyle(
+                          fontSize: 16 * accessibility.fontScale,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: AppTheme.primaryButtonStyle.copyWith(
+                        padding: WidgetStateProperty.all(
+                          const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                      onPressed: _abrirAgendarCita,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.list_alt, size: 24),
+                      label: Text(
+                        "Ver / Gestionar citas",
+                        style: TextStyle(
+                          fontSize: 16 * accessibility.fontScale,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: AppTheme.secondaryButtonStyle.copyWith(
+                        padding: WidgetStateProperty.all(
+                          const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                      onPressed: () {
+                        loadCitas();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) =>
+                                  CitasScreen(citas: citas, esMedico: true)),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
+            ),
+            Expanded(
+              child: citas.isEmpty
+                  ? _buildEmptyPage(
+                      "Sin citas registradas",
+                      Icons.event_busy,
+                      "Este paciente no tiene citas programadas.",
+                      isDark,
+                    )
+                  : ListView.builder(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: horizontalPad),
+                      itemCount: citas.length,
+                      itemBuilder: (_, i) =>
+                          _buildCitaCard(citas[i], accessibility, isDark),
+                    ),
+            ),
+          ],
+        ),
       ),
-    ],
-  );
-}
-  Widget _buildCitaCard(Map<String, dynamic> c, AccessibilityProvider accessibility, bool isDark) {
+    );
+  }
+
+  Widget _buildCitaCard(Map<String, dynamic> c,
+      AccessibilityProvider accessibility, bool isDark) {
     final estado = c["estado"]?.toString().toLowerCase() ?? "pendiente";
-    final estadoColor = estado == "aprobada" ? AppTheme.success :
-                        estado == "rechazada" || estado == "cancelada" ? AppTheme.danger :
-                        AppTheme.warning;
+    final estadoColor = estado == "aprobada"
+        ? AppTheme.success
+        : estado == "rechazada" || estado == "cancelada"
+            ? AppTheme.danger
+            : AppTheme.warning;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -3129,7 +3620,8 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: estadoColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(20),
@@ -3159,7 +3651,8 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
               Expanded(
                 child: OutlinedButton(
                   style: AppTheme.secondaryButtonStyle,
-                  onPressed: () => _cambiarEstadoCita(c, accessibility, isDark),
+                  onPressed: () =>
+                      _cambiarEstadoCita(c, accessibility, isDark),
                   child: Text(
                     "Cambiar estado",
                     style: TextStyle(
@@ -3175,7 +3668,8 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                 onPressed: () async {
                   final ok = await citaService.eliminarCita(c["idCita"]);
                   if (ok && mounted) {
-                    setState(() => citas.removeWhere((x) => x["idCita"] == c["idCita"]));
+                    setState(() => citas
+                        .removeWhere((x) => x["idCita"] == c["idCita"]));
                     _snack("Cita eliminada correctamente");
                   }
                 },
@@ -3194,8 +3688,10 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
     );
   }
 
-  void _cambiarEstadoCita(Map<String, dynamic> c, AccessibilityProvider accessibility, bool isDark) {
-    String estadoSel = (c["estado"] ?? "pendiente").toString().toLowerCase().trim();
+  void _cambiarEstadoCita(Map<String, dynamic> c,
+      AccessibilityProvider accessibility, bool isDark) {
+    String estadoSel =
+        (c["estado"] ?? "pendiente").toString().toLowerCase().trim();
     if (!_estadosCita.contains(estadoSel)) estadoSel = _estadosCita.first;
 
     showModalBottomSheet(
@@ -3241,9 +3737,10 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                   style: AppTheme.primaryButtonStyle,
                   onPressed: () async {
                     final ok = await citaService.actualizarEstado(
-                      c["idCita"], estadoSel
-                    );
-                    if (ok && mounted) setState(() => c["estado"] = estadoSel);
+                        c["idCita"], estadoSel);
+                    if (ok && mounted) {
+                      setState(() => c["estado"] = estadoSel);
+                    }
                     if (mounted) Navigator.pop(context);
                   },
                   child: Text(
@@ -3289,40 +3786,45 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
     );
   }
 
-  Widget _buildEmptyPage(String title, IconData icon, String sub, bool isDark) {
+  Widget _buildEmptyPage(
+      String title, IconData icon, String sub, bool isDark) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 72, color: AppTheme.gray300),
-            const SizedBox(height: 20),
-            Text(
-              title,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 72, color: AppTheme.gray300),
+              const SizedBox(height: 20),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              sub,
-              style: TextStyle(
-                color: isDark ? AppTheme.gray500 : AppTheme.gray400,
-                fontSize: 16,
-                height: 1.5,
+              const SizedBox(height: 12),
+              Text(
+                sub,
+                style: TextStyle(
+                  color: isDark ? AppTheme.gray500 : AppTheme.gray400,
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  bool _isSmallScreen(BuildContext context) => MediaQuery.of(context).size.width < 360;
+  bool _isSmallScreen(BuildContext context) =>
+      MediaQuery.of(context).size.width < 360;
 
   @override
   Widget build(BuildContext context) {
@@ -3349,20 +3851,28 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                             IconButton(
                               iconSize: 32,
                               icon: Icon(Icons.arrow_back,
-                                  color: isDark ? Colors.white : AppTheme.gray700,
+                                  color: isDark
+                                      ? Colors.white
+                                      : AppTheme.gray700,
                                   size: 32),
                               onPressed: () => Navigator.pop(context),
                             ),
                             Expanded(
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     widget.nombre,
                                     style: TextStyle(
-                                      color: isDark ? Colors.white : AppTheme.gray700,
-                                      fontSize: isSmall ? 18 : 22 * accessibility.fontScale,
+                                      color: isDark
+                                          ? Colors.white
+                                          : AppTheme.gray700,
+                                      fontSize: isSmall
+                                          ? 18
+                                          : 22 *
+                                              accessibility.fontScale,
                                       fontWeight: FontWeight.bold,
                                     ),
                                     overflow: TextOverflow.ellipsis,
@@ -3371,7 +3881,10 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                                     "${signos.length} signos · ${citas.length} citas · ${alertas.length} alertas",
                                     style: TextStyle(
                                       color: AppTheme.gray500,
-                                      fontSize: isSmall ? 12 : 14 * accessibility.fontScale,
+                                      fontSize: isSmall
+                                          ? 12
+                                          : 14 *
+                                              accessibility.fontScale,
                                     ),
                                   ),
                                 ],
@@ -3381,7 +3894,8 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                             const SizedBox(width: 4),
                             IconButton(
                               iconSize: 32,
-                              icon: const Icon(Icons.help_outline, color: AppTheme.primary, size: 32),
+                              icon: const Icon(Icons.help_outline,
+                                  color: AppTheme.primary, size: 32),
                               onPressed: _abrirTutorial,
                               tooltip: "Ayuda y tutorial",
                             ),
@@ -3391,7 +3905,9 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                                 IconButton(
                                   iconSize: 32,
                                   icon: Icon(Icons.chat_bubble_outline,
-                                      color: isDark ? Colors.white : AppTheme.gray700,
+                                      color: isDark
+                                          ? Colors.white
+                                          : AppTheme.gray700,
                                       size: 32),
                                   onPressed: abrirChat,
                                 ),
@@ -3402,16 +3918,14 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                                     child: Container(
                                       padding: const EdgeInsets.all(6),
                                       decoration: const BoxDecoration(
-                                        color: AppTheme.danger,
-                                        shape: BoxShape.circle
-                                      ),
+                                          color: AppTheme.danger,
+                                          shape: BoxShape.circle),
                                       child: Text(
                                         mensajesNoLeidos.toString(),
                                         style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold
-                                        ),
+                                            color: Colors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold),
                                       ),
                                     ),
                                   ),
@@ -3421,32 +3935,58 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                         ),
                       ),
                       Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
-                          color: isDark ? AppTheme.gray800 : AppTheme.gray50,
+                          color: isDark
+                              ? AppTheme.gray800
+                              : AppTheme.gray50,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: TabBar(
                           controller: _tabController,
+                          isScrollable: false,
                           labelColor: AppTheme.primary,
                           unselectedLabelColor: AppTheme.gray500,
                           indicator: const BoxDecoration(),
                           labelStyle: TextStyle(
-                            fontSize: isSmall ? 12 : 14 * accessibility.fontScale,
+                            fontSize: isSmall
+                                ? 12
+                                : 14 * accessibility.fontScale,
                             fontWeight: FontWeight.w600,
                           ),
                           unselectedLabelStyle: TextStyle(
-                            fontSize: isSmall ? 11 : 13 * accessibility.fontScale,
+                            fontSize: isSmall
+                                ? 11
+                                : 13 * accessibility.fontScale,
                           ),
                           tabs: const [
-                            Tab(icon: Icon(Icons.monitor_heart, size: 24), text: "Signos"),
-                            Tab(icon: Icon(Icons.healing, size: 24), text: "Síntomas"),
-                            Tab(icon: Icon(Icons.medication, size: 24), text: "Trat."),
-                            Tab(icon: Icon(Icons.event, size: 24), text: "Citas"),
-                            Tab(icon: Icon(Icons.warning_amber, size: 24), text: "Alertas"),
-                            Tab(icon: Icon(Icons.lightbulb_outline, size: 24), text: "Recom."),
-                            Tab(icon: Icon(Icons.analytics_outlined, size: 24), text: "Adherencia"),
-                            Tab(icon: Icon(Icons.assessment, size: 24), text: "Métricas"),
+                            Tab(
+                                icon: Icon(Icons.monitor_heart, size: 24),
+                                text: "Signos"),
+                            Tab(
+                                icon: Icon(Icons.healing, size: 24),
+                                text: "Síntomas"),
+                            Tab(
+                                icon: Icon(Icons.medication, size: 24),
+                                text: "Trat."),
+                            Tab(
+                                icon: Icon(Icons.event, size: 24),
+                                text: "Citas"),
+                            Tab(
+                                icon: Icon(Icons.warning_amber, size: 24),
+                                text: "Alertas"),
+                            Tab(
+                                icon: Icon(Icons.lightbulb_outline,
+                                    size: 24),
+                                text: "Recom."),
+                            Tab(
+                                icon: Icon(Icons.analytics_outlined,
+                                    size: 24),
+                                text: "Adherencia"),
+                            Tab(
+                                icon: Icon(Icons.assessment, size: 24),
+                                text: "Métricas"),
                           ],
                         ),
                       ),
@@ -3472,7 +4012,8 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
                               _tratamientosView(accessibility, isDark),
                               _citasView(accessibility, isDark),
                               _alertasView(accessibility, isDark),
-                              _buildRecomendacionesView(accessibility, isDark),
+                              _buildRecomendacionesView(
+                                  accessibility, isDark),
                               _buildAdherenciaView(accessibility, isDark),
                               _buildMetricasView(accessibility, isDark),
                             ],
@@ -3488,9 +4029,6 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
     );
   }
 
-  // ==============================================
-  // 🧩 BOTÓN DE EXPORTAR EN APP BAR
-  // ==============================================
   Widget _buildExportButton() {
     return Container(
       decoration: BoxDecoration(
@@ -3514,21 +4052,21 @@ Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
     );
   }
 
-  // ==============================================
-  // 📋 DIÁLOGO DE EXPORTACIÓN
-  // ==============================================
   void _mostrarDialogoExportar() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    final tieneDatos = signos.isNotEmpty || sintomas.isNotEmpty ||
-                       tratamientos.isNotEmpty || citas.isNotEmpty ||
-                       alertas.isNotEmpty || recomendaciones.isNotEmpty;
-    
+
+    final tieneDatos = signos.isNotEmpty ||
+        sintomas.isNotEmpty ||
+        tratamientos.isNotEmpty ||
+        citas.isNotEmpty ||
+        alertas.isNotEmpty ||
+        recomendaciones.isNotEmpty;
+
     if (!tieneDatos) {
       _snack("No hay datos para exportar", isError: true);
       return;
     }
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(

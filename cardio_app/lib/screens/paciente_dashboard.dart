@@ -6,9 +6,14 @@ import 'package:provider/provider.dart';
 
 import '../services/profile_service.dart';
 import '../services/admin_service.dart';
+import '../services/toma_service.dart';
+import '../services/paciente_service.dart';
+import '../services/chat_service.dart';
 import 'login_screen.dart';
 import 'perfil_detalle.dart';
 import 'configuracion_screen.dart';
+import 'tomas_screen.dart';
+import 'chat_screen.dart';
 
 class PacienteDashboard extends StatefulWidget {
   final int idUsuario;
@@ -27,56 +32,73 @@ class PacienteDashboard extends StatefulWidget {
 class _PacienteDashboardState extends State<PacienteDashboard> {
   final profile = ProfileService();
   final adminService = AdminService();
+  final tomaService = TomaService();
+  final pacienteService = PacienteService();
+  final chatService = ChatService();
   late NotificacionService notificacionService;
 
   Map<String, dynamic>? paciente;
   int? idPaciente;
   bool loading = true;
-  
+
+  // 🔥 MÉDICOS Y CHAT
+  List<Map<String, dynamic>> medicos = [];
+  bool _cargandoMedicos = false;
+
   // 🔥 NOTIFICACIONES
   List<Map<String, dynamic>> notificaciones = [];
   int notificacionesNoLeidas = 0;
   bool _cargandoNotificaciones = false;
 
-  // 🎯 TUTORIAL (AHORA DESACTIVADO POR DEFECTO)
-  bool _mostrarTutorial = false; 
+  // 🔥 TOMAS PENDIENTES
+  List<Map<String, dynamic>> tomasPendientes = [];
+  int tomasPendientesCount = 0;
+
+  // 🎯 TUTORIAL
+  bool _mostrarTutorial = false;
   int _pasoTutorial = 0;
-  
+
   final List<Map<String, dynamic>> _pasosTutorial = [
     {
       'icono': Icons.favorite,
       'titulo': '👋 Bienvenido a CardioCare',
-      'descripcion': 'Esta es tu aplicación de salud. Aquí encontrarás toda tu información médica en un solo lugar, fácil de entender.',
+      'descripcion':
+          'Esta es tu aplicación de salud. Aquí encontrarás toda tu información médica en un solo lugar, fácil de entender.',
       'color': AppTheme.primary,
     },
     {
       'icono': Icons.person,
       'titulo': '👤 Tus datos personales',
-      'descripcion': 'Aquí ves tu nombre, tu EPS y el médico que te atiende. Siempre tienes tu información a la mano.',
+      'descripcion':
+          'Aquí ves tu nombre, tu EPS y el médico que te atiende. Siempre tienes tu información a la mano.',
       'color': AppTheme.info,
     },
     {
       'icono': Icons.folder_shared,
       'titulo': '📁 Tu perfil clínico',
-      'descripcion': 'Toca el botón "Perfil clínico" para ver todos tus datos médicos: signos vitales, tratamientos y más.',
+      'descripcion':
+          'Toca el botón "Perfil clínico" para ver todos tus datos médicos: signos vitales, tratamientos y más.',
       'color': AppTheme.primary,
     },
     {
       'icono': Icons.notifications,
       'titulo': '🔔 Tus notificaciones',
-      'descripcion': 'Aquí recibes avisos importantes de tu médico: recordatorios, citas y recomendaciones.',
+      'descripcion':
+          'Aquí recibes avisos importantes de tu médico: recordatorios, citas y recomendaciones.',
       'color': AppTheme.warning,
     },
     {
       'icono': Icons.settings,
       'titulo': '⚙️ Configuración',
-      'descripcion': 'Aquí puedes ajustar el tamaño de letra y otras opciones para que la aplicación sea más fácil de usar.',
+      'descripcion':
+          'Aquí puedes ajustar el tamaño de letra y otras opciones para que la aplicación sea más fácil de usar.',
       'color': AppTheme.info,
     },
     {
       'icono': Icons.chat,
       'titulo': '💬 Habla con tu médico',
-      'descripcion': '¿Tienes alguna duda? Toca "Ir al chat" para enviar un mensaje a tu médico.',
+      'descripcion':
+          '¿Tienes alguna duda? Toca "Ir al chat" para enviar un mensaje a tu médico.',
       'color': AppTheme.success,
     },
   ];
@@ -96,8 +118,35 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
 
   Future<void> _inicializarDashboard() async {
     await loadProfile();
+    await _cargarMedicos();
     await _cargarNotificaciones();
+    await _cargarTomasPendientes();
     _iniciarEscuchaNotificaciones();
+  }
+
+  // ==============================
+  // 🔥 CARGAR MÉDICOS ASIGNADOS
+  // ==============================
+  Future<void> _cargarMedicos() async {
+    setState(() => _cargandoMedicos = true);
+    try {
+      final data = await pacienteService.getMedicos(widget.idUsuario);
+      if (!mounted) return;
+
+      setState(() {
+        medicos = List<Map<String, dynamic>>.from(data);
+        _cargandoMedicos = false;
+      });
+
+      print("📦 Médicos cargados: ${medicos.length}");
+    } catch (e) {
+      debugPrint("❌ Error cargando médicos: $e");
+      if (!mounted) return;
+      setState(() {
+        medicos = [];
+        _cargandoMedicos = false;
+      });
+    }
   }
 
   // ==============================
@@ -106,21 +155,57 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   Future<void> _cargarNotificaciones() async {
     setState(() => _cargandoNotificaciones = true);
     try {
-      final data = await notificacionService.getNotificacionesPaciente(widget.idUsuario);
+      final data =
+          await notificacionService.getNotificacionesPaciente(widget.idUsuario);
       if (!mounted) return;
       setState(() {
         notificaciones = List<Map<String, dynamic>>.from(data);
-        notificacionesNoLeidas = notificaciones.where((n) => n["leida"] != true).length;
+        notificacionesNoLeidas =
+            notificaciones.where((n) => n["leida"] != true).length;
         _cargandoNotificaciones = false;
       });
       print("📬 Notificaciones cargadas: ${notificaciones.length}");
     } catch (e) {
       debugPrint("❌ Error cargando notificaciones: $e");
+      if (!mounted) return;
       setState(() {
         notificaciones = [];
         notificacionesNoLeidas = 0;
         _cargandoNotificaciones = false;
       });
+    }
+  }
+
+  // ==============================
+  // 🔥 CARGAR TOMAS PENDIENTES
+  // ==============================
+  Future<void> _cargarTomasPendientes() async {
+    try {
+      if (idPaciente == null) {
+        print("ℹ️ Sin idPaciente, no se cargan tomas pendientes");
+        if (mounted) {
+          setState(() {
+            tomasPendientes = [];
+            tomasPendientesCount = 0;
+          });
+        }
+        return;
+      }
+
+      final data = await tomaService.getTomasHoy(idPaciente!);
+      final pendientes = data
+          .where((t) => t["estado"]?.toString() == "Pendiente")
+          .toList();
+
+      if (!mounted) return;
+      setState(() {
+        tomasPendientes = pendientes;
+        tomasPendientesCount = pendientes.length;
+      });
+
+      print("📋 Tomas pendientes hoy: $tomasPendientesCount");
+    } catch (e) {
+      debugPrint("❌ Error cargando tomas pendientes: $e");
     }
   }
 
@@ -148,11 +233,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   // ==============================
   Future<void> _marcarNotificacionComoLeida(String idNotificacion) async {
     await notificacionService.marcarComoLeida(idNotificacion);
+    if (!mounted) return;
     setState(() {
-      final index = notificaciones.indexWhere((n) => n["id"] == idNotificacion);
+      final index =
+          notificaciones.indexWhere((n) => n["id"] == idNotificacion);
       if (index != -1) {
         notificaciones[index]["leida"] = true;
-        notificacionesNoLeidas = notificaciones.where((n) => n["leida"] != true).length;
+        notificacionesNoLeidas =
+            notificaciones.where((n) => n["leida"] != true).length;
       }
     });
   }
@@ -162,6 +250,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   // ==============================
   Future<void> _marcarTodasComoLeidas() async {
     await notificacionService.marcarTodasComoLeidas(widget.idUsuario);
+    if (!mounted) return;
     setState(() {
       for (var n in notificaciones) {
         n["leida"] = true;
@@ -176,6 +265,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   Future<void> _limpiarTodasLasNotificaciones() async {
     try {
       notificacionService.limpiarNotificaciones();
+      if (!mounted) return;
       setState(() {
         notificaciones.clear();
         notificacionesNoLeidas = 0;
@@ -212,9 +302,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     if (notificacionesNoLeidas > 0) {
       _marcarTodasComoLeidas();
     }
-    
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -241,7 +331,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.notifications, color: AppTheme.primary, size: 32),
+                    const Icon(Icons.notifications,
+                        color: AppTheme.primary, size: 32),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Text(
@@ -261,11 +352,15 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                         },
                         child: const Text(
                           "Limpiar todo",
-                          style: TextStyle(color: AppTheme.danger, fontSize: 16),
+                          style:
+                              TextStyle(color: AppTheme.danger, fontSize: 16),
                         ),
                       ),
                     IconButton(
-                      icon: Icon(Icons.close, size: 30, color: isDark ? AppTheme.white : AppTheme.gray700),
+                      icon: Icon(Icons.close,
+                          size: 30,
+                          color:
+                              isDark ? AppTheme.white : AppTheme.gray700),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
@@ -278,13 +373,16 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.notifications_none, size: 72, color: AppTheme.gray300),
+                            Icon(Icons.notifications_none,
+                                size: 72, color: AppTheme.gray300),
                             const SizedBox(height: 20),
                             Text(
                               "No hay notificaciones",
                               style: TextStyle(
                                 fontSize: 18,
-                                color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+                                color: isDark
+                                    ? AppTheme.gray400
+                                    : AppTheme.gray500,
                               ),
                             ),
                             const SizedBox(height: 10),
@@ -292,7 +390,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                               "Las notificaciones aparecerán aquí",
                               style: TextStyle(
                                 fontSize: 15,
-                                color: isDark ? AppTheme.gray500 : AppTheme.gray400,
+                                color: isDark
+                                    ? AppTheme.gray500
+                                    : AppTheme.gray400,
                               ),
                             ),
                           ],
@@ -305,36 +405,60 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                           final n = notificaciones[index];
                           final tipo = n["tipo"] ?? "info";
                           final leida = n["leida"] == true;
-                          
+
                           Color color;
                           IconData icono;
-                          
+
                           switch (tipo) {
-                            case "signo": color = AppTheme.danger; icono = Icons.monitor_heart; break;
-                            case "sintoma": color = AppTheme.warning; icono = Icons.healing; break;
-                            case "cita": color = AppTheme.info; icono = Icons.event; break;
-                            case "alerta": color = AppTheme.danger; icono = Icons.warning_amber; break;
-                            case "recomendacion": color = AppTheme.primary; icono = Icons.lightbulb_outline; break;
-                            default: color = AppTheme.primary; icono = Icons.notifications;
+                            case "signo":
+                              color = AppTheme.danger;
+                              icono = Icons.monitor_heart;
+                              break;
+                            case "sintoma":
+                              color = AppTheme.warning;
+                              icono = Icons.healing;
+                              break;
+                            case "cita":
+                              color = AppTheme.info;
+                              icono = Icons.event;
+                              break;
+                            case "alerta":
+                              color = AppTheme.danger;
+                              icono = Icons.warning_amber;
+                              break;
+                            case "recomendacion":
+                              color = AppTheme.primary;
+                              icono = Icons.lightbulb_outline;
+                              break;
+                            default:
+                              color = AppTheme.primary;
+                              icono = Icons.notifications;
                           }
-                          
+
                           return GestureDetector(
                             onTap: () {
-                              if (!leida) _marcarNotificacionComoLeida(n["id"]);
+                              if (!leida) {
+                                _marcarNotificacionComoLeida(n["id"]);
+                              }
                               _abrirDetalleNotificacion(n);
                               Navigator.pop(context);
                             },
                             child: Container(
-                              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
-                                color: leida 
-                                    ? (isDark ? AppTheme.gray700 : AppTheme.white) 
+                                color: leida
+                                    ? (isDark
+                                        ? AppTheme.gray700
+                                        : AppTheme.white)
                                     : color.withOpacity(0.06),
                                 borderRadius: BorderRadius.circular(18),
                                 border: Border.all(
-                                  color: leida 
-                                      ? (isDark ? AppTheme.gray600 : AppTheme.gray200) 
+                                  color: leida
+                                      ? (isDark
+                                          ? AppTheme.gray600
+                                          : AppTheme.gray200)
                                       : color.withOpacity(0.3),
                                   width: 1.5,
                                 ),
@@ -347,19 +471,23 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                       color: color.withOpacity(0.12),
                                       borderRadius: BorderRadius.circular(14),
                                     ),
-                                    child: Icon(icono, color: color, size: 26),
+                                    child:
+                                        Icon(icono, color: color, size: 26),
                                   ),
                                   const SizedBox(width: 16),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
                                           _getTipoLabel(tipo),
                                           style: TextStyle(
                                             fontWeight: FontWeight.bold,
                                             fontSize: 17,
-                                            color: isDark ? AppTheme.white : AppTheme.gray700,
+                                            color: isDark
+                                                ? AppTheme.white
+                                                : AppTheme.gray700,
                                           ),
                                         ),
                                         const SizedBox(height: 6),
@@ -367,7 +495,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                           n["mensaje"] ?? "",
                                           style: TextStyle(
                                             fontSize: 15,
-                                            color: isDark ? AppTheme.gray300 : AppTheme.gray500,
+                                            color: isDark
+                                                ? AppTheme.gray300
+                                                : AppTheme.gray500,
                                           ),
                                         ),
                                         const SizedBox(height: 6),
@@ -375,7 +505,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                           _formatFecha(n["fecha"]),
                                           style: TextStyle(
                                             fontSize: 13,
-                                            color: isDark ? AppTheme.gray500 : AppTheme.gray400,
+                                            color: isDark
+                                                ? AppTheme.gray500
+                                                : AppTheme.gray400,
                                           ),
                                         ),
                                       ],
@@ -406,12 +538,18 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
 
   String _getTipoLabel(String tipo) {
     switch (tipo) {
-      case "signo": return "📊 Signos vitales";
-      case "sintoma": return "🤒 Síntomas";
-      case "cita": return "📅 Cita médica";
-      case "alerta": return "⚠️ Alerta de salud";
-      case "recomendacion": return "💡 Recomendación médica";
-      default: return "📨 Notificación";
+      case "signo":
+        return "📊 Signos vitales";
+      case "sintoma":
+        return "🤒 Síntomas";
+      case "cita":
+        return "📅 Cita médica";
+      case "alerta":
+        return "⚠️ Alerta de salud";
+      case "recomendacion":
+        return "💡 Recomendación médica";
+      default:
+        return "📨 Notificación";
     }
   }
 
@@ -426,7 +564,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         }
         final ahora = DateTime.now();
         final diferencia = ahora.difference(fechaTime);
-        
+
         if (diferencia.inMinutes < 1) {
           return "Ahora";
         } else if (diferencia.inHours < 1) {
@@ -446,27 +584,24 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   // ==============================
-  // 📥 CARGAR PERFIL - CORREGIDO PARA CUIDADORES
+  // 📥 CARGAR PERFIL
   // ==============================
   Future<void> loadProfile() async {
     setState(() => loading = true);
     try {
       print("🔍 Cargando perfil para usuario: ${widget.idUsuario}");
-      
+
       Map<String, dynamic>? data;
-      
-      // 🔥 PRIMERO: Intentar obtener como paciente (ignorar 404)
+
       try {
         data = await adminService.getPacientePorUsuario(widget.idUsuario);
         if (data != null) {
           print("✅ Paciente encontrado como usuario: ${data['nombre']}");
         }
       } catch (e) {
-        // Ignorar error, continuar con cuidador
         print("ℹ️ No es paciente, intentando como cuidador...");
       }
-      
-      // 🔥 SI NO ES PACIENTE, intentar como cuidador
+
       if (data == null) {
         print("🔍 Intentando como cuidador...");
         data = await adminService.getPacientePorCuidador(widget.idUsuario);
@@ -474,11 +609,11 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
           print("✅ Paciente encontrado como cuidador: ${data['nombre']}");
         }
       }
-      
+
       print("📦 Datos finales del paciente: $data");
-      
+
       if (!mounted) return;
-      
+
       if (data != null && data["idPaciente"] != null) {
         setState(() {
           paciente = data;
@@ -488,6 +623,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
           loading = false;
         });
         print("✅ Perfil cargado exitosamente: ${data['nombre']}");
+
+        await _cargarTomasPendientes();
       } else {
         print("⚠️ No se encontró paciente para el usuario ${widget.idUsuario}");
         setState(() {
@@ -495,10 +632,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
           idPaciente = null;
           loading = false;
         });
-        _mostrarSnackbarPersonalizado("No se encontró un paciente asociado a tu cuenta", isError: true);
+        _mostrarSnackbarPersonalizado(
+          "No se encontró un paciente asociado a tu cuenta",
+          isError: true,
+        );
       }
     } catch (e) {
       debugPrint("❌ Error cargando perfil: $e");
+      if (!mounted) return;
       setState(() => loading = false);
       _mostrarSnackbarPersonalizado("Error al cargar el perfil", isError: true);
     }
@@ -543,9 +684,15 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             Text("Cerrar sesión", style: AppTheme.title2),
           ],
         ),
-        content: Text("¿Estás seguro de que deseas cerrar sesión?", style: AppTheme.body2),
+        content: Text(
+          "¿Estás seguro de que deseas cerrar sesión?",
+          style: AppTheme.body2,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Cancelar")),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar"),
+          ),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
@@ -569,7 +716,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   // ==============================
   void openPerfil() {
     if (idPaciente == null) {
-      _mostrarSnackbarPersonalizado("No se encontró el paciente", isError: true);
+      _mostrarSnackbarPersonalizado("No se encontró el paciente",
+          isError: true);
       return;
     }
     Navigator.push(
@@ -581,6 +729,192 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
           nombre: widget.nombre,
         ),
       ),
+    ).then((_) {
+      _cargarTomasPendientes();
+    });
+  }
+
+  void openTomas() {
+    if (idPaciente == null) {
+      _mostrarSnackbarPersonalizado("No se encontró el paciente",
+          isError: true);
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TomasScreen(idPaciente: idPaciente!),
+      ),
+    ).then((_) {
+      _cargarTomasPendientes();
+    });
+  }
+
+  // ==============================
+  // 🔥 CHAT DIRECTO DESDE EL HOME
+  // ==============================
+  Future<void> abrirChat() async {
+    if (_cargandoMedicos) {
+      _mostrarSnackbarPersonalizado("Cargando médicos...", isError: false);
+      return;
+    }
+
+    // Recargar médicos si no los tenemos
+    if (medicos.isEmpty) {
+      await _cargarMedicos();
+    }
+
+    if (medicos.isEmpty) {
+      _mostrarSnackbarPersonalizado(
+        "No tiene médicos asignados para chatear",
+        isError: true,
+      );
+      return;
+    }
+
+    // Si tiene un solo médico → abrir chat directo
+    if (medicos.length == 1) {
+      await _abrirChatConMedico(medicos.first);
+      return;
+    }
+
+    // Si tiene varios → mostrar selector
+    _mostrarSelectorMedicos();
+  }
+
+  // ==============================
+  // 🔥 ABRIR CHAT CON UN MÉDICO ESPECÍFICO
+  // ==============================
+  Future<void> _abrirChatConMedico(Map<String, dynamic> medico) async {
+    try {
+      final idMedico =
+          int.tryParse(medico["idProfesional"]?.toString() ?? "0") ?? 0;
+      final nombreMedico = medico["nombre"]?.toString() ?? "Médico";
+
+      if (idMedico == 0) {
+        _mostrarSnackbarPersonalizado("Médico no válido", isError: true);
+        return;
+      }
+
+      print("🔍 Abriendo chat: paciente(idUsuario=${widget.idUsuario}) con medico(idProfesional=$idMedico)");
+
+      final convId = await chatService.getOrCreateConversacion(
+        widget.idUsuario,
+        idMedico,
+      );
+
+      if (convId == null) {
+        _mostrarSnackbarPersonalizado("No se pudo abrir el chat", isError: true);
+        return;
+      }
+
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            idConversacion: convId,
+            idUsuario: widget.idUsuario,
+            nombre: nombreMedico,
+            especialista: 'medico',
+          ),
+        ),
+      );
+    } catch (e) {
+      debugPrint("❌ Error abriendo chat: $e");
+      _mostrarSnackbarPersonalizado("Error al abrir el chat", isError: true);
+    }
+  }
+
+  // ==============================
+  // 🔥 SELECTOR DE MÉDICOS
+  // ==============================
+  void _mostrarSelectorMedicos() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: isDark ? AppTheme.gray800 : Colors.white,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.06),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.chat_bubble,
+                        color: AppTheme.primary, size: 28),
+                    const SizedBox(width: 12),
+                    Text(
+                      "Seleccione un médico",
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: isDark ? AppTheme.white : AppTheme.gray700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              ...medicos.map((med) {
+                final nombreMedico = med["nombre"]?.toString() ?? "Médico";
+                final especialidad = med["especialidad"]?.toString() ?? "";
+
+                return ListTile(
+                  leading: CircleAvatar(
+                    radius: 26,
+                    backgroundColor: AppTheme.primary.withOpacity(0.1),
+                    child: Text(
+                      nombreMedico.isNotEmpty
+                          ? nombreMedico[0].toUpperCase()
+                          : "M",
+                      style: const TextStyle(
+                        color: AppTheme.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 22,
+                      ),
+                    ),
+                  ),
+                  title: Text(
+                    nombreMedico,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 17,
+                    ),
+                  ),
+                  subtitle: Text(
+                    especialidad.isNotEmpty
+                        ? especialidad
+                        : "Médico tratante",
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  trailing: const Icon(Icons.chevron_right,
+                      color: AppTheme.gray400),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _abrirChatConMedico(med);
+                  },
+                );
+              }).toList(),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -596,7 +930,6 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     ).then((_) => loadProfile());
   }
 
-  // 🎯 FUNCIÓN PARA ABRIR EL TUTORIAL MANUALMENTE
   void _abrirTutorial() {
     setState(() {
       _mostrarTutorial = true;
@@ -629,7 +962,6 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
-                  // ✅ LOGO REAL DE CARDIO CARE
                   Container(
                     width: 40,
                     height: 40,
@@ -643,7 +975,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                         'assets/images/Cardiocare.png',
                         fit: BoxFit.contain,
                         errorBuilder: (context, error, stackTrace) {
-                          return const Icon(Icons.favorite, color: Colors.white, size: 24);
+                          return const Icon(Icons.favorite,
+                              color: Colors.white, size: 24);
                         },
                       ),
                     ),
@@ -651,43 +984,45 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
-                      mainAxisSize: MainAxisSize.min, // ✅ EVITA EL OVERFLOW DE 29px
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           "CardioCare",
-                          style: TextStyle(
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
-                          overflow: TextOverflow.ellipsis, // ✅ CORTA EL TEXTO SI ES LARGO
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
-                        Text(
+                        const Text(
                           "Tu salud en buenas manos",
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 12,
                           ),
-                          overflow: TextOverflow.ellipsis, // ✅ CORTA EL TEXTO SI ES LARGO
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                  // ❓ NUEVO BOTÓN DE AYUDA (TUTORIAL)
-                  _buildAppBarButton(
-                    Icons.help_outline,
-                    _abrirTutorial,
-                  ),
+                  // 💬 BOTÓN DE CHAT DIRECTO EN LA APP BAR
+                  _buildAppBarButton(Icons.chat_bubble_outline, abrirChat),
+                  const SizedBox(width: 6),
+                  _buildAppBarButton(Icons.help_outline, _abrirTutorial),
                   const SizedBox(width: 6),
                   _buildAppBarButton(
                     Icons.notifications_outlined,
                     _mostrarPanelNotificaciones,
-                    badge: notificacionesNoLeidas > 0 ? notificacionesNoLeidas : null,
+                    badge: notificacionesNoLeidas > 0
+                        ? notificacionesNoLeidas
+                        : null,
                   ),
                   const SizedBox(width: 6),
-                  _buildAppBarButton(Icons.settings_outlined, openConfiguracion),
+                  _buildAppBarButton(
+                      Icons.settings_outlined, openConfiguracion),
                   const SizedBox(width: 6),
                   _buildAppBarButton(Icons.logout, logout),
                 ],
@@ -703,7 +1038,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                 RefreshIndicator(
                   onRefresh: () async {
                     await loadProfile();
+                    await _cargarMedicos();
                     await _cargarNotificaciones();
+                    await _cargarTomasPendientes();
                   },
                   color: AppTheme.primary,
                   child: SingleChildScrollView(
@@ -712,6 +1049,12 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildHeader(accessibility, isDark),
+                        const SizedBox(height: 12),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: _buildAlertaTomasPendientes(
+                              accessibility, isDark),
+                        ),
                         Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
@@ -723,7 +1066,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                 "Acceso clínico",
                                 style: AppTheme.title1.copyWith(
                                   fontSize: 18 * accessibility.fontScale,
-                                  color: isDark ? AppTheme.white : AppTheme.gray700,
+                                  color: isDark
+                                      ? AppTheme.white
+                                      : AppTheme.gray700,
                                 ),
                               ),
                               const SizedBox(height: 12),
@@ -738,10 +1083,86 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                     ),
                   ),
                 ),
-                // 🎯 Tutorial flotante (Solo si el usuario lo pide)
                 if (_mostrarTutorial) _buildTutorial(accessibility),
               ],
             ),
+    );
+  }
+
+  // ==============================
+  // 💊 ALERTA DE TOMAS PENDIENTES
+  // ==============================
+  Widget _buildAlertaTomasPendientes(
+      AccessibilityProvider accessibility, bool isDark) {
+    if (tomasPendientesCount == 0) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: openTomas,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              AppTheme.warning.withOpacity(0.15),
+              AppTheme.warning.withOpacity(0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: AppTheme.warning.withOpacity(0.4),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppTheme.warning.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(
+                Icons.medication_liquid,
+                color: AppTheme.warning,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tomasPendientesCount == 1
+                        ? "¡Tienes 1 toma pendiente!"
+                        : "¡Tienes $tomasPendientesCount tomas pendientes!",
+                    style: TextStyle(
+                      fontSize: 15 * accessibility.fontScale,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.warning,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    "Toca aquí para ver tus medicamentos de hoy",
+                    style: TextStyle(
+                      fontSize: 12 * accessibility.fontScale,
+                      color: AppTheme.gray500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.chevron_right,
+              color: AppTheme.warning,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -751,7 +1172,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   Widget _buildTutorial(AccessibilityProvider accessibility) {
     final paso = _pasosTutorial[_pasoTutorial];
     final color = paso['color'] as Color;
-    
+
     return Positioned(
       bottom: 20,
       left: 16,
@@ -769,26 +1190,23 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 🎯 Indicador de progreso
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(_pasosTutorial.length, (index) {
+                children:
+                    List.generate(_pasosTutorial.length, (index) {
                   return Container(
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     width: 10,
                     height: 10,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: _pasoTutorial == index 
-                          ? color 
-                          : AppTheme.gray300,
+                      color:
+                          _pasoTutorial == index ? color : AppTheme.gray300,
                     ),
                   );
                 }),
               ),
               const SizedBox(height: 16),
-              
-              // 🎯 Icono y contenido
               Row(
                 children: [
                   Container(
@@ -834,18 +1252,18 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                 ],
               ),
               const SizedBox(height: 16),
-              
-              // 🎯 Botones de navegación
               Row(
                 children: [
                   if (_pasoTutorial > 0)
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () => setState(() => _pasoTutorial--),
+                        onPressed: () =>
+                            setState(() => _pasoTutorial--),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppTheme.gray500,
                           side: BorderSide(color: AppTheme.gray300),
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -888,13 +1306,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // ✅ BOTÓN GRANDE DE "SALTAR TUTORIAL"
                   SizedBox(
                     width: double.infinity,
                     child: TextButton(
-                      onPressed: () => setState(() => _mostrarTutorial = false),
+                      onPressed: () =>
+                          setState(() => _mostrarTutorial = false),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -921,7 +1340,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   // ==============================
   // 🧩 APP BAR BUTTON
   // ==============================
-  Widget _buildAppBarButton(IconData icon, VoidCallback onPressed, {int? badge}) {
+  Widget _buildAppBarButton(IconData icon, VoidCallback onPressed,
+      {int? badge}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.2),
@@ -964,7 +1384,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   // ==============================
   Widget _buildHeader(AccessibilityProvider accessibility, bool isDark) {
     final nombreCompleto = paciente?["nombre"]?.toString() ?? widget.nombre;
-    final nombreInicial = nombreCompleto.isNotEmpty ? nombreCompleto[0].toUpperCase() : 'U';
+    final nombreInicial = nombreCompleto.isNotEmpty
+        ? nombreCompleto[0].toUpperCase()
+        : 'U';
     final eps = paciente?["eps"] ?? "-";
 
     return Container(
@@ -978,8 +1400,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             height: 70,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
-              boxShadow: [BoxShadow(color: AppTheme.primary.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+              border: Border.all(
+                  color: AppTheme.primary.withOpacity(0.3), width: 2),
+              boxShadow: [
+                BoxShadow(
+                    color: AppTheme.primary.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4)),
+              ],
             ),
             child: ClipOval(
               child: Image.asset(
@@ -989,7 +1417,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, stackTrace) {
                   return Container(
-                    decoration: BoxDecoration(gradient: AppTheme.primaryGradient),
+                    decoration:
+                        BoxDecoration(gradient: AppTheme.primaryGradient),
                     child: Center(
                       child: Text(
                         nombreInicial,
@@ -1030,16 +1459,22 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: AppTheme.success.withOpacity(0.1),
-              border: Border.all(color: AppTheme.success.withOpacity(0.3)),
+              border:
+                  Border.all(color: AppTheme.success.withOpacity(0.3)),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(width: 8, height: 8, decoration: const BoxDecoration(color: AppTheme.success, shape: BoxShape.circle)),
+                Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                        color: AppTheme.success, shape: BoxShape.circle)),
                 const SizedBox(width: 6),
                 Text(
                   "Activo",
@@ -1078,7 +1513,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   color: AppTheme.primary.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.health_and_safety_outlined, color: AppTheme.primary, size: 22),
+                child: const Icon(Icons.health_and_safety_outlined,
+                    color: AppTheme.primary, size: 22),
               ),
               const SizedBox(width: 12),
               Text(
@@ -1090,7 +1526,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               ),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppTheme.success.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
@@ -1137,7 +1574,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value, AccessibilityProvider accessibility, bool isDark) {
+  Widget _infoRow(IconData icon, String label, String value,
+      AccessibilityProvider accessibility, bool isDark) {
     return Row(
       children: [
         Icon(icon, color: AppTheme.primary, size: 18),
@@ -1172,7 +1610,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   // ==============================
   // 🔘 GRID DE ACCIONES
   // ==============================
-  Widget _buildAccionesGrid(AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildAccionesGrid(
+      AccessibilityProvider accessibility, bool isDark) {
     final items = [
       _AccionItem(
         "Perfil clínico",
@@ -1181,9 +1620,21 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         openPerfil,
       ),
       _AccionItem(
+        "Mis tomas",
+        Icons.medication_liquid,
+        const Color(0xFF059669),
+        openTomas,
+      ),
+      _AccionItem(
+        "Chat médico",
+        Icons.chat_bubble_outline,
+        AppTheme.info,
+        abrirChat,
+      ),
+      _AccionItem(
         "Configuración",
         Icons.settings_outlined,
-        AppTheme.info,
+        AppTheme.gray500,
         openConfiguracion,
       ),
     ];
@@ -1195,11 +1646,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
       childAspectRatio: 1.2,
-      children: items.map((item) => _buildAccionCard(item, accessibility, isDark)).toList(),
+      children: items
+          .map((item) => _buildAccionCard(item, accessibility, isDark))
+          .toList(),
     );
   }
 
-  Widget _buildAccionCard(_AccionItem item, AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildAccionCard(
+      _AccionItem item, AccessibilityProvider accessibility, bool isDark) {
     return GestureDetector(
       onTap: item.onTap,
       child: Container(
@@ -1271,7 +1725,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  "Contacta a tu médico desde tu perfil clínico",
+                  "Chatea con tu médico tratante",
                   style: TextStyle(
                     color: Colors.white70,
                     fontSize: 13 * accessibility.fontScale,
@@ -1282,12 +1736,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   style: TextButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: AppTheme.primary,
-                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 18, vertical: 10),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  onPressed: openPerfil,
+                  onPressed: abrirChat,
                   icon: const Icon(Icons.chat_bubble_outline, size: 16),
                   label: Text(
                     "Ir al chat",

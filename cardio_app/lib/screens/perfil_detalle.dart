@@ -73,7 +73,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   final Map<String, bool> _activoLocal = {};
   final Map<String, String> _horaOriginal = {};
 
-  // ✅ NUEVO: Recordatorios de presión arterial
+  // Recordatorios de presión arterial
   final Map<String, Map<String, dynamic>> _recordatoriosPresionBD = {};
   final Map<String, bool> _activoPresionLocal = {};
   final Map<String, String> _horaPresionOriginal = {};
@@ -90,10 +90,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   bool loading = true;
   int mensajesNoLeidos = 0;
   int? idConversacion;
-  
+
   Map<int, int> _mensajesNoLeidosPorMedico = {};
   Map<int, int> _conversacionesPorMedico = {};
-  
+
   bool _mostrarGuia = false;
   int _guiaPaso = 0;
 
@@ -111,10 +111,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     {'titulo': 'Chat con médico', 'descripcion': 'Use el ícono de chat para hablar con su médico.'},
   ];
 
-  // ==============================================
-  // 📱 UTILIDADES DE RESPONSIVE
-  // ==============================================
-  bool _isSmallScreen(BuildContext context) => MediaQuery.of(context).size.width < 360;
+  bool _isSmallScreen(BuildContext context) =>
+      MediaQuery.of(context).size.width < 360;
 
   @override
   void initState() {
@@ -143,15 +141,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       final keyPrefix = 'recordatorios_${widget.idPaciente}_';
-      
+
       for (var entry in _activoLocal.entries) {
         await prefs.setBool('${keyPrefix}activo_${entry.key}', entry.value);
       }
-      
+
       for (var entry in _horaOriginal.entries) {
         await prefs.setString('${keyPrefix}hora_${entry.key}', entry.value);
       }
-      
+
       debugPrint("✅ Estado de recordatorios de medicamentos guardado");
     } catch (e) {
       debugPrint("❌ Error guardando estado: $e");
@@ -165,15 +163,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       final keyPrefix = 'recordatorios_presion_${widget.idPaciente}_';
-      
+
       for (var entry in _activoPresionLocal.entries) {
         await prefs.setBool('${keyPrefix}activo_${entry.key}', entry.value);
       }
-      
+
       for (var entry in _horaPresionOriginal.entries) {
         await prefs.setString('${keyPrefix}hora_${entry.key}', entry.value);
       }
-      
+
       debugPrint("✅ Estado de recordatorios de presión guardado");
     } catch (e) {
       debugPrint("❌ Error guardando estado presión: $e");
@@ -187,29 +185,29 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       final keyPrefix = 'recordatorios_${widget.idPaciente}_';
-      
+
       if (_activoLocal.isNotEmpty && _horaOriginal.isNotEmpty) {
         return;
       }
-      
+
       for (var m in _medicamentosFlat) {
         final key = m["key"] as String;
         final activoKey = '${keyPrefix}activo_$key';
         final horaKey = '${keyPrefix}hora_$key';
-        
+
         final activo = prefs.getBool(activoKey);
         final hora = prefs.getString(horaKey);
-        
+
         if (activo != null) {
           _activoLocal[key] = activo;
         }
-        
+
         if (hora != null && hora.isNotEmpty) {
           _horaOriginal[key] = hora;
         }
       }
-      
-      setState(() {});
+
+      if (mounted) setState(() {});
       debugPrint("✅ Estado de recordatorios de medicamentos cargado");
     } catch (e) {
       debugPrint("❌ Error cargando estado: $e");
@@ -223,33 +221,31 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     try {
       final prefs = await SharedPreferences.getInstance();
       final keyPrefix = 'recordatorios_presion_${widget.idPaciente}_';
-      
-      // Si ya hay datos cargados, no recargar
+
       if (_activoPresionLocal.isNotEmpty && _horaPresionOriginal.isNotEmpty) {
         return;
       }
-      
-      // Cargar estado guardado para cada tipo de recordatorio de presión
+
       final List<String> tiposPresion = ['mañana', 'tarde', 'noche'];
-      
+
       for (var tipo in tiposPresion) {
         final key = 'presion_$tipo';
         final activoKey = '${keyPrefix}activo_$key';
         final horaKey = '${keyPrefix}hora_$key';
-        
+
         final activo = prefs.getBool(activoKey);
         final hora = prefs.getString(horaKey);
-        
+
         if (activo != null) {
           _activoPresionLocal[key] = activo;
         }
-        
+
         if (hora != null && hora.isNotEmpty) {
           _horaPresionOriginal[key] = hora;
         }
       }
-      
-      setState(() {});
+
+      if (mounted) setState(() {});
       debugPrint("✅ Estado de recordatorios de presión cargado");
     } catch (e) {
       debugPrint("❌ Error cargando estado presión: $e");
@@ -261,7 +257,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   Future<void> _cargarSignos() async {
     if (_signosCargados && signos.isNotEmpty) return;
-    
+
     try {
       final data = await signosService.getSignos(widget.idUsuario);
       final lista = List<Map<String, dynamic>>.from(data);
@@ -277,8 +273,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   }
 
   Future<void> _cargarDatosConCache() async {
-    setState(() => loading = true);
-    
+    if (mounted) setState(() => loading = true);
+
     await Future.wait([
       _cargarMedicos(),
       _cargarProfile(),
@@ -290,47 +286,44 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       _cargarRecordatorios(),
       _cargarRecordatoriosPresion(),
     ]);
-    
+
     await _cargarEstadoRecordatorios();
     await _cargarEstadoRecordatoriosPresion();
     await _cargarTodosLosMensajesNoLeidos();
-    
+
     if (!mounted) return;
     setState(() => loading = false);
   }
 
   Future<void> _cargarMedicos() async {
     if (_medicosCargados && medicos.isNotEmpty) return;
-    
+
     try {
       final data = await pacienteService.getMedicos(widget.idUsuario);
       if (!mounted) return;
-      
+
       setState(() {
         medicos = List<Map<String, dynamic>>.from(data);
         _medicosCargados = true;
       });
-          
+
       print("📦 Médicos cargados: ${medicos.length}");
     } catch (e) {
       print("❌ Error loadMedicos: $e");
-      setState(() => medicos = []);
+      if (mounted) setState(() => medicos = []);
     }
   }
 
-  // ==============================================
-  // 🔧 CARGAR PERFIL
-  // ==============================================
   Future<void> _cargarProfile() async {
     if (paciente != null) return;
-    
+
     try {
       print("🔍 Cargando perfil para usuario: ${widget.idUsuario}");
-      
+
       final data = await adminService.getPacientePorUsuario(widget.idUsuario);
-      
+
       print("📦 Datos del paciente: $data");
-      
+
       if (data != null && data["idPaciente"] != null) {
         if (!mounted) return;
         setState(() {
@@ -352,7 +345,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
 
   Future<void> _cargarCitas() async {
     if (_citasCargados && citas.isNotEmpty) return;
-    
+
     try {
       final data = await citaService.getByPaciente(widget.idPaciente);
       if (!mounted) return;
@@ -365,7 +358,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
 
   Future<void> _cargarSintomas() async {
     if (_sintomasCargados && sintomas.isNotEmpty) return;
-    
+
     try {
       final data = await sintomaService.getSintomasByUser(widget.idUsuario);
       final lista = List<Map<String, dynamic>>.from(data);
@@ -380,7 +373,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
 
   Future<void> _cargarRecomendaciones() async {
     if (_recomendacionesCargadas && recomendaciones.isNotEmpty) return;
-    
+
     try {
       final data = await recomendacionService.getByPaciente(widget.idPaciente);
       if (!mounted) return;
@@ -395,7 +388,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
 
   Future<void> _cargarTratamientos() async {
     if (_tratamientosCargados && tratamientos.isNotEmpty) return;
-    
+
     try {
       final data = await tratamientoService.getByPaciente(widget.idPaciente);
       final lista = List<Map<String, dynamic>>.from(data);
@@ -405,16 +398,26 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       final flat = <Map<String, dynamic>>[];
       for (final t in lista) {
         final idT = int.tryParse(
-              (t["idTratamiento"] ?? t["id"] ?? t["IdTratamiento"] ?? t["id_tratamiento"] ?? "")
+              (t["idTratamiento"] ??
+                      t["id"] ??
+                      t["IdTratamiento"] ??
+                      t["id_tratamiento"] ??
+                      "")
                   .toString(),
-            ) ?? 0;
+            ) ??
+            0;
         if (idT == 0) continue;
         final meds = await tratamientoService.getMedicamentos(idT);
         for (final m in meds) {
           final idMed = int.tryParse(
-                (m["idMedicamento"] ?? m["id"] ?? m["IdMedicamento"] ?? m["id_medicamento"] ?? "")
+                (m["idMedicamento"] ??
+                        m["id"] ??
+                        m["IdMedicamento"] ??
+                        m["id_medicamento"] ??
+                        "")
                     .toString(),
-              ) ?? 0;
+              ) ??
+              0;
           flat.add({
             "key": "${idT}_$idMed",
             "idTratamiento": idT,
@@ -435,16 +438,14 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     } catch (_) {}
   }
 
-  // ==============================================
-  // 📥 CARGAR RECORDATORIOS DE MEDICAMENTOS
-  // ==============================================
   Future<void> _cargarRecordatorios() async {
     if (_recordatoriosCargados && _recordatoriosBD.isNotEmpty) {
       return;
     }
-    
+
     try {
-      final lista = await recordatorioService.getActivosByPaciente(widget.idPaciente);
+      final lista =
+          await recordatorioService.getActivosByPaciente(widget.idPaciente);
       if (!mounted) return;
 
       _recordatoriosBD.clear();
@@ -461,18 +462,19 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         final key = m["key"] as String;
         final idT = int.tryParse(m["idTratamiento"]?.toString() ?? "") ?? 0;
         final rec = porTratamiento[idT];
-        
+
         if (rec != null) {
           _recordatoriosBD[key] = rec;
-          
-          if (!_horaOriginal.containsKey(key) || _horaOriginal[key] == "--:--") {
+
+          if (!_horaOriginal.containsKey(key) ||
+              _horaOriginal[key] == "--:--") {
             String horaOriginal = rec["hora"]?.toString() ?? "";
             if (horaOriginal.length > 5) {
               horaOriginal = horaOriginal.substring(0, 5);
             }
             _horaOriginal[key] = horaOriginal;
           }
-          
+
           if (!_activoLocal.containsKey(key)) {
             final activo = rec["activo"] == 1 || rec["activo"] == true;
             _activoLocal[key] = activo;
@@ -489,35 +491,47 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       }
 
       _recordatoriosCargados = true;
-      setState(() {});
-      debugPrint("📋 Recordatorios de medicamentos cargados: ${_recordatoriosBD.length}");
+      if (mounted) setState(() {});
+      debugPrint(
+          "📋 Recordatorios de medicamentos cargados: ${_recordatoriosBD.length}");
     } catch (e) {
       debugPrint("❌ loadRecordatorios: $e");
     }
   }
 
-  // ==============================================
-  // 📥 CARGAR RECORDATORIOS DE PRESIÓN ARTERIAL
-  // ==============================================
   Future<void> _cargarRecordatoriosPresion() async {
     if (_recordatoriosPresionCargados && _recordatoriosPresionBD.isNotEmpty) {
       return;
     }
-    
+
     try {
-      // Crear recordatorios de presión por defecto si no existen
       _recordatoriosPresionBD.clear();
-      
+
       final List<Map<String, dynamic>> tiposPresion = [
-        {'key': 'presion_mañana', 'label': '🌅 Mañana', 'hora': '07:00', 'icon': Icons.wb_sunny},
-        {'key': 'presion_tarde', 'label': '☀️ Tarde', 'hora': '14:00', 'icon': Icons.wb_sunny_outlined},
-        {'key': 'presion_noche', 'label': '🌙 Noche', 'hora': '21:00', 'icon': Icons.nightlight_round},
+        {
+          'key': 'presion_mañana',
+          'label': '🌅 Mañana',
+          'hora': '07:00',
+          'icon': Icons.wb_sunny
+        },
+        {
+          'key': 'presion_tarde',
+          'label': '☀️ Tarde',
+          'hora': '14:00',
+          'icon': Icons.wb_sunny_outlined
+        },
+        {
+          'key': 'presion_noche',
+          'label': '🌙 Noche',
+          'hora': '21:00',
+          'icon': Icons.nightlight_round
+        },
       ];
-      
+
       for (var tipo in tiposPresion) {
         final key = tipo['key'] as String;
         final horaDefecto = tipo['hora'] as String;
-        
+
         _recordatoriosPresionBD[key] = {
           'idRecordatorio': 0,
           'idPaciente': widget.idPaciente,
@@ -526,22 +540,22 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           'hora': horaDefecto,
           'activo': 1,
         };
-        
+
         if (!_horaPresionOriginal.containsKey(key)) {
           _horaPresionOriginal[key] = horaDefecto;
         }
-        
+
         if (!_activoPresionLocal.containsKey(key)) {
           _activoPresionLocal[key] = true;
         }
       }
-      
-      // Cargar estado guardado
+
       await _cargarEstadoRecordatoriosPresion();
-      
+
       _recordatoriosPresionCargados = true;
-      setState(() {});
-      debugPrint("📋 Recordatorios de presión cargados: ${_recordatoriosPresionBD.length}");
+      if (mounted) setState(() {});
+      debugPrint(
+          "📋 Recordatorios de presión cargados: ${_recordatoriosPresionBD.length}");
     } catch (e) {
       debugPrint("❌ loadRecordatoriosPresion: $e");
     }
@@ -556,7 +570,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     _recomendacionesCargadas = false;
     _medicosCargados = false;
     _recordatoriosPresionCargados = false;
-    
+
     await _cargarDatosConCache();
   }
 
@@ -579,24 +593,30 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     _citasCargados = false;
     await _cargarCitas();
   }
+
   Future<void> loadSintomas() async {
     _sintomasCargados = false;
     await _cargarSintomas();
   }
+
   Future<void> loadRecomendaciones() async {
     _recomendacionesCargadas = false;
     await _cargarRecomendaciones();
   }
+
   Future<void> loadTratamientos() async {
     await _recargarTratamientos();
   }
+
   Future<void> loadRecordatorios() async {
     await _recargarRecordatorios();
   }
+
   Future<void> loadSignos() async {
     _signosCargados = false;
     await _cargarSignos();
   }
+
   Future<void> loadRecordatoriosPresion() async {
     _recordatoriosPresionCargados = false;
     await _cargarRecordatoriosPresion();
@@ -609,24 +629,27 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     int totalNoLeidos = 0;
     _mensajesNoLeidosPorMedico.clear();
     _conversacionesPorMedico.clear();
-    
+
     final idUsuarioPaciente = widget.idUsuario;
-    
+
     for (var medico in medicos) {
       final idMedico = int.tryParse(medico["idProfesional"].toString()) ?? 0;
       if (idMedico != 0) {
         try {
-          final convId = await chatService.getOrCreateConversacion(idUsuarioPaciente, idMedico);
+          final convId = await chatService.getOrCreateConversacion(
+              idUsuarioPaciente, idMedico);
           if (convId != null) {
             _conversacionesPorMedico[idMedico] = convId;
-            final noLeidos = await chatService.getMensajesNoLeidos(convId, idUsuarioPaciente);
+            final noLeidos =
+                await chatService.getMensajesNoLeidos(convId, idUsuarioPaciente);
             if (noLeidos > 0) {
               _mensajesNoLeidosPorMedico[idMedico] = noLeidos;
               totalNoLeidos += noLeidos;
             }
           }
         } catch (e) {
-          debugPrint("Error cargando mensajes no leídos para médico $idMedico: $e");
+          debugPrint(
+              "Error cargando mensajes no leídos para médico $idMedico: $e");
         }
       }
     }
@@ -641,21 +664,23 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   Future<void> _abrirChatConMedico(int idMedico, String nombreMedico) async {
     try {
       final idUsuarioPaciente = widget.idUsuario;
-      
-      print("🔍 Abriendo chat: paciente(idUsuario=$idUsuarioPaciente) con medico(idProfesional=$idMedico)");
-      
-      int? convId = _conversacionesPorMedico[idMedico] ?? 
-          await chatService.getOrCreateConversacion(idUsuarioPaciente, idMedico);
-      
+
+      print(
+          "🔍 Abriendo chat: paciente(idUsuario=$idUsuarioPaciente) con medico(idProfesional=$idMedico)");
+
+      int? convId = _conversacionesPorMedico[idMedico] ??
+          await chatService.getOrCreateConversacion(
+              idUsuarioPaciente, idMedico);
+
       if (convId == null) {
         _snack("No se pudo abrir el chat");
         return;
       }
-      
+
       _conversacionesPorMedico[idMedico] = convId;
-      
+
       if (!mounted) return;
-      
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -713,21 +738,26 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               ),
               const Divider(),
               ...medicos.map((med) {
-                final idMedico = int.tryParse(med["idProfesional"].toString()) ?? 0;
+                final idMedico =
+                    int.tryParse(med["idProfesional"].toString()) ?? 0;
                 final nombreMedico = med["nombre"]?.toString() ?? "Médico";
                 final especialidad = med["especialidad"]?.toString() ?? "";
                 final noLeidos = _mensajesNoLeidosPorMedico[idMedico] ?? 0;
-                
+
                 return ListTile(
                   leading: _buildCircleAvatarMedico(nombreMedico),
-                  title: Text(nombreMedico, style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text(especialidad.isNotEmpty ? especialidad : "Médico tratante"),
+                  title: Text(nombreMedico,
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: Text(especialidad.isNotEmpty
+                      ? especialidad
+                      : "Médico tratante"),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       if (noLeidos > 0)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
                             color: AppTheme.danger,
                             borderRadius: BorderRadius.circular(12),
@@ -764,12 +794,12 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       _snack("No tiene médicos asignados");
       return;
     }
-    
+
     if (medicos.length > 1) {
       _mostrarSelectorMedicos();
       return;
     }
-    
+
     final med = medicos.first;
     final idMedico = int.tryParse(med["idProfesional"].toString()) ?? 0;
     final nombreMedico = med["nombre"]?.toString() ?? "Médico";
@@ -779,13 +809,13 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   int _toInt(dynamic v) => int.tryParse(v?.toString() ?? "") ?? 0;
 
   // ==============================================
-  // AVATAR DEL PACIENTE
+  // AVATARES
   // ==============================================
   Widget _buildAvatarPaciente(String nombre) {
     final isSmall = _isSmallScreen(context);
     final size = isSmall ? 56.0 : 70.0;
     final iconSize = isSmall ? 18.0 : 22.0;
-    
+
     return Container(
       width: size,
       height: size,
@@ -826,21 +856,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  // ==============================================
-  // AVATAR DEL MÉDICO
-  // ==============================================
   Widget _buildCircleAvatarMedico(String nombre) {
     final isSmall = _isSmallScreen(context);
     final radius = isSmall ? 20.0 : 24.0;
     final fontSize = isSmall ? 14.0 : 16.0;
-    
+
     return CircleAvatar(
       radius: radius,
       backgroundColor: AppTheme.primary.withOpacity(0.1),
       backgroundImage: const AssetImage('assets/images/medico.png'),
-      onBackgroundImageError: (_, __) {
-        // Si falla la imagen, mostrar iniciales
-      },
+      onBackgroundImageError: (_, __) {},
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
@@ -860,14 +885,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  // ==============================================
-  // AVATAR DEL MÉDICO (VERSIÓN GRANDE)
-  // ==============================================
   Widget _buildMedicoAvatarGrande(String nombre) {
     final isSmall = _isSmallScreen(context);
     final size = isSmall ? 44.0 : 55.0;
     final fontSize = isSmall ? 16.0 : 20.0;
-    
+
     return Container(
       width: size,
       height: size,
@@ -900,15 +922,25 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
 
   // ==============================================
   // 🔄 TOGGLE RECORDATORIO DE MEDICAMENTO
+  // ✅ Ahora pasa idPaciente al service para regenerar tomas
   // ==============================================
-  Future<void> _toggleRecordatorio(String key, bool nuevoValor, Map<String, dynamic> med) async {
+  Future<void> _toggleRecordatorio(
+      String key, bool nuevoValor, Map<String, dynamic> med) async {
+    // ─────────── DESACTIVAR ───────────
     if (!nuevoValor) {
       try {
         final recExistente = _recordatoriosBD[key];
         if (recExistente != null && recExistente.isNotEmpty) {
           final idRec = _toInt(recExistente["idRecordatorio"]);
           if (idRec != 0) {
-            await recordatorioService.toggleActivo(idRec, activo: false);
+            // ✅ Pasamos idPaciente para que se regeneren las tomas
+            await recordatorioService.toggleActivo(
+              idRec,
+              activo: false,
+              idPaciente: widget.idPaciente,
+            );
+
+            if (!mounted) return;
             setState(() {
               _recordatoriosBD[key] = {
                 ...recExistente,
@@ -919,6 +951,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
             await _guardarEstadoRecordatorios();
             _snack("Recordatorio desactivado para ${med["nombre"]}");
           } else {
+            if (!mounted) return;
             setState(() {
               _activoLocal[key] = false;
             });
@@ -926,6 +959,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
             _snack("Recordatorio desactivado");
           }
         } else {
+          if (!mounted) return;
           setState(() {
             _activoLocal[key] = false;
           });
@@ -935,12 +969,13 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         return;
       } catch (e) {
         debugPrint("❌ Error desactivando recordatorio: $e");
-        setState(() => _activoLocal[key] = true);
+        if (mounted) setState(() => _activoLocal[key] = true);
         _snack("Error al desactivar el recordatorio");
         return;
       }
     }
 
+    // ─────────── ACTIVAR ───────────
     final TimeOfDay? horaSeleccionada = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.now(),
@@ -965,26 +1000,38 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         );
       },
     );
-    
+
     if (horaSeleccionada == null) {
-      setState(() => _activoLocal[key] = false);
+      if (mounted) setState(() => _activoLocal[key] = false);
       return;
     }
-    
-    final horaFormateada = "${horaSeleccionada.hour.toString().padLeft(2, '0')}:${horaSeleccionada.minute.toString().padLeft(2, '0')}";
-    
+
+    final horaFormateada =
+        "${horaSeleccionada.hour.toString().padLeft(2, '0')}:${horaSeleccionada.minute.toString().padLeft(2, '0')}";
+
     try {
       final recExistente = _recordatoriosBD[key];
-      
+
       if (recExistente != null && recExistente.isNotEmpty) {
+        // Ya existe el recordatorio → actualizar hora + activar
         final idRec = _toInt(recExistente["idRecordatorio"]);
         if (idRec == 0) {
           throw Exception("idRecordatorio inválido");
         }
-        
-        await recordatorioService.actualizarHora(idRec, horaFormateada);
-        await recordatorioService.toggleActivo(idRec, activo: true);
-        
+
+        await recordatorioService.actualizarHora(
+          idRec,
+          horaFormateada,
+          idPaciente: widget.idPaciente,
+        );
+        await recordatorioService.toggleActivo(
+          idRec,
+          activo: true,
+          hora: horaFormateada,
+          idPaciente: widget.idPaciente,
+        );
+
+        if (!mounted) return;
         setState(() {
           _recordatoriosBD[key] = {
             ...recExistente,
@@ -996,19 +1043,22 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         });
         await _guardarEstadoRecordatorios();
       } else {
+        // No existe → crear nuevo recordatorio
         final idTratamiento = int.tryParse(key.split("_").first) ?? 0;
         if (idTratamiento == 0) {
-          setState(() => _activoLocal[key] = false);
+          if (mounted) setState(() => _activoLocal[key] = false);
           _snack("Error: tratamiento no identificado");
           return;
         }
-        
+
         final idRec = await recordatorioService.crear(
           idTratamiento: idTratamiento,
           hora: horaFormateada,
           activo: true,
+          idPaciente: widget.idPaciente, // ✅ genera tomas
         );
-        
+
+        if (!mounted) return;
         setState(() {
           _recordatoriosBD[key] = {
             "idRecordatorio": idRec,
@@ -1021,26 +1071,29 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         });
         await _guardarEstadoRecordatorios();
       }
-      
-      _snack("Recordatorio activado para ${med["nombre"]} a las $horaFormateada");
-      
+
+      _snack(
+          "Recordatorio activado para ${med["nombre"]} a las $horaFormateada");
     } catch (e) {
       debugPrint("❌ Error activando recordatorio: $e");
-      setState(() => _activoLocal[key] = false);
+      if (mounted) setState(() => _activoLocal[key] = false);
       _snack("❌ Error al activar el recordatorio");
     }
   }
 
   // ==============================================
-  // 🔄 TOGGLE RECORDATORIO DE PRESIÓN ARTERIAL
+  // 🔄 TOGGLE RECORDATORIO DE PRESIÓN
   // ==============================================
-  Future<void> _toggleRecordatorioPresion(String key, bool nuevoValor, Map<String, dynamic> recordatorio) async {
+  Future<void> _toggleRecordatorioPresion(
+      String key, bool nuevoValor, Map<String, dynamic> recordatorio) async {
     final String etiqueta = recordatorio['etiqueta'] ?? 'Presión arterial';
-    
+
     if (!nuevoValor) {
-      setState(() {
-        _activoPresionLocal[key] = false;
-      });
+      if (mounted) {
+        setState(() {
+          _activoPresionLocal[key] = false;
+        });
+      }
       await _guardarEstadoRecordatoriosPresion();
       _snack("Recordatorio de presión desactivado");
       return;
@@ -1070,14 +1123,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         );
       },
     );
-    
+
     if (horaSeleccionada == null) {
-      setState(() => _activoPresionLocal[key] = false);
+      if (mounted) setState(() => _activoPresionLocal[key] = false);
       return;
     }
-    
-    final horaFormateada = "${horaSeleccionada.hour.toString().padLeft(2, '0')}:${horaSeleccionada.minute.toString().padLeft(2, '0')}";
-    
+
+    final horaFormateada =
+        "${horaSeleccionada.hour.toString().padLeft(2, '0')}:${horaSeleccionada.minute.toString().padLeft(2, '0')}";
+
+    if (!mounted) return;
     setState(() {
       _activoPresionLocal[key] = true;
       _horaPresionOriginal[key] = horaFormateada;
@@ -1087,37 +1142,80 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         'activo': 1,
       };
     });
-    
+
     await _guardarEstadoRecordatoriosPresion();
-    _snack("Recordatorio de presión activado para $etiqueta a las $horaFormateada");
+    _snack(
+        "Recordatorio de presión activado para $etiqueta a las $horaFormateada");
   }
 
-  void abrirCitas() => Navigator.push(context, MaterialPageRoute(builder: (_) => CitasScreen(citas: citas, esMedico: false, )));
+  // ==============================================
+  // 🧭 NAVEGACIÓN
+  // ==============================================
+  void abrirCitas() => Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) => CitasScreen(citas: citas, esMedico: false)));
+
   void abrirAgendar() => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => AgendarCitaScreen(idPaciente: widget.idPaciente, medicos: medicos)),
+        MaterialPageRoute(
+            builder: (_) => AgendarCitaScreen(
+                idPaciente: widget.idPaciente, medicos: medicos)),
       ).then((_) => _cargarCitas());
-  void abrirCalendario() => Navigator.push(context, MaterialPageRoute(builder: (_) => CalendarioScreen(idPaciente: widget.idPaciente)));
+
+  void abrirCalendario() => Navigator.push(
+      context,
+      MaterialPageRoute(
+          builder: (_) => CalendarioScreen(idPaciente: widget.idPaciente)));
+
   void abrirConfiguracion() => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => ConfiguracionScreen(idUsuario: widget.idUsuario, tipoUsuario: "paciente"),
+          builder: (_) => ConfiguracionScreen(
+              idUsuario: widget.idUsuario, tipoUsuario: "paciente"),
         ),
       ).then((_) => _cargarProfile());
+
+  // ✅ Navegar a TomasScreen con recarga de recordatorios al volver
+  void _abrirTomas() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TomasScreen(idPaciente: widget.idPaciente),
+      ),
+    ).then((_) {
+      // Al volver, refrescar los recordatorios porque pudieron cambiar
+      loadRecordatorios();
+    });
+  }
+
+  void _abrirCuidadores() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CuidadoresScreen(idPaciente: widget.idPaciente),
+      ),
+    );
+  }
 
   void crearSintoma() {
     final titulo = TextEditingController();
     final desc = TextEditingController();
-    
+
     final nombrePaciente = widget.nombre;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       backgroundColor: Theme.of(context).cardColor,
       builder: (_) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
+        padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 20,
+            right: 20,
+            top: 20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1126,13 +1224,18 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               child: Container(
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2)),
               ),
             ),
             const SizedBox(height: 20),
             Text(
               "Registrar síntoma",
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).textTheme.bodyLarge?.color),
+              style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).textTheme.bodyLarge?.color),
             ),
             const SizedBox(height: 20),
             TextField(
@@ -1141,8 +1244,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 hintText: "Ej: Dolor de cabeza",
                 filled: true,
                 fillColor: Theme.of(context).scaffoldBackgroundColor,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
               ),
             ),
             const SizedBox(height: 12),
@@ -1153,8 +1259,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 hintText: "Describa cómo se siente...",
                 filled: true,
                 fillColor: Theme.of(context).scaffoldBackgroundColor,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none),
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16, vertical: 14),
               ),
             ),
             const SizedBox(height: 20),
@@ -1165,14 +1274,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   backgroundColor: AppTheme.primary,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: () async {
-                  if (titulo.text.trim().isEmpty || desc.text.trim().isEmpty) {
+                  if (titulo.text.trim().isEmpty ||
+                      desc.text.trim().isEmpty) {
                     _snack("Complete todos los campos");
                     return;
                   }
-                  
+
                   final exito = await sintomaService.crearSintoma(
                     idUsuario: widget.idUsuario,
                     titulo: titulo.text.trim(),
@@ -1180,7 +1291,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     prioridad: "MEDIA",
                     nombrePaciente: nombrePaciente,
                   );
-                  
+
                   if (!mounted) return;
                   Navigator.pop(context);
                   if (exito) {
@@ -1190,7 +1301,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     _snack("Error al registrar síntoma");
                   }
                 },
-                child: const Text("Guardar", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+                child: const Text("Guardar",
+                    style:
+                        TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
               ),
             ),
             const SizedBox(height: 20),
@@ -1234,23 +1347,35 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
 
   Color _getColorCategoria(String categoria) {
     switch (categoria) {
-      case 'Alimentación': return const Color(0xFFF59E0B);
-      case 'Ejercicio': return const Color(0xFF10B981);
-      case 'Medicación': return AppTheme.primary;
-      case 'Hábitos': return const Color(0xFF8B5CF6);
-      case 'Seguimiento': return const Color(0xFF14B8A6);
-      default: return const Color(0xFF6B7280);
+      case 'Alimentación':
+        return const Color(0xFFF59E0B);
+      case 'Ejercicio':
+        return const Color(0xFF10B981);
+      case 'Medicación':
+        return AppTheme.primary;
+      case 'Hábitos':
+        return const Color(0xFF8B5CF6);
+      case 'Seguimiento':
+        return const Color(0xFF14B8A6);
+      default:
+        return const Color(0xFF6B7280);
     }
   }
 
   IconData _getIconoCategoria(String categoria) {
     switch (categoria) {
-      case 'Alimentación': return Icons.restaurant;
-      case 'Ejercicio': return Icons.fitness_center;
-      case 'Medicación': return Icons.medication;
-      case 'Hábitos': return Icons.self_improvement;
-      case 'Seguimiento': return Icons.monitor_heart;
-      default: return Icons.notes;
+      case 'Alimentación':
+        return Icons.restaurant;
+      case 'Ejercicio':
+        return Icons.fitness_center;
+      case 'Medicación':
+        return Icons.medication;
+      case 'Hábitos':
+        return Icons.self_improvement;
+      case 'Seguimiento':
+        return Icons.monitor_heart;
+      default:
+        return Icons.notes;
     }
   }
 
@@ -1262,11 +1387,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       backgroundColor: Colors.transparent,
-      builder: (context) => _RecomendacionDetalleModal(recomendacion: recomendacion),
+      builder: (context) =>
+          _RecomendacionDetalleModal(recomendacion: recomendacion),
     );
   }
 
-  // 🎯 FUNCIÓN PARA ABRIR LA GUÍA MANUALMENTE
   void _abrirGuia() {
     setState(() {
       _mostrarGuia = true;
@@ -1274,9 +1399,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     });
   }
 
-  // ==============================================
-  // ➕ REGISTRAR SIGNOS DESDE EL PACIENTE
-  // ==============================================
   void _registrarSignosPaciente() {
     Navigator.push(
       context,
@@ -1292,6 +1414,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     });
   }
 
+  // ==============================================
+  // 🏗 BUILD
+  // ==============================================
   @override
   Widget build(BuildContext context) {
     final accessibility = Provider.of<AccessibilityProvider>(context);
@@ -1300,7 +1425,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     final isTablet = screenWidth >= 600;
     final isSmall = screenWidth < 360;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return Scaffold(
       backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
       body: SafeArea(
@@ -1315,7 +1440,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 ),
               ),
               child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: isWeb ? 24 : (isSmall ? 8 : 12), vertical: isSmall ? 8 : 12),
+                padding: EdgeInsets.symmetric(
+                    horizontal: isWeb ? 24 : (isSmall ? 8 : 12),
+                    vertical: isSmall ? 8 : 12),
                 child: Row(
                   children: [
                     Container(
@@ -1324,7 +1451,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.arrow_back, color: Colors.white, size: isSmall ? 24 : 28),
+                        icon: Icon(Icons.arrow_back,
+                            color: Colors.white, size: isSmall ? 24 : 28),
                         onPressed: () => Navigator.pop(context),
                       ),
                     ),
@@ -1358,7 +1486,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.help_outline, color: Colors.white, size: isSmall ? 22 : 26),
+                        icon: Icon(Icons.help_outline,
+                            color: Colors.white, size: isSmall ? 22 : 26),
                         onPressed: _abrirGuia,
                       ),
                     ),
@@ -1369,7 +1498,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.settings_outlined, color: Colors.white, size: isSmall ? 22 : 26),
+                        icon: Icon(Icons.settings_outlined,
+                            color: Colors.white, size: isSmall ? 22 : 26),
                         onPressed: abrirConfiguracion,
                       ),
                     ),
@@ -1377,9 +1507,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 ),
               ),
             ),
-            
             Container(
-              margin: EdgeInsets.symmetric(horizontal: isSmall ? 8 : 16, vertical: isSmall ? 8 : 12),
+              margin: EdgeInsets.symmetric(
+                  horizontal: isSmall ? 8 : 16, vertical: isSmall ? 8 : 12),
               height: isSmall ? 42 : 50,
               child: TabBar(
                 controller: _tabController,
@@ -1398,21 +1528,29 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 ),
                 isScrollable: true,
                 tabs: const [
-                  Tab(icon: Icon(Icons.person_outline, size: 20), text: "Perfil"),
-                  Tab(icon: Icon(Icons.monitor_heart, size: 20), text: "Signos"),
+                  Tab(
+                      icon: Icon(Icons.person_outline, size: 20),
+                      text: "Perfil"),
+                  Tab(
+                      icon: Icon(Icons.monitor_heart, size: 20),
+                      text: "Signos"),
                   Tab(icon: Icon(Icons.medication, size: 20), text: "Trat."),
                   Tab(icon: Icon(Icons.healing, size: 20), text: "Síntomas"),
-                  Tab(icon: Icon(Icons.lightbulb_outline, size: 20), text: "Recom."),
-                  Tab(icon: Icon(Icons.notifications_outlined, size: 20), text: "Recordat."),
+                  Tab(
+                      icon: Icon(Icons.lightbulb_outline, size: 20),
+                      text: "Recom."),
+                  Tab(
+                      icon: Icon(Icons.notifications_outlined, size: 20),
+                      text: "Recordat."),
                 ],
               ),
             ),
-            
             Expanded(
               child: loading
                   ? const Center(child: CircularProgressIndicator())
                   : paciente == null
-                      ? const Center(child: Text("No se pudo cargar el perfil"))
+                      ? const Center(
+                          child: Text("No se pudo cargar el perfil"))
                       : RefreshIndicator(
                           onRefresh: loadAll,
                           color: AppTheme.primary,
@@ -1429,7 +1567,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                                   _tabRecordatorios(accessibility),
                                 ],
                               ),
-                              if (_mostrarGuia) _buildGuiaFlotante(accessibility),
+                              if (_mostrarGuia)
+                                _buildGuiaFlotante(accessibility),
                             ],
                           ),
                         ),
@@ -1439,7 +1578,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       ),
     );
   }
-  
+
   // ==============================================
   // 🎯 GUÍA FLOTANTE
   // ==============================================
@@ -1447,7 +1586,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     final paso = _pasosGuia[_guiaPaso];
     final isSmall = _isSmallScreen(context);
     final bottomPadding = MediaQuery.of(context).padding.bottom;
-    
+
     return Positioned(
       bottom: isSmall ? 8 + bottomPadding : 16 + bottomPadding,
       left: isSmall ? 8 : 16,
@@ -1460,7 +1599,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           padding: EdgeInsets.all(isSmall ? 12 : 16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(isSmall ? 16 : 20),
-            border: Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
+            border:
+                Border.all(color: AppTheme.primary.withOpacity(0.3), width: 2),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -1479,7 +1619,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       child: Text(
                         "${_guiaPaso + 1}",
                         style: TextStyle(
-                          fontSize: (isSmall ? 16 : 20) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 16 : 20) * accessibility.fontScale,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.primary,
                         ),
@@ -1494,7 +1635,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         Text(
                           paso['titulo']!,
                           style: TextStyle(
-                            fontSize: (isSmall ? 14 : 17) * accessibility.fontScale,
+                            fontSize: (isSmall ? 14 : 17) *
+                                accessibility.fontScale,
                             fontWeight: FontWeight.bold,
                             color: AppTheme.gray700,
                           ),
@@ -1503,7 +1645,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         Text(
                           paso['descripcion']!,
                           style: TextStyle(
-                            fontSize: (isSmall ? 12 : 15) * accessibility.fontScale,
+                            fontSize: (isSmall ? 12 : 15) *
+                                accessibility.fontScale,
                             color: AppTheme.gray500,
                             height: 1.3,
                           ),
@@ -1545,8 +1688,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         height: isSmall ? 8 : 10,
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          color: _guiaPaso == index 
-                              ? AppTheme.primary 
+                          color: _guiaPaso == index
+                              ? AppTheme.primary
                               : AppTheme.gray300,
                         ),
                       );
@@ -1560,13 +1703,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           Size(isSmall ? 60 : 80, isSmall ? 32 : 40),
                         ),
                         padding: WidgetStateProperty.all(
-                          EdgeInsets.symmetric(horizontal: isSmall ? 12 : 16),
+                          EdgeInsets.symmetric(
+                              horizontal: isSmall ? 12 : 16),
                         ),
                       ),
                       child: Text(
                         "Siguiente",
                         style: TextStyle(
-                          fontSize: (isSmall ? 12 : 15) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 12 : 15) * accessibility.fontScale,
                         ),
                       ),
                     ),
@@ -1581,26 +1726,31 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           Size(isSmall ? 60 : 80, isSmall ? 32 : 40),
                         ),
                         padding: WidgetStateProperty.all(
-                          EdgeInsets.symmetric(horizontal: isSmall ? 12 : 16),
+                          EdgeInsets.symmetric(
+                              horizontal: isSmall ? 12 : 16),
                         ),
                       ),
                       child: Text(
                         "Chat",
                         style: TextStyle(
-                          fontSize: (isSmall ? 12 : 15) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 12 : 15) * accessibility.fontScale,
                         ),
                       ),
                     ),
                   TextButton(
                     onPressed: () => setState(() => _mostrarGuia = false),
                     style: TextButton.styleFrom(
-                      minimumSize: Size(isSmall ? 40 : 50, isSmall ? 32 : 40),
-                      padding: EdgeInsets.symmetric(horizontal: isSmall ? 8 : 12),
+                      minimumSize:
+                          Size(isSmall ? 40 : 50, isSmall ? 32 : 40),
+                      padding: EdgeInsets.symmetric(
+                          horizontal: isSmall ? 8 : 12),
                     ),
                     child: Text(
                       "Saltar tutorial",
                       style: TextStyle(
-                        fontSize: (isSmall ? 11 : 14) * accessibility.fontScale,
+                        fontSize:
+                            (isSmall ? 11 : 14) * accessibility.fontScale,
                         color: AppTheme.gray500,
                       ),
                     ),
@@ -1620,7 +1770,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   Widget _tabPerfil(AccessibilityProvider accessibility) {
     final isWeb = kIsWeb;
     final isSmall = _isSmallScreen(context);
-    
+
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.all(isWeb ? 24 : (isSmall ? 12 : 16)),
@@ -1651,7 +1801,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   Widget _tabSignos(AccessibilityProvider accessibility) {
     final isWeb = kIsWeb;
     final isSmall = _isSmallScreen(context);
-    
+
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.all(isWeb ? 24 : (isSmall ? 12 : 16)),
@@ -1702,7 +1852,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                             Text(
                               "Mis Signos Vitales",
                               style: TextStyle(
-                                fontSize: (isSmall ? 15 : 17) * accessibility.fontScale,
+                                fontSize: (isSmall ? 15 : 17) *
+                                    accessibility.fontScale,
                                 fontWeight: FontWeight.bold,
                                 color: AppTheme.gray700,
                               ),
@@ -1711,7 +1862,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                             Text(
                               "Registra y da seguimiento a tus signos vitales",
                               style: TextStyle(
-                                fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                                fontSize: (isSmall ? 11 : 13) *
+                                    accessibility.fontScale,
                                 color: AppTheme.gray500,
                               ),
                             ),
@@ -1720,7 +1872,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       ),
                       if (signos.isNotEmpty)
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
                           decoration: BoxDecoration(
                             color: AppTheme.info,
                             borderRadius: BorderRadius.circular(20),
@@ -1759,7 +1912,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           child: Text(
                             "Registra tus signos vitales para dar seguimiento a tu salud. ¡Mantén un control diario!",
                             style: TextStyle(
-                              fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                              fontSize: (isSmall ? 11 : 13) *
+                                  accessibility.fontScale,
                               color: AppTheme.gray600,
                               height: 1.4,
                             ),
@@ -1772,7 +1926,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               ),
             ),
             const SizedBox(height: 16),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
@@ -1793,7 +1946,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               ),
             ),
             const SizedBox(height: 16),
-            
             if (signos.isEmpty)
               _buildEmptySignos(accessibility)
             else ...[
@@ -1809,13 +1961,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  // ==============================================
-  // 📭 ESTADO VACÍO PARA SIGNOS
-  // ==============================================
   Widget _buildEmptySignos(AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
     final iconSize = isSmall ? 60.0 : 80.0;
-    
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1843,7 +1992,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           ),
           const SizedBox(height: 12),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: isSmall ? 16 : 24, vertical: isSmall ? 12 : 16),
+            padding: EdgeInsets.symmetric(
+                horizontal: isSmall ? 16 : 24,
+                vertical: isSmall ? 12 : 16),
             decoration: BoxDecoration(
               color: AppTheme.info.withOpacity(0.05),
               borderRadius: BorderRadius.circular(12),
@@ -1885,54 +2036,61 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   Widget _buildGraficoInteligente(AccessibilityProvider accessibility) {
     if (signos.isEmpty) return const SizedBox();
-    
+
     final isSmall = _isSmallScreen(context);
-    
+
     List<double> sistolicas = [];
     List<double> diastolicas = [];
     List<double> frecuencias = [];
-    
+
     for (var s in signos) {
-      sistolicas.add(double.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0);
-      diastolicas.add(double.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0);
-      frecuencias.add(double.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0);
+      sistolicas
+          .add(double.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0);
+      diastolicas.add(
+          double.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0);
+      frecuencias.add(
+          double.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0);
     }
-    
+
     double getPercentile(List<double> values, double percentile) {
       if (values.isEmpty) return 0;
       List<double> sorted = List.from(values)..sort();
       int index = (percentile * (sorted.length - 1)).round();
       return sorted[index];
     }
-    
+
     double minY = 0;
     double maxY = 0;
     bool hasOutliers = false;
     List<String> outlierMessages = [];
-    
+
     if (sistolicas.isNotEmpty) {
       double p5Sist = getPercentile(sistolicas, 0.05);
       double p95Sist = getPercentile(sistolicas, 0.95);
       double p5Fc = getPercentile(frecuencias, 0.05);
       double p95Fc = getPercentile(frecuencias, 0.95);
-      
-      minY = [p5Sist, p5Fc].reduce((a,b) => a < b ? a : b) - 10;
-      maxY = [p95Sist, p95Fc].reduce((a,b) => a > b ? a : b) + 10;
+
+      minY = [p5Sist, p5Fc].reduce((a, b) => a < b ? a : b) - 10;
+      maxY = [p95Sist, p95Fc].reduce((a, b) => a > b ? a : b) + 10;
       minY = minY.clamp(40, 100);
       maxY = maxY.clamp(80, 200);
-      
+
       for (var s in signos) {
-        int sist = int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
-        int fc = int.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
+        int sist =
+            int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
+        int fc =
+            int.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
         if (sist > 180 || sist < 80) {
           hasOutliers = true;
-          if (!outlierMessages.contains("Presión arterial fuera de rango normal")) {
+          if (!outlierMessages
+              .contains("Presión arterial fuera de rango normal")) {
             outlierMessages.add("Presión arterial fuera de rango normal");
           }
         }
         if (fc > 150 || fc < 40) {
           hasOutliers = true;
-          if (!outlierMessages.contains("Frecuencia cardiaca fuera de rango normal")) {
+          if (!outlierMessages
+              .contains("Frecuencia cardiaca fuera de rango normal")) {
             outlierMessages.add("Frecuencia cardiaca fuera de rango normal");
           }
         }
@@ -1949,14 +2107,20 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(20),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2))
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Icon(Icons.show_chart, size: isSmall ? 16 : 20, color: AppTheme.primary),
+                  Icon(Icons.show_chart,
+                      size: isSmall ? 16 : 20, color: AppTheme.primary),
                   const SizedBox(width: 8),
                   Text(
                     "Historial de mediciones",
@@ -1972,9 +2136,12 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 spacing: isSmall ? 8 : 16,
                 runSpacing: isSmall ? 4 : 6,
                 children: [
-                  _leyenda(const Color(0xFFEF4444), "Sistólica", accessibility),
-                  _leyenda(const Color(0xFF3B82F6), "Diastólica", accessibility),
-                  _leyenda(const Color(0xFFEC4899), "Frecuencia Cardiaca", accessibility),
+                  _leyenda(
+                      const Color(0xFFEF4444), "Sistólica", accessibility),
+                  _leyenda(
+                      const Color(0xFF3B82F6), "Diastólica", accessibility),
+                  _leyenda(const Color(0xFFEC4899), "Frecuencia Cardiaca",
+                      accessibility),
                 ],
               ),
               const SizedBox(height: 16),
@@ -1986,7 +2153,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       show: true,
                       drawVerticalLine: false,
                       horizontalInterval: (maxY - minY) / 4,
-                      getDrawingHorizontalLine: (value) => FlLine(color: AppTheme.gray200, strokeWidth: 1, dashArray: [5, 5]),
+                      getDrawingHorizontalLine: (value) => FlLine(
+                          color: AppTheme.gray200,
+                          strokeWidth: 1,
+                          dashArray: [5, 5]),
                     ),
                     titlesData: FlTitlesData(
                       leftTitles: AxisTitles(
@@ -1997,7 +2167,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           getTitlesWidget: (value, meta) => Text(
                             value.toInt().toString(),
                             style: TextStyle(
-                              fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                              fontSize:
+                                  (isSmall ? 10 : 12) * accessibility.fontScale,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -2009,7 +2180,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           reservedSize: isSmall ? 30 : 40,
                           getTitlesWidget: (value, meta) {
                             final int index = value.toInt();
-                            if (index < 0 || index >= signos.length) return const SizedBox();
+                            if (index < 0 || index >= signos.length) {
+                              return const SizedBox();
+                            }
                             final fecha = signos[index]["fechaRegistro"];
                             if (fecha == null) return const SizedBox();
                             try {
@@ -2021,14 +2194,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                                     Text(
                                       "${f.day}",
                                       style: TextStyle(
-                                        fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                        fontSize: (isSmall ? 10 : 12) *
+                                            accessibility.fontScale,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
                                     Text(
                                       _meses[f.month - 1],
                                       style: TextStyle(
-                                        fontSize: (isSmall ? 8 : 10) * accessibility.fontScale,
+                                        fontSize: (isSmall ? 8 : 10) *
+                                            accessibility.fontScale,
                                         color: AppTheme.gray500,
                                       ),
                                     ),
@@ -2038,16 +2213,23 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                             } catch (_) {
                               return Text(
                                 "${index + 1}",
-                                style: TextStyle(fontSize: (isSmall ? 10 : 12) * accessibility.fontScale),
+                                style: TextStyle(
+                                    fontSize: (isSmall ? 10 : 12) *
+                                        accessibility.fontScale),
                               );
                             }
                           },
                         ),
                       ),
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
+                      topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
                     ),
-                    borderData: FlBorderData(show: true, border: Border.all(color: AppTheme.gray200, width: 1)),
+                    borderData: FlBorderData(
+                        show: true,
+                        border:
+                            Border.all(color: AppTheme.gray200, width: 1)),
                     minY: minY,
                     maxY: maxY,
                     lineTouchData: LineTouchData(
@@ -2058,25 +2240,36 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           return touchedSpots.map((touchedSpot) {
                             final String nombre;
                             switch (touchedSpot.barIndex) {
-                              case 0: nombre = "Presión Sistólica";
-                              break;
-                              case 1: nombre = "Presión Diastólica";
-                              break;
-                              default: nombre = "Frecuencia Cardiaca";
+                              case 0:
+                                nombre = "Presión Sistólica";
+                                break;
+                              case 1:
+                                nombre = "Presión Diastólica";
+                                break;
+                              default:
+                                nombre = "Frecuencia Cardiaca";
                             }
-                            String unidad = touchedSpot.barIndex == 2 ? " lpm" : " mmHg";
+                            String unidad = touchedSpot.barIndex == 2
+                                ? " lpm"
+                                : " mmHg";
                             return LineTooltipItem(
                               "$nombre: ${touchedSpot.y.toInt()}$unidad",
-                              const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                              const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600),
                             );
                           }).toList();
                         },
                       ),
                     ),
                     lineBarsData: [
-                      _crearLineaConOutliers("presionSistolica", const Color(0xFFEF4444), false, minY, maxY),
-                      _crearLineaConOutliers("presionDiastolica", const Color(0xFF3B82F6), true, minY, maxY),
-                      _crearLineaConOutliers("frecuenciaCardiaca", const Color(0xFFEC4899), false, minY, maxY),
+                      _crearLineaConOutliers("presionSistolica",
+                          const Color(0xFFEF4444), false, minY, maxY),
+                      _crearLineaConOutliers("presionDiastolica",
+                          const Color(0xFF3B82F6), true, minY, maxY),
+                      _crearLineaConOutliers("frecuenciaCardiaca",
+                          const Color(0xFFEC4899), false, minY, maxY),
                     ],
                   ),
                 ),
@@ -2088,10 +2281,14 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           const SizedBox(height: 12),
           Container(
             padding: EdgeInsets.all(isSmall ? 8 : 12),
-            decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.orange.shade200)),
+            decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.orange.shade200)),
             child: Row(
               children: [
-                Icon(Icons.warning_amber_rounded, size: isSmall ? 16 : 20, color: Colors.orange.shade700),
+                Icon(Icons.warning_amber_rounded,
+                    size: isSmall ? 16 : 20, color: Colors.orange.shade700),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -2100,7 +2297,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       Text(
                         "¡Atención! Valores fuera de rango",
                         style: TextStyle(
-                          fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 11 : 13) * accessibility.fontScale,
                           fontWeight: FontWeight.bold,
                           color: Colors.orange,
                         ),
@@ -2108,13 +2306,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       const SizedBox(height: 4),
                       Wrap(
                         spacing: 8,
-                        children: outlierMessages.map((msg) => Text(
-                          "• $msg",
-                          style: TextStyle(
-                            fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
-                            color: Colors.orange.shade700,
-                          ),
-                        )).toList(),
+                        children: outlierMessages
+                            .map((msg) => Text(
+                                  "• $msg",
+                                  style: TextStyle(
+                                    fontSize: (isSmall ? 10 : 12) *
+                                        accessibility.fontScale,
+                                    color: Colors.orange.shade700,
+                                  ),
+                                ))
+                            .toList(),
                       ),
                     ],
                   ),
@@ -2127,10 +2328,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  LineChartBarData _crearLineaConOutliers(String key, Color color, bool dashed, double minY, double maxY) {
+  LineChartBarData _crearLineaConOutliers(
+      String key, Color color, bool dashed, double minY, double maxY) {
     List<FlSpot> spots = [];
     List<bool> isOutlier = [];
-    
+
     for (int i = 0; i < signos.length; i++) {
       double value = double.tryParse(signos[i][key]?.toString() ?? "0") ?? 0;
       bool outlier = value < minY || value > maxY;
@@ -2138,7 +2340,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       double displayValue = value.clamp(minY, maxY);
       spots.add(FlSpot(i.toDouble(), displayValue));
     }
-    
+
     return LineChartBarData(
       spots: spots,
       isCurved: true,
@@ -2158,27 +2360,30 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           );
         },
       ),
-      belowBarData: BarAreaData(show: true, color: color.withOpacity(0.08), cutOffY: minY),
+      belowBarData: BarAreaData(
+          show: true, color: color.withOpacity(0.08), cutOffY: minY),
       aboveBarData: BarAreaData(show: false),
     );
   }
 
-  // ==============================================
-  // 📊 RESUMEN DE SIGNOS GRANDE
-  // ==============================================
   Widget _buildSignosResumenGrande(AccessibilityProvider accessibility) {
     final s = signos.first;
     final isSmall = _isSmallScreen(context);
-    final int sistolica = int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
-    final int diastolica = int.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0;
-    final int fc = int.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
-    final int spo2 = int.tryParse(s["saturacionOxigeno"]?.toString() ?? "0") ?? 0;
+    final int sistolica =
+        int.tryParse(s["presionSistolica"]?.toString() ?? "0") ?? 0;
+    final int diastolica =
+        int.tryParse(s["presionDiastolica"]?.toString() ?? "0") ?? 0;
+    final int fc =
+        int.tryParse(s["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
+    final int spo2 =
+        int.tryParse(s["saturacionOxigeno"]?.toString() ?? "0") ?? 0;
 
     return Column(
       children: [
         Row(
           children: [
-            const Icon(Icons.calendar_today_outlined, size: 16, color: AppTheme.gray500),
+            const Icon(Icons.calendar_today_outlined,
+                size: 16, color: AppTheme.gray500),
             const SizedBox(width: 8),
             Text(
               "Última medición: ${_formatFecha(s["fechaRegistro"])}",
@@ -2253,13 +2458,18 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     required AccessibilityProvider accessibility,
   }) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Container(
       padding: EdgeInsets.all(isSmall ? 14 : 20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2283,7 +2493,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     Text(
                       titulo,
                       style: TextStyle(
-                        fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                        fontSize:
+                            (isSmall ? 13 : 15) * accessibility.fontScale,
                         fontWeight: FontWeight.w600,
                         color: AppTheme.gray500,
                       ),
@@ -2295,7 +2506,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           TextSpan(
                             text: valor,
                             style: TextStyle(
-                              fontSize: (isSmall ? 32 : 40) * accessibility.fontScale,
+                              fontSize: (isSmall ? 32 : 40) *
+                                  accessibility.fontScale,
                               fontWeight: FontWeight.bold,
                               color: valorColor,
                             ),
@@ -2303,7 +2515,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           TextSpan(
                             text: "  $unidad",
                             style: TextStyle(
-                              fontSize: (isSmall ? 13 : 16) * accessibility.fontScale,
+                              fontSize: (isSmall ? 13 : 16) *
+                                  accessibility.fontScale,
                               color: AppTheme.gray500,
                             ),
                           ),
@@ -2344,13 +2557,18 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     required AccessibilityProvider accessibility,
   }) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Container(
       padding: EdgeInsets.all(isSmall ? 12 : 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2380,7 +2598,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 TextSpan(
                   text: valor,
                   style: TextStyle(
-                    fontSize: (isSmall ? 28 : 34) * accessibility.fontScale,
+                    fontSize:
+                        (isSmall ? 28 : 34) * accessibility.fontScale,
                     fontWeight: FontWeight.bold,
                     color: valorColor,
                   ),
@@ -2388,7 +2607,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 TextSpan(
                   text: " $unidad",
                   style: TextStyle(
-                    fontSize: (isSmall ? 12 : 14) * accessibility.fontScale,
+                    fontSize:
+                        (isSmall ? 12 : 14) * accessibility.fontScale,
                     color: AppTheme.gray500,
                   ),
                 ),
@@ -2403,29 +2623,55 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   }
 
   Widget _estadoBadgePresion(int sistolica, AccessibilityProvider accessibility) {
-    if (sistolica < 120) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1), AppTheme.success, accessibility);
-    if (sistolica < 130) return _badgeWidget("Un poco elevada", AppTheme.warning.withOpacity(0.1), AppTheme.warning, accessibility);
-    if (sistolica < 140) return _badgeWidget("Elevada", AppTheme.warning.withOpacity(0.15), AppTheme.warning, accessibility);
-    return _badgeWidget("Muy alta", AppTheme.danger.withOpacity(0.1), AppTheme.danger, accessibility);
+    if (sistolica < 120) {
+      return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1),
+          AppTheme.success, accessibility);
+    }
+    if (sistolica < 130) {
+      return _badgeWidget("Un poco elevada", AppTheme.warning.withOpacity(0.1),
+          AppTheme.warning, accessibility);
+    }
+    if (sistolica < 140) {
+      return _badgeWidget("Elevada", AppTheme.warning.withOpacity(0.15),
+          AppTheme.warning, accessibility);
+    }
+    return _badgeWidget("Muy alta", AppTheme.danger.withOpacity(0.1),
+        AppTheme.danger, accessibility);
   }
 
   Widget _estadoBadgeFC(int fc, AccessibilityProvider accessibility) {
-    if (fc >= 60 && fc <= 100) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1), AppTheme.success, accessibility);
-    if (fc < 60) return _badgeWidget("Baja", AppTheme.warning.withOpacity(0.1), AppTheme.warning, accessibility);
-    return _badgeWidget("Alta", AppTheme.warning.withOpacity(0.15), AppTheme.warning, accessibility);
+    if (fc >= 60 && fc <= 100) {
+      return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1),
+          AppTheme.success, accessibility);
+    }
+    if (fc < 60) {
+      return _badgeWidget("Baja", AppTheme.warning.withOpacity(0.1),
+          AppTheme.warning, accessibility);
+    }
+    return _badgeWidget("Alta", AppTheme.warning.withOpacity(0.15),
+        AppTheme.warning, accessibility);
   }
 
   Widget _estadoBadgeSpo2(int spo2, AccessibilityProvider accessibility) {
-    if (spo2 >= 95) return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1), AppTheme.success, accessibility);
-    if (spo2 >= 90) return _badgeWidget("Un poco bajo", AppTheme.warning.withOpacity(0.1), AppTheme.warning, accessibility);
-    return _badgeWidget("Muy bajo", AppTheme.danger.withOpacity(0.1), AppTheme.danger, accessibility);
+    if (spo2 >= 95) {
+      return _badgeWidget("Normal", AppTheme.success.withOpacity(0.1),
+          AppTheme.success, accessibility);
+    }
+    if (spo2 >= 90) {
+      return _badgeWidget("Un poco bajo", AppTheme.warning.withOpacity(0.1),
+          AppTheme.warning, accessibility);
+    }
+    return _badgeWidget("Muy bajo", AppTheme.danger.withOpacity(0.1),
+        AppTheme.danger, accessibility);
   }
 
-  Widget _badgeWidget(String texto, Color bg, Color fg, AccessibilityProvider accessibility) {
+  Widget _badgeWidget(String texto, Color bg, Color fg,
+      AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isSmall ? 8 : 12, vertical: isSmall ? 6 : 8),
+      padding: EdgeInsets.symmetric(
+          horizontal: isSmall ? 8 : 12, vertical: isSmall ? 6 : 8),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(10),
@@ -2444,8 +2690,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   Widget _barraPresion(int sistolica, AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
     const double minVal = 80, maxVal = 180;
-    final double progreso = ((sistolica - minVal) / (maxVal - minVal)).clamp(0.0, 1.0);
-    Color colorBarra = sistolica < 120 ? AppTheme.success : sistolica < 130 ? AppTheme.warning : sistolica < 140 ? const Color(0xFFF97316) : AppTheme.danger;
+    final double progreso =
+        ((sistolica - minVal) / (maxVal - minVal)).clamp(0.0, 1.0);
+    Color colorBarra = sistolica < 120
+        ? AppTheme.success
+        : sistolica < 130
+            ? AppTheme.warning
+            : sistolica < 140
+                ? const Color(0xFFF97316)
+                : AppTheme.danger;
     return Column(
       children: [
         Row(
@@ -2488,12 +2741,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  // ==============================================
-  // 📖 REFERENCIA DE SIGNOS
-  // ==============================================
   Widget _buildReferenciaSignos(AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Container(
       padding: EdgeInsets.all(isSmall ? 12 : 16),
       decoration: BoxDecoration(
@@ -2519,17 +2769,21 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
             ],
           ),
           const SizedBox(height: 12),
-          _filaReferencia("Presión arterial", "menos de 120/80 mmHg", accessibility),
-          _filaReferencia("Frecuencia cardiaca", "entre 60 y 100 lpm", accessibility),
-          _filaReferencia("Oxígeno en sangre", "entre 95% y 100%", accessibility),
+          _filaReferencia(
+              "Presión arterial", "menos de 120/80 mmHg", accessibility),
+          _filaReferencia(
+              "Frecuencia cardiaca", "entre 60 y 100 lpm", accessibility),
+          _filaReferencia(
+              "Oxígeno en sangre", "entre 95% y 100%", accessibility),
         ],
       ),
     );
   }
 
-  Widget _filaReferencia(String nombre, String valor, AccessibilityProvider accessibility) {
+  Widget _filaReferencia(
+      String nombre, String valor, AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Row(
@@ -2556,9 +2810,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  Widget _leyenda(Color color, String label, AccessibilityProvider accessibility) {
+  Widget _leyenda(
+      Color color, String label, AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -2574,33 +2829,59 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  // ==============================================
-  // 📊 RESUMEN DE SIGNOS (PEQUEÑO)
-  // ==============================================
   Widget _buildSignosResumen(AccessibilityProvider accessibility) {
     final ultimo = signos.isNotEmpty ? signos.first : null;
     final isSmall = _isSmallScreen(context);
-    final int sistolica = int.tryParse(ultimo?["presionSistolica"]?.toString() ?? "0") ?? 0;
-    final int fc = int.tryParse(ultimo?["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
-    final int spo2 = int.tryParse(ultimo?["saturacionOxigeno"]?.toString() ?? "0") ?? 0;
-    
+    final int sistolica =
+        int.tryParse(ultimo?["presionSistolica"]?.toString() ?? "0") ?? 0;
+    final int fc =
+        int.tryParse(ultimo?["frecuenciaCardiaca"]?.toString() ?? "0") ?? 0;
+    final int spo2 =
+        int.tryParse(ultimo?["saturacionOxigeno"]?.toString() ?? "0") ?? 0;
+
     return Row(
       children: [
-        _statCard("Presión", ultimo != null ? "${ultimo["presionSistolica"]}/${ultimo["presionDiastolica"]}" : "--/--", "mmHg", Icons.bloodtype, sistolica >= 140 ? AppTheme.danger : sistolica >= 120 ? AppTheme.warning : AppTheme.success, accessibility),
+        _statCard(
+            "Presión",
+            ultimo != null
+                ? "${ultimo["presionSistolica"]}/${ultimo["presionDiastolica"]}"
+                : "--/--",
+            "mmHg",
+            Icons.bloodtype,
+            sistolica >= 140
+                ? AppTheme.danger
+                : sistolica >= 120
+                    ? AppTheme.warning
+                    : AppTheme.success,
+            accessibility),
         SizedBox(width: isSmall ? 6 : 10),
-        _statCard("Frec. cardiaca", ultimo != null ? "$fc" : "--", "lpm", Icons.favorite, (fc >= 60 && fc <= 100) ? AppTheme.success : AppTheme.danger, accessibility),
+        _statCard(
+            "Frec. cardiaca",
+            ultimo != null ? "$fc" : "--",
+            "lpm",
+            Icons.favorite,
+            (fc >= 60 && fc <= 100) ? AppTheme.success : AppTheme.danger,
+            accessibility),
         SizedBox(width: isSmall ? 6 : 10),
-        _statCard("Oxígeno", ultimo != null ? "$spo2" : "--", "%", Icons.air, spo2 >= 95 ? AppTheme.success : AppTheme.danger, accessibility),
+        _statCard(
+            "Oxígeno",
+            ultimo != null ? "$spo2" : "--",
+            "%",
+            Icons.air,
+            spo2 >= 95 ? AppTheme.success : AppTheme.danger,
+            accessibility),
       ],
     );
   }
 
-  Widget _statCard(String label, String value, String unit, IconData icon, Color color, AccessibilityProvider accessibility) {
+  Widget _statCard(String label, String value, String unit, IconData icon,
+      Color color, AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Expanded(
       child: Container(
-        padding: EdgeInsets.symmetric(vertical: isSmall ? 12 : 16, horizontal: isSmall ? 8 : 12),
+        padding: EdgeInsets.symmetric(
+            vertical: isSmall ? 12 : 16, horizontal: isSmall ? 8 : 12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -2650,13 +2931,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   // 📋 TAB TRATAMIENTOS
   // ==============================================
-  Widget _tabTratamientos(AccessibilityProvider accessibility, bool isDark) {
+  Widget _tabTratamientos(
+      AccessibilityProvider accessibility, bool isDark) {
     if (tratamientos.isEmpty) {
-      return _buildEmpty("No hay tratamientos registrados", Icons.medication_outlined);
+      return _buildEmpty(
+          "No hay tratamientos registrados", Icons.medication_outlined);
     }
 
     final isSmall = _isSmallScreen(context);
-    
+
     return SingleChildScrollView(
       padding: EdgeInsets.all(isSmall ? 12 : 16),
       child: Column(
@@ -2701,7 +2984,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       Text(
                         "💊 Tus tratamientos activos",
                         style: TextStyle(
-                          fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 13 : 15) * accessibility.fontScale,
                           fontWeight: FontWeight.w600,
                           color: AppTheme.gray700,
                         ),
@@ -2710,7 +2994,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       Text(
                         "Toca cada tarjeta para ver los medicamentos",
                         style: TextStyle(
-                          fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 11 : 13) * accessibility.fontScale,
                           color: AppTheme.gray500,
                         ),
                       ),
@@ -2718,7 +3003,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppTheme.primary,
                     borderRadius: BorderRadius.circular(20),
@@ -2736,26 +3022,29 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
             ),
           ),
           const SizedBox(height: 16),
-          
           ...tratamientos.asMap().entries.map((entry) {
             final index = entry.key;
             final t = entry.value;
-            final idTratamiento = int.tryParse(t["idTratamiento"].toString()) ?? 0;
-            
+            final idTratamiento =
+                int.tryParse(t["idTratamiento"].toString()) ?? 0;
+
             return Container(
               margin: const EdgeInsets.only(bottom: 14),
               decoration: BoxDecoration(
                 color: isDark ? AppTheme.gray800 : Colors.white,
                 borderRadius: BorderRadius.circular(18),
-                boxShadow: isDark ? null : [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
+                boxShadow: isDark
+                    ? null
+                    : [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.06),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                 border: Border.all(
-                  color: _getTratamientoColor(t["estado"] ?? "").withOpacity(0.2),
+                  color: _getTratamientoColor(t["estado"] ?? "")
+                      .withOpacity(0.2),
                   width: 1.5,
                 ),
               ),
@@ -2770,7 +3059,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [
-                              _getTratamientoColor(t["estado"] ?? "").withOpacity(0.08),
+                              _getTratamientoColor(t["estado"] ?? "")
+                                  .withOpacity(0.08),
                               Colors.transparent,
                             ],
                             begin: Alignment.topLeft,
@@ -2790,7 +3080,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                                 gradient: LinearGradient(
                                   colors: [
                                     _getTratamientoColor(t["estado"] ?? ""),
-                                    _getTratamientoColor(t["estado"] ?? "").withOpacity(0.7),
+                                    _getTratamientoColor(t["estado"] ?? "")
+                                        .withOpacity(0.7),
                                   ],
                                 ),
                                 borderRadius: BorderRadius.circular(12),
@@ -2815,8 +3106,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                                     t["descripcion"] ?? "Tratamiento",
                                     style: TextStyle(
                                       fontWeight: FontWeight.w700,
-                                      fontSize: (isSmall ? 14 : 16) * accessibility.fontScale,
-                                      color: isDark ? AppTheme.white : AppTheme.gray700,
+                                      fontSize: (isSmall ? 14 : 16) *
+                                          accessibility.fontScale,
+                                      color: isDark
+                                          ? AppTheme.white
+                                          : AppTheme.gray700,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -2832,8 +3126,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                                           vertical: 3,
                                         ),
                                         decoration: BoxDecoration(
-                                          color: _getEstadoColor(t["estado"] ?? ""),
-                                          borderRadius: BorderRadius.circular(6),
+                                          color: _getEstadoColor(
+                                              t["estado"] ?? ""),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
                                         ),
                                         child: Text(
                                           _getEstadoTexto(t["estado"] ?? ""),
@@ -2856,7 +3152,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                                           Text(
                                             _formatFecha(t["fechaInicio"]),
                                             style: TextStyle(
-                                              fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                              fontSize: (isSmall ? 10 : 12) *
+                                                  accessibility.fontScale,
                                               color: AppTheme.gray500,
                                             ),
                                           ),
@@ -2888,7 +3185,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                                   Text(
                                     "${meds.length}",
                                     style: TextStyle(
-                                      fontSize: (isSmall ? 12 : 14) * accessibility.fontScale,
+                                      fontSize: (isSmall ? 12 : 14) *
+                                          accessibility.fontScale,
                                       fontWeight: FontWeight.bold,
                                       color: AppTheme.primary,
                                     ),
@@ -2899,17 +3197,19 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           ],
                         ),
                       ),
-                      
                       if (meds.isNotEmpty) ...[
                         const Divider(height: 1, color: AppTheme.gray200),
-                        ...meds.map((m) => _buildMedicamentoItem(m, accessibility, isDark)).toList(),
+                        ...meds
+                            .map((m) => _buildMedicamentoItem(
+                                m, accessibility, isDark))
+                            .toList(),
                       ] else ...[
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 20),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(
+                              const Icon(
                                 Icons.medication_outlined,
                                 size: 20,
                                 color: AppTheme.gray400,
@@ -2918,7 +3218,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                               Text(
                                 "Sin medicamentos asignados",
                                 style: TextStyle(
-                                  fontSize: (isSmall ? 12 : 14) * accessibility.fontScale,
+                                  fontSize: (isSmall ? 12 : 14) *
+                                      accessibility.fontScale,
                                   color: AppTheme.gray500,
                                   fontStyle: FontStyle.italic,
                                 ),
@@ -2927,7 +3228,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           ),
                         ),
                       ],
-                      
                       Container(
                         padding: EdgeInsets.all(isSmall ? 8 : 12),
                         decoration: BoxDecoration(
@@ -2950,21 +3250,25 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
                                         "Progreso",
                                         style: TextStyle(
-                                          fontSize: (isSmall ? 9 : 11) * accessibility.fontScale,
+                                          fontSize: (isSmall ? 9 : 11) *
+                                              accessibility.fontScale,
                                           color: AppTheme.gray500,
                                         ),
                                       ),
                                       Text(
                                         "${_calcularProgreso(t)}%",
                                         style: TextStyle(
-                                          fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                          fontSize: (isSmall ? 10 : 12) *
+                                              accessibility.fontScale,
                                           fontWeight: FontWeight.w600,
-                                          color: _getTratamientoColor(t["estado"] ?? ""),
+                                          color: _getTratamientoColor(
+                                              t["estado"] ?? ""),
                                         ),
                                       ),
                                     ],
@@ -2977,7 +3281,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                                       minHeight: isSmall ? 4 : 6,
                                       backgroundColor: AppTheme.gray200,
                                       valueColor: AlwaysStoppedAnimation<Color>(
-                                        _getTratamientoColor(t["estado"] ?? ""),
+                                        _getTratamientoColor(
+                                            t["estado"] ?? ""),
                                       ),
                                     ),
                                   ),
@@ -2998,14 +3303,13 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  // ==============================================
-  // 💊 ITEM DE MEDICAMENTO
-  // ==============================================
-  Widget _buildMedicamentoItem(Map<String, dynamic> m, AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildMedicamentoItem(Map<String, dynamic> m,
+      AccessibilityProvider accessibility, bool isDark) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Container(
-      padding: EdgeInsets.symmetric(horizontal: isSmall ? 12 : 16, vertical: isSmall ? 10 : 12),
+      padding: EdgeInsets.symmetric(
+          horizontal: isSmall ? 12 : 16, vertical: isSmall ? 10 : 12),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.gray800.withOpacity(0.5) : AppTheme.gray50,
         border: Border(
@@ -3054,7 +3358,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   runSpacing: 4,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: AppTheme.info.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -3062,14 +3367,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       child: Text(
                         m["dosis"] ?? "",
                         style: TextStyle(
-                          fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 10 : 12) * accessibility.fontScale,
                           color: AppTheme.info,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
                         color: AppTheme.warning.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(6),
@@ -3086,7 +3393,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           Text(
                             "Cada ${m["frecuencia"] ?? ""}",
                             style: TextStyle(
-                              fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                              fontSize:
+                                  (isSmall ? 10 : 12) * accessibility.fontScale,
                               color: AppTheme.warning,
                               fontWeight: FontWeight.w500,
                             ),
@@ -3115,10 +3423,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       ),
     );
   }
-
-  // ==============================================
-  // 🎨 FUNCIONES DE UTILIDAD PARA TRATAMIENTOS
-  // ==============================================
 
   Color _getTratamientoColor(String estado) {
     switch (estado.toLowerCase()) {
@@ -3177,18 +3481,18 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     if (tratamiento["fechaFin"] == null) {
       return 50.0;
     }
-    
+
     try {
       final inicio = DateTime.parse(tratamiento["fechaInicio"].toString());
       final fin = DateTime.parse(tratamiento["fechaFin"].toString());
       final ahora = DateTime.now();
-      
+
       if (ahora.isBefore(inicio)) return 0.0;
       if (ahora.isAfter(fin)) return 100.0;
-      
+
       final total = fin.difference(inicio).inDays;
       final transcurrido = ahora.difference(inicio).inDays;
-      
+
       if (total == 0) return 50.0;
       return (transcurrido / total * 100).clamp(0.0, 100.0);
     } catch (_) {
@@ -3201,7 +3505,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   Widget _tabSintomas(AccessibilityProvider accessibility, bool isDark) {
     final isSmall = _isSmallScreen(context);
-    
+
     return SingleChildScrollView(
       padding: EdgeInsets.all(isSmall ? 12 : 16),
       child: Column(
@@ -3229,7 +3533,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     Text(
                       "Mis Síntomas",
                       style: TextStyle(
-                        fontSize: (isSmall ? 16 : 18) * accessibility.fontScale,
+                        fontSize:
+                            (isSmall ? 16 : 18) * accessibility.fontScale,
                         fontWeight: FontWeight.bold,
                         color: isDark ? AppTheme.white : AppTheme.gray700,
                       ),
@@ -3237,7 +3542,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     Text(
                       "Registra cómo te sientes",
                       style: TextStyle(
-                        fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                        fontSize:
+                            (isSmall ? 11 : 13) * accessibility.fontScale,
                         color: AppTheme.gray500,
                       ),
                     ),
@@ -3245,7 +3551,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppTheme.warning,
                   borderRadius: BorderRadius.circular(20),
@@ -3265,7 +3572,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              icon: Icon(Icons.add_circle_outline, size: isSmall ? 16 : 20),
+              icon:
+                  Icon(Icons.add_circle_outline, size: isSmall ? 16 : 20),
               label: Text(
                 "Registrar síntoma",
                 style: TextStyle(
@@ -3289,23 +3597,22 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           if (sintomas.isEmpty)
             _buildEmpty("No hay síntomas registrados", Icons.healing)
           else
-            ...sintomas.map((s) => _buildSintomaCard(s, accessibility, isDark)),
+            ...sintomas
+                .map((s) => _buildSintomaCard(s, accessibility, isDark)),
         ],
       ),
     );
   }
 
-  // ==============================================
-  // 🤒 TARJETA DE SÍNTOMA
-  // ==============================================
-  Widget _buildSintomaCard(Map<String, dynamic> s, AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildSintomaCard(Map<String, dynamic> s,
+      AccessibilityProvider accessibility, bool isDark) {
     final isSmall = _isSmallScreen(context);
-    
+
     final prioridad = s["prioridad"]?.toString().toUpperCase() ?? "MEDIA";
     Color severityColor;
     IconData severityIcon;
     String severityLabel;
-    
+
     switch (prioridad) {
       case "ALTA":
       case "CRITICA":
@@ -3328,20 +3635,22 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         severityIcon = Icons.circle_outlined;
         severityLabel = "Sin clasificar";
     }
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: isDark ? AppTheme.gray800 : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: isDark ? null : [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
         border: Border.all(
           color: severityColor.withOpacity(0.2),
           width: 1.5,
@@ -3390,7 +3699,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         s["titulo"] ?? "Síntoma",
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
-                          fontSize: (isSmall ? 14 : 16) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 14 : 16) * accessibility.fontScale,
                           color: isDark ? AppTheme.white : AppTheme.gray700,
                         ),
                         maxLines: 1,
@@ -3402,7 +3712,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         runSpacing: 4,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 2),
                             decoration: BoxDecoration(
                               color: severityColor.withOpacity(0.15),
                               borderRadius: BorderRadius.circular(6),
@@ -3410,7 +3721,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                             child: Text(
                               severityLabel,
                               style: TextStyle(
-                                fontSize: (isSmall ? 9 : 11) * accessibility.fontScale,
+                                fontSize: (isSmall ? 9 : 11) *
+                                    accessibility.fontScale,
                                 fontWeight: FontWeight.w600,
                                 color: severityColor,
                               ),
@@ -3428,7 +3740,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                               Text(
                                 _formatFecha(s["fecha"]),
                                 style: TextStyle(
-                                  fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                  fontSize: (isSmall ? 10 : 12) *
+                                      accessibility.fontScale,
                                   color: AppTheme.gray500,
                                 ),
                               ),
@@ -3441,7 +3754,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 ),
                 if (s["fecha"] != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppTheme.gray100,
                       borderRadius: BorderRadius.circular(8),
@@ -3449,7 +3763,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     child: Text(
                       _formatHora(s["fecha"]),
                       style: TextStyle(
-                        fontSize: (isSmall ? 9 : 11) * accessibility.fontScale,
+                        fontSize:
+                            (isSmall ? 9 : 11) * accessibility.fontScale,
                         color: AppTheme.gray500,
                       ),
                     ),
@@ -3457,7 +3772,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               ],
             ),
           ),
-          if (s["descripcion"] != null && s["descripcion"].toString().isNotEmpty)
+          if (s["descripcion"] != null &&
+              s["descripcion"].toString().isNotEmpty)
             Padding(
               padding: EdgeInsets.all(isSmall ? 10 : 14),
               child: Text(
@@ -3470,9 +3786,13 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               ),
             ),
           Container(
-            padding: EdgeInsets.symmetric(horizontal: isSmall ? 10 : 14, vertical: isSmall ? 8 : 10),
+            padding: EdgeInsets.symmetric(
+                horizontal: isSmall ? 10 : 14,
+                vertical: isSmall ? 8 : 10),
             decoration: BoxDecoration(
-              color: isDark ? AppTheme.gray800.withOpacity(0.5) : AppTheme.gray50,
+              color: isDark
+                  ? AppTheme.gray800.withOpacity(0.5)
+                  : AppTheme.gray50,
               borderRadius: const BorderRadius.only(
                 bottomLeft: Radius.circular(17),
                 bottomRight: Radius.circular(17),
@@ -3495,7 +3815,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       Text(
                         "Prioridad: $severityLabel",
                         style: TextStyle(
-                          fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 10 : 12) * accessibility.fontScale,
                           color: AppTheme.gray500,
                         ),
                       ),
@@ -3503,7 +3824,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppTheme.success.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -3523,7 +3845,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       Text(
                         "Activo",
                         style: TextStyle(
-                          fontSize: (isSmall ? 9 : 11) * accessibility.fontScale,
+                          fontSize: (isSmall ? 9 : 11) *
+                              accessibility.fontScale,
                           color: AppTheme.success,
                           fontWeight: FontWeight.w500,
                         ),
@@ -3542,9 +3865,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   // 📋 TAB RECOMENDACIONES
   // ==============================================
-  Widget _tabRecomendaciones(AccessibilityProvider accessibility, bool isDark) {
+  Widget _tabRecomendaciones(
+      AccessibilityProvider accessibility, bool isDark) {
     final isSmall = _isSmallScreen(context);
-    
+
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: EdgeInsets.all(isSmall ? 12 : 16),
@@ -3558,13 +3882,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
             ),
             child: Row(
               children: [
-                Icon(Icons.touch_app, color: AppTheme.info, size: isSmall ? 16 : 20),
+                Icon(Icons.touch_app,
+                    color: AppTheme.info, size: isSmall ? 16 : 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     "Toque para ver detalles",
                     style: TextStyle(
-                      fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                      fontSize:
+                          (isSmall ? 11 : 13) * accessibility.fontScale,
                       color: AppTheme.info,
                     ),
                   ),
@@ -3574,20 +3900,24 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
           ),
           const SizedBox(height: 16),
           if (recomendaciones.isEmpty)
-            _buildEmpty("No hay recomendaciones de su médico aún", Icons.lightbulb_outline)
+            _buildEmpty("No hay recomendaciones de su médico aún",
+                Icons.lightbulb_outline)
           else
-            ...recomendaciones.asMap().entries.map((entry) => _buildRecomendacionCard(entry.value, entry.key + 1, accessibility, isDark)),
+            ...recomendaciones.asMap().entries.map((entry) =>
+                _buildRecomendacionCard(
+                    entry.value, entry.key + 1, accessibility, isDark)),
         ],
       ),
     );
   }
 
-  Widget _buildRecomendacionCard(Map<String, dynamic> r, int numero, AccessibilityProvider accessibility, bool isDark) {
+  Widget _buildRecomendacionCard(Map<String, dynamic> r, int numero,
+      AccessibilityProvider accessibility, bool isDark) {
     final isSmall = _isSmallScreen(context);
     final categoria = r["categoria"] ?? "Otros";
     final colorCategoria = _getColorCategoria(categoria);
     final iconoCategoria = _getIconoCategoria(categoria);
-    
+
     return GestureDetector(
       onTap: () => _verDetalleRecomendacion(r),
       child: AnimatedContainer(
@@ -3596,8 +3926,14 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 10, offset: const Offset(0, 2))],
-          border: Border.all(color: colorCategoria.withOpacity(0.3), width: 1),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 10,
+                offset: const Offset(0, 2))
+          ],
+          border: Border.all(
+              color: colorCategoria.withOpacity(0.3), width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -3639,7 +3975,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         Text(
                           categoria,
                           style: TextStyle(
-                            fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                            fontSize: (isSmall ? 10 : 12) *
+                                accessibility.fontScale,
                             color: colorCategoria,
                             fontWeight: FontWeight.w600,
                           ),
@@ -3648,9 +3985,12 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         Text(
                           r["titulo"] ?? "Recomendación Médica",
                           style: TextStyle(
-                            fontSize: (isSmall ? 14 : 16) * accessibility.fontScale,
+                            fontSize: (isSmall ? 14 : 16) *
+                                accessibility.fontScale,
                             fontWeight: FontWeight.bold,
-                            color: isDark ? AppTheme.white : AppTheme.gray700,
+                            color: isDark
+                                ? AppTheme.white
+                                : AppTheme.gray700,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -3664,7 +4004,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       color: colorCategoria.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(iconoCategoria, color: colorCategoria, size: isSmall ? 16 : 20),
+                    child: Icon(iconoCategoria,
+                        color: colorCategoria, size: isSmall ? 16 : 20),
                   ),
                 ],
               ),
@@ -3677,8 +4018,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   Text(
                     r["descripcion"] ?? "",
                     style: TextStyle(
-                      fontSize: (isSmall ? 12 : 14) * accessibility.fontScale,
-                      color: isDark ? AppTheme.gray300 : AppTheme.gray500,
+                      fontSize:
+                          (isSmall ? 12 : 14) * accessibility.fontScale,
+                      color:
+                          isDark ? AppTheme.gray300 : AppTheme.gray500,
                       height: 1.4,
                     ),
                     maxLines: 2,
@@ -3688,7 +4031,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: AppTheme.info.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
@@ -3696,12 +4040,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.calendar_today, size: isSmall ? 10 : 12, color: AppTheme.info),
+                            Icon(Icons.calendar_today,
+                                size: isSmall ? 10 : 12,
+                                color: AppTheme.info),
                             const SizedBox(width: 4),
                             Text(
                               _formatFecha(r["fecha"]),
                               style: TextStyle(
-                                fontSize: (isSmall ? 9 : 11) * accessibility.fontScale,
+                                fontSize: (isSmall ? 9 : 11) *
+                                    accessibility.fontScale,
                                 color: AppTheme.info,
                               ),
                             ),
@@ -3714,13 +4061,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           Text(
                             "Ver detalles",
                             style: TextStyle(
-                              fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                              fontSize: (isSmall ? 10 : 12) *
+                                  accessibility.fontScale,
                               color: AppTheme.primary,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(width: 4),
-                          Icon(Icons.chevron_right, size: isSmall ? 14 : 16, color: AppTheme.primary),
+                          Icon(Icons.chevron_right,
+                              size: isSmall ? 14 : 16,
+                              color: AppTheme.primary),
                         ],
                       ),
                     ],
@@ -3739,7 +4089,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   Widget _tabRecordatorios(AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
-    
+
     return SingleChildScrollView(
       padding: EdgeInsets.all(isSmall ? 10 : 16),
       child: Column(
@@ -3786,7 +4136,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       Text(
                         "🫀 Recordatorios de Presión Arterial",
                         style: TextStyle(
-                          fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 13 : 15) * accessibility.fontScale,
                           fontWeight: FontWeight.bold,
                           color: AppTheme.gray700,
                         ),
@@ -3794,7 +4145,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       Text(
                         "Toma tu presión en los horarios recomendados",
                         style: TextStyle(
-                          fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                          fontSize:
+                              (isSmall ? 10 : 12) * accessibility.fontScale,
                           color: AppTheme.gray500,
                         ),
                       ),
@@ -3809,28 +4161,32 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               ],
             ),
           ),
-          
-          // Recordatorios de presión
           ..._recordatoriosPresionBD.entries.map((entry) {
             final key = entry.key;
             final recordatorio = entry.value;
             final etiqueta = recordatorio['etiqueta'] ?? 'Presión';
             final activo = _activoPresionLocal[key] ?? false;
-            final hora = _horaPresionOriginal[key] ?? recordatorio['hora'] ?? '--:--';
-            final icono = key.contains('mañana') 
-                ? Icons.wb_sunny 
-                : key.contains('tarde') 
-                    ? Icons.wb_sunny_outlined 
+            final hora = _horaPresionOriginal[key] ??
+                recordatorio['hora'] ??
+                '--:--';
+            final icono = key.contains('mañana')
+                ? Icons.wb_sunny
+                : key.contains('tarde')
+                    ? Icons.wb_sunny_outlined
                     : Icons.nightlight_round;
-            
+
             return Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: EdgeInsets.all(isSmall ? 10 : 14),
               decoration: BoxDecoration(
-                color: activo ? AppTheme.danger.withOpacity(0.05) : Colors.white,
+                color: activo
+                    ? AppTheme.danger.withOpacity(0.05)
+                    : Colors.white,
                 borderRadius: BorderRadius.circular(14),
                 border: Border.all(
-                  color: activo ? AppTheme.danger.withOpacity(0.4) : AppTheme.gray200,
+                  color: activo
+                      ? AppTheme.danger.withOpacity(0.4)
+                      : AppTheme.gray200,
                   width: activo ? 2 : 1,
                 ),
                 boxShadow: [
@@ -3847,7 +4203,9 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   Container(
                     padding: EdgeInsets.all(isSmall ? 8 : 10),
                     decoration: BoxDecoration(
-                      color: activo ? AppTheme.danger.withOpacity(0.15) : AppTheme.gray200.withOpacity(0.3),
+                      color: activo
+                          ? AppTheme.danger.withOpacity(0.15)
+                          : AppTheme.gray200.withOpacity(0.3),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -3866,15 +4224,19 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           etiqueta,
                           style: TextStyle(
                             fontWeight: FontWeight.w600,
-                            fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
-                            color: activo ? AppTheme.gray700 : AppTheme.gray500,
+                            fontSize: (isSmall ? 13 : 15) *
+                                accessibility.fontScale,
+                            color: activo
+                                ? AppTheme.gray700
+                                : AppTheme.gray500,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           "Tomar presión arterial",
                           style: TextStyle(
-                            fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                            fontSize: (isSmall ? 10 : 12) *
+                                accessibility.fontScale,
                             color: AppTheme.gray500,
                           ),
                         ),
@@ -3882,12 +4244,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           const SizedBox(height: 4),
                           Row(
                             children: [
-                              Icon(Icons.access_time, size: isSmall ? 12 : 14, color: AppTheme.danger),
+                              Icon(Icons.access_time,
+                                  size: isSmall ? 12 : 14,
+                                  color: AppTheme.danger),
                               const SizedBox(width: 4),
                               Text(
                                 "$hora hrs",
                                 style: TextStyle(
-                                  fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                  fontSize: (isSmall ? 10 : 12) *
+                                      accessibility.fontScale,
                                   color: AppTheme.danger,
                                   fontWeight: FontWeight.w500,
                                 ),
@@ -3900,7 +4265,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           Text(
                             "Activar recordatorio de presión",
                             style: TextStyle(
-                              fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                              fontSize: (isSmall ? 10 : 12) *
+                                  accessibility.fontScale,
                               color: AppTheme.gray500,
                             ),
                           ),
@@ -3913,17 +4279,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     activeColor: AppTheme.danger,
                     inactiveThumbColor: AppTheme.gray300,
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    onChanged: (v) => _toggleRecordatorioPresion(key, v, recordatorio),
+                    onChanged: (v) =>
+                        _toggleRecordatorioPresion(key, v, recordatorio),
                   ),
                 ],
               ),
             );
           }).toList(),
-          
           const SizedBox(height: 16),
           Divider(color: AppTheme.gray200, thickness: 1),
           const SizedBox(height: 16),
-          
           // ✅ SECCIÓN: RECORDATORIOS DE MEDICAMENTOS
           if (_medicamentosFlat.isNotEmpty) ...[
             Container(
@@ -3966,7 +4331,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         Text(
                           "💊 Recordatorios de Medicamentos",
                           style: TextStyle(
-                            fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                            fontSize: (isSmall ? 13 : 15) *
+                                accessibility.fontScale,
                             fontWeight: FontWeight.bold,
                             color: AppTheme.gray700,
                           ),
@@ -3974,7 +4340,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         Text(
                           "No olvides tomar tus medicamentos",
                           style: TextStyle(
-                            fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                            fontSize: (isSmall ? 10 : 12) *
+                                accessibility.fontScale,
                             color: AppTheme.gray500,
                           ),
                         ),
@@ -3989,20 +4356,23 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 ],
               ),
             ),
-            
             ..._medicamentosFlat.map((m) {
               final key = m["key"] as String;
               final activo = _activoLocal[key] ?? false;
               String horaMostrar = _horaOriginal[key] ?? "--:--";
-              
+
               return Container(
                 margin: const EdgeInsets.only(bottom: 10),
                 padding: EdgeInsets.all(isSmall ? 10 : 14),
                 decoration: BoxDecoration(
-                  color: activo ? AppTheme.success.withOpacity(0.05) : Colors.white,
+                  color: activo
+                      ? AppTheme.success.withOpacity(0.05)
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: activo ? AppTheme.success.withOpacity(0.4) : AppTheme.gray200,
+                    color: activo
+                        ? AppTheme.success.withOpacity(0.4)
+                        : AppTheme.gray200,
                     width: activo ? 2 : 1,
                   ),
                   boxShadow: [
@@ -4019,12 +4389,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     Container(
                       padding: EdgeInsets.all(isSmall ? 8 : 10),
                       decoration: BoxDecoration(
-                        color: activo ? AppTheme.success.withOpacity(0.15) : AppTheme.gray200.withOpacity(0.3),
+                        color: activo
+                            ? AppTheme.success.withOpacity(0.15)
+                            : AppTheme.gray200.withOpacity(0.3),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
                         Icons.medication,
-                        color: activo ? AppTheme.success : AppTheme.gray500,
+                        color: activo
+                            ? AppTheme.success
+                            : AppTheme.gray500,
                         size: isSmall ? 20 : 24,
                       ),
                     ),
@@ -4038,8 +4412,11 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                             m["nombre"] ?? "Medicamento",
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
-                              color: activo ? AppTheme.gray700 : AppTheme.gray500,
+                              fontSize: (isSmall ? 13 : 15) *
+                                  accessibility.fontScale,
+                              color: activo
+                                  ? AppTheme.gray700
+                                  : AppTheme.gray500,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -4048,7 +4425,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                           Text(
                             "${m["dosis"] ?? ""} - Cada ${m["frecuencia"] ?? ""}",
                             style: TextStyle(
-                              fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                              fontSize: (isSmall ? 10 : 12) *
+                                  accessibility.fontScale,
                               color: AppTheme.gray500,
                             ),
                             maxLines: 1,
@@ -4058,12 +4436,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                             const SizedBox(height: 4),
                             Row(
                               children: [
-                                Icon(Icons.access_time, size: isSmall ? 12 : 14, color: AppTheme.success),
+                                Icon(Icons.access_time,
+                                    size: isSmall ? 12 : 14,
+                                    color: AppTheme.success),
                                 const SizedBox(width: 4),
                                 Text(
                                   "$horaMostrar hrs",
                                   style: TextStyle(
-                                    fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                    fontSize: (isSmall ? 10 : 12) *
+                                        accessibility.fontScale,
                                     color: AppTheme.success,
                                     fontWeight: FontWeight.w500,
                                   ),
@@ -4076,7 +4457,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                             Text(
                               "Activar recordatorio",
                               style: TextStyle(
-                                fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                fontSize: (isSmall ? 10 : 12) *
+                                    accessibility.fontScale,
                                 color: AppTheme.gray500,
                               ),
                             ),
@@ -4088,7 +4470,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                       value: activo,
                       activeColor: AppTheme.success,
                       inactiveThumbColor: AppTheme.gray300,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      materialTapTargetSize:
+                          MaterialTapTargetSize.shrinkWrap,
                       onChanged: (v) => _toggleRecordatorio(key, v, m),
                     ),
                   ],
@@ -4101,16 +4484,19 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               decoration: BoxDecoration(
                 color: AppTheme.gray50,
                 borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppTheme.gray200.withOpacity(0.5)),
+                border: Border.all(
+                    color: AppTheme.gray200.withOpacity(0.5)),
               ),
               child: Column(
                 children: [
-                  Icon(Icons.medication_outlined, size: isSmall ? 40 : 50, color: AppTheme.gray300),
+                  Icon(Icons.medication_outlined,
+                      size: isSmall ? 40 : 50, color: AppTheme.gray300),
                   const SizedBox(height: 10),
                   Text(
                     "No hay medicamentos registrados",
                     style: TextStyle(
-                      fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                      fontSize:
+                          (isSmall ? 13 : 15) * accessibility.fontScale,
                       color: AppTheme.gray500,
                       fontWeight: FontWeight.w500,
                     ),
@@ -4119,7 +4505,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   Text(
                     "Los medicamentos aparecerán cuando tengas tratamientos activos",
                     style: TextStyle(
-                      fontSize: (isSmall ? 11 : 12) * accessibility.fontScale,
+                      fontSize:
+                          (isSmall ? 11 : 12) * accessibility.fontScale,
                       color: AppTheme.gray400,
                     ),
                     textAlign: TextAlign.center,
@@ -4128,7 +4515,6 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
               ),
             ),
           ],
-          
           const SizedBox(height: 80),
         ],
       ),
@@ -4141,25 +4527,60 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   Widget _buildAccionesGrid(AccessibilityProvider accessibility) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isSmall = screenWidth < 360;
-    
+
     final items = [
-      {"label": "Calendario", "icon": Icons.calendar_month, "color": AppTheme.warning, "fn": abrirCalendario},
-      {"label": "Síntoma", "icon": Icons.add_circle, "color": const Color(0xFF8B5CF6), "fn": crearSintoma},
-      {"label": "Agendar", "icon": Icons.event_note, "color": AppTheme.primary, "fn": abrirAgendar},
-      {"label": "Chat", "icon": Icons.chat_bubble, "color": AppTheme.info, "fn": abrirChatGeneral},
-      {"label": "Mis citas", "icon": Icons.event_available, "color": AppTheme.success, "fn": abrirCitas},
-      {"label": "Mis tomas", "icon": Icons.medication_liquid, "color": const Color(0xFF059669), "fn": () => Navigator.push(context, MaterialPageRoute(builder: (_) => TomasScreen(idPaciente: widget.idPaciente)))},
-      {"label": "Cuidadores", "icon": Icons.people, "color": const Color(0xFF8B5CF6), "fn": () => Navigator.push(context, MaterialPageRoute(builder: (_) => CuidadoresScreen(idPaciente: widget.idPaciente)))},
+      {
+        "label": "Calendario",
+        "icon": Icons.calendar_month,
+        "color": AppTheme.warning,
+        "fn": abrirCalendario
+      },
+      {
+        "label": "Síntoma",
+        "icon": Icons.add_circle,
+        "color": const Color(0xFF8B5CF6),
+        "fn": crearSintoma
+      },
+      {
+        "label": "Agendar",
+        "icon": Icons.event_note,
+        "color": AppTheme.primary,
+        "fn": abrirAgendar
+      },
+      {
+        "label": "Chat",
+        "icon": Icons.chat_bubble,
+        "color": AppTheme.info,
+        "fn": abrirChatGeneral
+      },
+      {
+        "label": "Mis citas",
+        "icon": Icons.event_available,
+        "color": AppTheme.success,
+        "fn": abrirCitas
+      },
+      {
+        "label": "Mis tomas",
+        "icon": Icons.medication_liquid,
+        "color": const Color(0xFF059669),
+        "fn": _abrirTomas
+      },
+      {
+        "label": "Cuidadores",
+        "icon": Icons.people,
+        "color": const Color(0xFF8B5CF6),
+        "fn": _abrirCuidadores
+      },
     ];
-    
-    final crossAxisCount = kIsWeb 
-        ? 6 
-        : screenWidth > 500 
-            ? 4 
-            : screenWidth > 360 
-                ? 3 
+
+    final crossAxisCount = kIsWeb
+        ? 6
+        : screenWidth > 500
+            ? 4
+            : screenWidth > 360
+                ? 3
                 : 2;
-    
+
     return GridView.count(
       crossAxisCount: crossAxisCount,
       crossAxisSpacing: isSmall ? 6 : 12,
@@ -4176,7 +4597,12 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(16),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 2))],
+              boxShadow: [
+                BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2))
+              ],
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -4187,14 +4613,16 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     color: color.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  child: Icon(item["icon"] as IconData, color: color, size: isSmall ? 24 : 28),
+                  child: Icon(item["icon"] as IconData,
+                      color: color, size: isSmall ? 24 : 28),
                 ),
                 const SizedBox(height: 10),
                 Text(
                   item["label"] as String,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                    fontSize:
+                        (isSmall ? 11 : 13) * accessibility.fontScale,
                     fontWeight: FontWeight.w600,
                     color: AppTheme.gray700,
                   ),
@@ -4212,7 +4640,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   Widget _buildEmpty(String msg, IconData icon) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -4237,7 +4665,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   Widget _buildHeader(AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Container(
       padding: EdgeInsets.all(isSmall ? 14 : 20),
       decoration: BoxDecoration(
@@ -4256,7 +4684,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 Text(
                   paciente?["nombre"] ?? "",
                   style: TextStyle(
-                    fontSize: (isSmall ? 16 : 20) * accessibility.fontScale,
+                    fontSize:
+                        (isSmall ? 16 : 20) * accessibility.fontScale,
                     fontWeight: FontWeight.bold,
                     color: AppTheme.gray700,
                   ),
@@ -4265,7 +4694,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                 Text(
                   "EPS: ${paciente?["eps"] ?? "-"}",
                   style: TextStyle(
-                    fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                    fontSize:
+                        (isSmall ? 13 : 15) * accessibility.fontScale,
                     color: AppTheme.gray500,
                   ),
                 ),
@@ -4282,7 +4712,7 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   Widget _buildMedicoCard(AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
-    
+
     if (medicos.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(16),
@@ -4293,13 +4723,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
         ),
         child: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: AppTheme.warning, size: isSmall ? 20 : 24),
+            Icon(Icons.warning_amber_rounded,
+                color: AppTheme.warning, size: isSmall ? 20 : 24),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 "No tiene médicos asignados aún",
                 style: TextStyle(
-                  fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
+                  fontSize:
+                      (isSmall ? 13 : 15) * accessibility.fontScale,
                 ),
               ),
             ),
@@ -4313,7 +4745,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
       children: [
         Row(
           children: [
-            Icon(Icons.medical_information, size: isSmall ? 16 : 20, color: AppTheme.primary),
+            Icon(Icons.medical_information,
+                size: isSmall ? 16 : 20, color: AppTheme.primary),
             const SizedBox(width: 8),
             Text(
               "Su equipo médico",
@@ -4331,20 +4764,21 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
     );
   }
 
-  Widget _buildMedicoCardItem(Map<String, dynamic> med, AccessibilityProvider accessibility) {
+  Widget _buildMedicoCardItem(
+      Map<String, dynamic> med, AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
     final nombreMedico = med["nombre"]?.toString() ?? "Médico";
     final especialidad = med["especialidad"]?.toString() ?? "";
     final telefono = med["telefono"]?.toString() ?? "";
     final correo = med["correo"]?.toString() ?? "";
-    
+
     int idMedico = 0;
     try {
       idMedico = int.tryParse(med["idProfesional"]?.toString() ?? "0") ?? 0;
     } catch (_) {
       idMedico = 0;
     }
-    
+
     final noLeidos = _mensajesNoLeidosPorMedico[idMedico] ?? 0;
 
     return Container(
@@ -4373,7 +4807,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   "Médico tratante",
                   style: TextStyle(
                     color: Colors.white70,
-                    fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                    fontSize:
+                        (isSmall ? 10 : 12) * accessibility.fontScale,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -4382,7 +4817,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
-                    fontSize: (isSmall ? 14 : 16) * accessibility.fontScale,
+                    fontSize:
+                        (isSmall ? 14 : 16) * accessibility.fontScale,
                   ),
                 ),
                 if (especialidad.isNotEmpty)
@@ -4390,7 +4826,8 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                     especialidad,
                     style: TextStyle(
                       color: Colors.white70,
-                      fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
+                      fontSize:
+                          (isSmall ? 11 : 13) * accessibility.fontScale,
                     ),
                   ),
                 if (telefono.isNotEmpty || correo.isNotEmpty) ...[
@@ -4403,12 +4840,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.phone, size: isSmall ? 12 : 14, color: Colors.white.withOpacity(0.7)),
+                            Icon(Icons.phone,
+                                size: isSmall ? 12 : 14,
+                                color: Colors.white.withOpacity(0.7)),
                             const SizedBox(width: 4),
                             Text(
                               telefono,
                               style: TextStyle(
-                                fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                fontSize: (isSmall ? 10 : 12) *
+                                    accessibility.fontScale,
                                 color: Colors.white.withOpacity(0.8),
                               ),
                             ),
@@ -4419,12 +4859,15 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
                         Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.email, size: isSmall ? 12 : 14, color: Colors.white.withOpacity(0.7)),
+                            Icon(Icons.email,
+                                size: isSmall ? 12 : 14,
+                                color: Colors.white.withOpacity(0.7)),
                             const SizedBox(width: 4),
                             Text(
                               correo,
                               style: TextStyle(
-                                fontSize: (isSmall ? 10 : 12) * accessibility.fontScale,
+                                fontSize: (isSmall ? 10 : 12) *
+                                    accessibility.fontScale,
                                 color: Colors.white.withOpacity(0.8),
                               ),
                               maxLines: 1,
@@ -4487,9 +4930,10 @@ class _PerfilDetalleScreenState extends State<PerfilDetalleScreen>
   // ==============================================
   // 📝 SECCIÓN LABEL
   // ==============================================
-  Widget _buildSectionLabel(String titulo, AccessibilityProvider accessibility) {
+  Widget _buildSectionLabel(
+      String titulo, AccessibilityProvider accessibility) {
     final isSmall = _isSmallScreen(context);
-    
+
     return Text(
       titulo,
       style: TextStyle(
@@ -4511,23 +4955,35 @@ class _RecomendacionDetalleModal extends StatelessWidget {
 
   Color _getColorCategoria(String categoria) {
     switch (categoria) {
-      case 'Alimentación': return const Color(0xFFF59E0B);
-      case 'Ejercicio': return const Color(0xFF10B981);
-      case 'Medicación': return AppTheme.primary;
-      case 'Hábitos': return const Color(0xFF8B5CF6);
-      case 'Seguimiento': return const Color(0xFF14B8A6);
-      default: return const Color(0xFF6B7280);
+      case 'Alimentación':
+        return const Color(0xFFF59E0B);
+      case 'Ejercicio':
+        return const Color(0xFF10B981);
+      case 'Medicación':
+        return AppTheme.primary;
+      case 'Hábitos':
+        return const Color(0xFF8B5CF6);
+      case 'Seguimiento':
+        return const Color(0xFF14B8A6);
+      default:
+        return const Color(0xFF6B7280);
     }
   }
 
   IconData _getIconoCategoria(String categoria) {
     switch (categoria) {
-      case 'Alimentación': return Icons.restaurant;
-      case 'Ejercicio': return Icons.fitness_center;
-      case 'Medicación': return Icons.medication;
-      case 'Hábitos': return Icons.self_improvement;
-      case 'Seguimiento': return Icons.monitor_heart;
-      default: return Icons.notes;
+      case 'Alimentación':
+        return Icons.restaurant;
+      case 'Ejercicio':
+        return Icons.fitness_center;
+      case 'Medicación':
+        return Icons.medication;
+      case 'Hábitos':
+        return Icons.self_improvement;
+      case 'Seguimiento':
+        return Icons.monitor_heart;
+      default:
+        return Icons.notes;
     }
   }
 
@@ -4535,7 +4991,10 @@ class _RecomendacionDetalleModal extends StatelessWidget {
     if (fecha == null) return "-";
     try {
       final f = DateTime.parse(fecha.toString());
-      final meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+      final meses = [
+        'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+        'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
+      ];
       return "${f.day} ${meses[f.month - 1]}, ${f.year}";
     } catch (_) {
       return fecha.toString();
@@ -4559,10 +5018,14 @@ class _RecomendacionDetalleModal extends StatelessWidget {
     final colorCategoria = _getColorCategoria(categoria);
     final iconoCategoria = _getIconoCategoria(categoria);
     final profesional = recomendacion["profesional"] ?? "Médico tratante";
-    final tieneHora = recomendacion["fecha"] != null && recomendacion["fecha"].toString().contains(" ");
+    final tieneHora = recomendacion["fecha"] != null &&
+        recomendacion["fecha"].toString().contains(" ");
 
     return Container(
-      decoration: const BoxDecoration(color: Colors.white, borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
       child: DraggableScrollableSheet(
         initialChildSize: 0.85,
         minChildSize: 0.5,
@@ -4591,7 +5054,10 @@ class _RecomendacionDetalleModal extends StatelessWidget {
                     gradient: LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [colorCategoria, colorCategoria.withOpacity(0.8)],
+                      colors: [
+                        colorCategoria,
+                        colorCategoria.withOpacity(0.8)
+                      ],
                     ),
                     borderRadius: const BorderRadius.only(
                       topLeft: Radius.circular(24),
@@ -4606,7 +5072,9 @@ class _RecomendacionDetalleModal extends StatelessWidget {
                           color: Colors.white.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Icon(iconoCategoria, color: Colors.white, size: isSmall ? 24 : 28),
+                        child: Icon(iconoCategoria,
+                            color: Colors.white,
+                            size: isSmall ? 24 : 28),
                       ),
                       const SizedBox(width: 16),
                       Expanded(
@@ -4623,7 +5091,8 @@ class _RecomendacionDetalleModal extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              recomendacion["titulo"] ?? "Recomendación Médica",
+                              recomendacion["titulo"] ??
+                                  "Recomendación Médica",
                               style: TextStyle(
                                 color: Colors.white,
                                 fontSize: isSmall ? 16 : 20,
@@ -4660,7 +5129,8 @@ class _RecomendacionDetalleModal extends StatelessWidget {
                           icon: Icons.access_time,
                           color: AppTheme.warning,
                           label: "Horario sugerido",
-                          value: _obtenerHoraFormateada(recomendacion["fecha"]),
+                          value: _obtenerHoraFormateada(
+                              recomendacion["fecha"]),
                         ),
                       ],
                       const SizedBox(height: 24),
@@ -4677,7 +5147,8 @@ class _RecomendacionDetalleModal extends StatelessWidget {
                           children: [
                             const Row(
                               children: [
-                                Icon(Icons.description, size: 20, color: AppTheme.info),
+                                Icon(Icons.description,
+                                    size: 20, color: AppTheme.info),
                                 SizedBox(width: 8),
                                 Text(
                                   "Descripción",
@@ -4691,7 +5162,8 @@ class _RecomendacionDetalleModal extends StatelessWidget {
                             ),
                             const SizedBox(height: 12),
                             Text(
-                              recomendacion["descripcion"] ?? "Sin descripción",
+                              recomendacion["descripcion"] ??
+                                  "Sin descripción",
                               style: TextStyle(
                                 fontSize: isSmall ? 13 : 15,
                                 height: 1.6,
@@ -4705,7 +5177,8 @@ class _RecomendacionDetalleModal extends StatelessWidget {
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          icon: Icon(Icons.close, size: isSmall ? 16 : 20),
+                          icon: Icon(Icons.close,
+                              size: isSmall ? 16 : 20),
                           label: Text(
                             "Cerrar",
                             style: TextStyle(
@@ -4749,7 +5222,7 @@ class _InfoRowDetalle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isSmall = MediaQuery.of(context).size.width < 360;
-    
+
     return Row(
       children: [
         Container(
