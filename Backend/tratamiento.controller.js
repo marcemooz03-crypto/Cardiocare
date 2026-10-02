@@ -21,12 +21,39 @@ function existePaciente(idPaciente, callback) {
   });
 }
 
+/**
+ * Busca el paciente a partir del idUsuario (FK paciente.idUsuario -> usuario.idUsuario)
+ * y devuelve el idPaciente real.
+ */
+function buscarPacientePorUsuario(idUsuario, callback) {
+  const sql = `
+    SELECT p.idPaciente, p.idUsuario, u.nombre, u.correo
+    FROM paciente p
+    JOIN usuario u ON p.idUsuario = u.idUsuario
+    WHERE p.idUsuario = ?
+  `;
+  db.query(sql, [idUsuario], (err, result) => {
+    if (err) return callback(err, false, null);
+    return callback(null, result.length > 0, result[0]);
+  });
+}
+
+/**
+ * Resuelve el paciente real: si llega idUsuario lo busca por esa FK,
+ * si no, valida el idPaciente directamente.
+ */
+function resolverPaciente({ idUsuario, idPaciente }, callback) {
+  if (idUsuario) return buscarPacientePorUsuario(idUsuario, callback);
+  return existePaciente(idPaciente, callback);
+}
+
 // ======================================================
 // 🟢 CREAR TRATAMIENTO (VALIDA PACIENTE, idSintoma OPCIONAL)
 // ======================================================
 exports.crearTratamiento = (req, res) => {
   const {
-    idPaciente,
+    idUsuario,        // 👈 preferido (como en signos): se convierte a idPaciente
+    idPaciente,       // 👈 alternativa: idPaciente real
     idSintoma,        // 👈 puede venir null / undefined
     fechaInicio,
     fechaFin,
@@ -36,16 +63,16 @@ exports.crearTratamiento = (req, res) => {
 
   console.log("📦 CREAR TRATAMIENTO - BODY:", req.body);
 
-  // ✅ Validación mínima: paciente y descripción son obligatorios
-  if (!idPaciente || !descripcion) {
+  // ✅ Validación mínima: (idUsuario o idPaciente) y descripción son obligatorios
+  if ((!idUsuario && !idPaciente) || !descripcion) {
     return res.status(400).json({
       ok: false,
-      message: "idPaciente y descripcion son obligatorios"
+      message: "idUsuario (o idPaciente) y descripcion son obligatorios"
     });
   }
 
-  // 1️⃣ VERIFICAR QUE EL PACIENTE EXISTE
-  existePaciente(idPaciente, (errPac, pacienteExiste, paciente) => {
+  // 1️⃣ RESOLVER EL PACIENTE (idUsuario -> idPaciente) Y VERIFICAR QUE EXISTE
+  resolverPaciente({ idUsuario, idPaciente }, (errPac, pacienteExiste, paciente) => {
     if (errPac) {
       console.log("❌ Error verificando paciente:", errPac);
       return res.status(500).json({
@@ -57,11 +84,13 @@ exports.crearTratamiento = (req, res) => {
     if (!pacienteExiste) {
       return res.status(400).json({
         ok: false,
-        message: `El paciente ${idPaciente} no está registrado como paciente`
+        message: idUsuario
+          ? `El usuario ${idUsuario} no está registrado como paciente`
+          : `El paciente ${idPaciente} no está registrado como paciente`
       });
     }
 
-    // 2️⃣ INSERTAR TRATAMIENTO
+    // 2️⃣ INSERTAR TRATAMIENTO (usando el idPaciente REAL de la tabla paciente)
     const sql = `
       INSERT INTO tratamiento
       (
@@ -82,7 +111,7 @@ exports.crearTratamiento = (req, res) => {
         fechaFin || null,
         descripcion,
         idSintoma || null,      // 👈 null si no se seleccionó síntoma
-        idPaciente,
+        paciente.idPaciente,    // 👈 idPaciente real, no el que llegó del body
         estado || 'Activo'
       ],
       (err, result) => {
@@ -99,6 +128,7 @@ exports.crearTratamiento = (req, res) => {
         res.status(201).json({
           ok: true,
           idTratamiento: result.insertId,
+          idPaciente: paciente.idPaciente,
           paciente: paciente.nombre
         });
       }
@@ -192,6 +222,66 @@ exports.obtenerPorPaciente = (req, res) => {
     db.query(sql, [idPaciente], (err, result) => {
       if (err) {
         console.log("❌ ERROR obtenerPorPaciente:", err);
+        return res.status(500).json({ ok: false, error: err });
+      }
+      res.json(result);
+    });
+  });
+};
+
+// ======================================================
+// 👤 OBTENER POR USUARIO (idUsuario -> idPaciente, como en signos)
+// ======================================================
+exports.obtenerPorUsuario = (req, res) => {
+  const { idUsuario } = req.params;
+
+  if (!idUsuario) {
+    return res.status(400).json({
+      ok: false,
+      message: "El ID del usuario es requerido"
+    });
+  }
+
+  buscarPacientePorUsuario(idUsuario, (errPac, pacienteExiste, paciente) => {
+    if (errPac) {
+      console.log("❌ Error verificando paciente:", errPac);
+      return res.status(500).json({
+        ok: false,
+        error: errPac.sqlMessage || errPac.message
+      });
+    }
+
+    if (!pacienteExiste) {
+      return res.status(404).json({
+        ok: false,
+        message: `El usuario ${idUsuario} no está registrado como paciente`
+      });
+    }
+
+    const sql = `
+      SELECT
+        t.idTratamiento,
+        t.fechaInicio,
+        t.fechaFin,
+        t.descripcion,
+        t.estado,
+        t.idPaciente,
+
+        s.idSintoma,
+        s.descripcion AS sintoma
+
+      FROM tratamiento t
+      LEFT JOIN sintoma s
+        ON t.idSintoma = s.idSintoma
+
+      WHERE t.idPaciente = ?
+
+      ORDER BY t.fechaInicio DESC
+    `;
+
+    db.query(sql, [paciente.idPaciente], (err, result) => {
+      if (err) {
+        console.log("❌ ERROR obtenerPorUsuario:", err);
         return res.status(500).json({ ok: false, error: err });
       }
       res.json(result);
