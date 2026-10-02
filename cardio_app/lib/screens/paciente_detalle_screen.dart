@@ -23,7 +23,8 @@ import '../services/alerta_service.dart';
 import '../screens/editar_tratamiento.dart';
 import '../services/notificacion_service.dart';
 import '../services/metricas_service.dart';
-import 'agendar_cita_medico_screen.dart'; // ✅ NUEVO
+import 'agendar_cita_medico_screen.dart';
+import 'tratamiento_screen.dart'; // ✅ NUEVO: import explícito
 
 class PacienteDetalleScreen extends StatefulWidget {
   final int idPaciente;
@@ -106,13 +107,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   static const Color _danger = AppTheme.danger;
   static const Color _info = AppTheme.info;
 
-  // ==============================================
-  // 🖥️ CONSTANTES RESPONSIVE
-  // ==============================================
-  /// Ancho máximo del contenido principal para que no se estire en Windows
   static const double _kMaxContentWidth = 1100;
 
-  /// Devuelve cuántas columnas usar en el grid de métricas
   int _columnasMetricas(double width) {
     if (width < 360) return 2;
     if (width < 600) return 2;
@@ -513,9 +509,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     }
   }
 
-  // ==============================================
-  // 📝 CONSTRUIR CSV
-  // ==============================================
   String _buildCSVContent() {
     const String sep = ';';
     StringBuffer buffer = StringBuffer();
@@ -638,9 +631,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return buffer.toString();
   }
 
-  // ==============================================
-  // 📥 CARGAR DATOS
-  // ==============================================
   Future<void> loadSignos() async {
     try {
       print("🔍 Buscando signos para usuario: ${widget.idUsuarioPaciente}");
@@ -780,9 +770,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return int.tryParse(v.toString());
   }
 
-  // ==============================================
-  // 🎨 COLORES PARA MÉTRICAS
-  // ==============================================
   Color _getColorMetrica(dynamic valor, double objetivo) {
     final double val = _toDouble(valor);
     if (val >= objetivo) return AppTheme.success;
@@ -817,9 +804,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return valor.toString();
   }
 
-  // ==============================================
-  // 📊 VISTA DE MÉTRICAS (RESPONSIVE)
-  // ==============================================
   Widget _buildMetricasView(AccessibilityProvider accessibility, bool isDark) {
     if (_cargandoMetricas) {
       return const Center(child: CircularProgressIndicator());
@@ -904,9 +888,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ==============================================
-  // ✅ MÉTRICAS GRID — RESPONSIVE
-  // ==============================================
   Widget _buildMetricasGrid(
     AccessibilityProvider accessibility,
     bool isDark,
@@ -916,7 +897,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     final bool esGrande = screenWidth >= 900;
     final bool esMuyGrande = screenWidth >= 1200;
 
-    // Aspect ratio: más horizontal cuando más columnas hay
     final double aspect = esMuyGrande
         ? 1.7
         : esGrande
@@ -1009,9 +989,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ==============================================
-  // ✅ MÉTRICA CARD — RESPONSIVE
-  // ==============================================
   Widget _buildMetricaCard(
     String titulo,
     String valor,
@@ -1254,9 +1231,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return buffer.toString();
   }
 
-  // ==============================================
-  // 🧭 FUNCIONES DEL TUTORIAL
-  // ==============================================
   void _abrirTutorial() {
     setState(() {
       _mostrarTutorial = true;
@@ -1368,9 +1342,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ==============================================
-  // 📋 VISTA DE ADHERENCIA (RESPONSIVE)
-  // ==============================================
   Widget _buildAdherenciaView(
       AccessibilityProvider accessibility, bool isDark) {
     if (_cargandoAdherencia) {
@@ -1907,7 +1878,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── RECOMENDACIONES (RESPONSIVE) ───
   Widget _buildRecomendacionesView(
       AccessibilityProvider accessibility, bool isDark) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -2042,7 +2012,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── ALERTAS ───
   Widget _alertasView(AccessibilityProvider accessibility, bool isDark) {
     if (_cargandoAlertas) {
       return const Center(child: CircularProgressIndicator());
@@ -2286,7 +2255,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── SIGNOS ───
   Widget _signosView(AccessibilityProvider accessibility) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -3200,7 +3168,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── SÍNTOMAS ───
   Widget _sintomasView(AccessibilityProvider accessibility, bool isDark) {
     if (sintomas.isEmpty) {
       return _buildEmptyPage(
@@ -3321,7 +3288,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── TRATAMIENTOS ───
+  // ═══════════════════════════════════════════════
+  // ✅✅✅ AQUÍ ESTÁ EL CAMBIO IMPORTANTE ✅✅✅
+  // ═══════════════════════════════════════════════
   Widget _tratamientosView(
       AccessibilityProvider accessibility, bool isDark) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -3354,7 +3323,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     context,
                     MaterialPageRoute(
                       builder: (_) => CrearTratamientoScreen(
-                        idPaciente: widget.idPaciente,
+                        // ✅ CORREGIDO: la FK de `tratamiento` apunta a
+                        //    usuario(idUsuario), así que enviamos el ID de usuario
+                        idUsuarioPaciente: widget.idUsuarioPaciente,
                         idMedico: widget.idMedico,
                       ),
                     ),
@@ -3499,7 +3470,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── CITAS ───
   Widget _citasView(AccessibilityProvider accessibility, bool isDark) {
     final screenWidth = MediaQuery.of(context).size.width;
     final double horizontalPad = screenWidth < 600 ? 16.0 : 24.0;
@@ -3513,7 +3483,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 12),
               child: Column(
                 children: [
-                  // ✅ NUEVO: Botón para agendar cita
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -3759,7 +3728,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── WIDGETS COMUNES ───
   Widget _buildEmpty(String msg, IconData icon, bool isDark) {
     return Container(
       width: double.infinity,

@@ -5,12 +5,15 @@ import 'package:cardio_app/app.theme.dart';
 import '../services/tratamiento_service.dart';
 
 class CrearTratamientoScreen extends StatefulWidget {
-  final int idPaciente;
+  /// ✅ ID del USUARIO del paciente (no el idPaciente).
+  /// La tabla `tratamiento` tiene una FK a `usuario(idUsuario)`.
+  final int idUsuarioPaciente;
+
   final int idMedico;
 
   const CrearTratamientoScreen({
     super.key,
-    required this.idPaciente,
+    required this.idUsuarioPaciente,
     required this.idMedico,
   });
 
@@ -39,8 +42,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   List<Map<String, dynamic>> _medicamentos = [];
   List<Map<String, dynamic>> _sintomas = [];
   int? _medicamentoSeleccionadoId;
-
-  // ✅ SÍNTOMA OPCIONAL → puede ser null
   int? _sintomaSeleccionadoId;
 
   String _estado = "Activo";
@@ -48,7 +49,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   bool _isLoadingData = true;
   final _formKey = GlobalKey<FormState>();
 
-  // Fechas seleccionadas
   DateTime? _fechaInicio;
   DateTime? _fechaFin;
 
@@ -97,8 +97,8 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
           _isLoadingData = false;
         });
 
-        print("✅ Medicamentos: ${_medicamentos.length}");
-        print("✅ Síntomas: ${_sintomas.length}");
+        debugPrint("✅ Medicamentos: ${_medicamentos.length}");
+        debugPrint("✅ Síntomas: ${_sintomas.length}");
       }
     } catch (e) {
       if (mounted) {
@@ -173,7 +173,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   ) async {
     final DateTime now = DateTime.now();
 
-    // ✅ Permitir fechas pasadas (por si el médico registra un tratamiento ya iniciado)
     final DateTime initial = isInicio
         ? (_fechaInicio ?? now)
         : (_fechaFin ?? _fechaInicio ?? now);
@@ -181,7 +180,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(2000), // ✅ permite fechas pasadas
+      firstDate: DateTime(2000),
       lastDate: DateTime(now.year + 5),
       builder: (context, child) {
         return Theme(
@@ -266,15 +265,17 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
       return;
     }
 
-    // ✅ YA NO se exige síntoma. Solo se envía si fue seleccionado.
-
     setState(() => _isLoading = true);
 
     try {
+      // ✅ Enviamos `idUsuario` porque la FK de `tratamiento` apunta a `usuario(idUsuario)`.
+      //    Además incluimos `idPaciente` con el mismo valor por compatibilidad con el backend,
+      //    en caso de que el controller lo espere con ese nombre.
       final tratamientoData = {
-        "idPaciente": widget.idPaciente,
+        "idPaciente": widget.idUsuarioPaciente, // 👈 ID de usuario (así lo espera la FK)
+        "idUsuario": widget.idUsuarioPaciente,  // 👈 alias por si el backend usa este nombre
         "idMedico": widget.idMedico,
-        "idSintoma": _sintomaSeleccionadoId, // 👈 puede ser null
+        "idSintoma": _sintomaSeleccionadoId,
         "descripcion": _descripcionController.text.trim(),
         "fechaInicio": _convertirFechaParaAPI(_fechaInicio!),
         "fechaFin": _convertirFechaParaAPI(_fechaFin!),
@@ -282,7 +283,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
         "observaciones": _observacionesController.text.trim(),
       };
 
-      print("📦 ENVIANDO TRATAMIENTO: $tratamientoData");
+      debugPrint("📦 ENVIANDO TRATAMIENTO: $tratamientoData");
 
       final response = await service.crearTratamiento(tratamientoData);
 
@@ -347,7 +348,8 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
                         children: [
                           _buildInfoCard(accessibility, isDark),
                           const SizedBox(height: 20),
-                          _buildInformacionTratamientoCard(accessibility, isDark),
+                          _buildInformacionTratamientoCard(
+                              accessibility, isDark),
                           const SizedBox(height: 16),
                           _buildPeriodoCard(accessibility, isDark),
                           const SizedBox(height: 16),
@@ -493,12 +495,10 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
           ),
         ),
         const SizedBox(height: 16),
-
-        // ✅ SÍNTOMA OPCIONAL (SIN *)
         _buildDropdownField(
           value: _sintomaSeleccionadoId,
           items: _sintomas,
-          label: "Síntoma asociado (opcional)", // 👈 sin *
+          label: "Síntoma asociado (opcional)",
           hint: "Sin síntoma",
           icon: Icons.healing,
           displayField: "titulo",
@@ -506,7 +506,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
           onChanged: (v) => setState(() => _sintomaSeleccionadoId = v),
           accessibility: accessibility,
           isDark: isDark,
-          permitirNull: true, // 👈 permite "Sin síntoma"
+          permitirNull: true,
         ),
       ],
     );
@@ -688,7 +688,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
   // ==============================================
   // 🧩 WIDGETS REUTILIZABLES
   // ==============================================
-
   Widget _buildSectionCard({
     required IconData icon,
     required String title,
@@ -916,13 +915,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     );
   }
 
-  // ==============================================
-  // 🔽 DROPDOWN GENÉRICO
-  // ==============================================
-  // ✅ CORREGIDO:
-  // - Acepta `int?` (permite null)
-  // - Si `permitirNull = true`, agrega opción "Sin X"
-  // - El validator SOLO se activa si el label tiene "*"
   Widget _buildDropdownField({
     required int? value,
     required List<Map<String, dynamic>> items,
@@ -934,7 +926,7 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
     required void Function(int?) onChanged,
     required AccessibilityProvider accessibility,
     required bool isDark,
-    bool permitirNull = false, // 👈 nuevo parámetro
+    bool permitirNull = false,
   }) {
     final esObligatorio = label.contains('*');
 
@@ -972,7 +964,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
             color: isDark ? Colors.white : AppTheme.gray700,
           ),
           items: [
-            // ✅ Opción "Sin X" si se permite null
             if (permitirNull)
               DropdownMenuItem<int?>(
                 value: null,
@@ -995,7 +986,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
                   ],
                 ),
               ),
-            // Opciones normales
             ...items.map((item) {
               final id = int.tryParse(item[valueField]?.toString() ?? '');
               final nombre = item[displayField]?.toString() ?? "";
@@ -1012,7 +1002,6 @@ class _CrearTratamientoScreenState extends State<CrearTratamientoScreen> {
             }).toList(),
           ],
           onChanged: onChanged,
-          // ✅ Validator SOLO si el campo tiene *
           validator: esObligatorio
               ? (_) => value == null ? "Este campo es obligatorio" : null
               : null,
