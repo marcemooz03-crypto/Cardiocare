@@ -39,18 +39,24 @@ function normalizarEstado(estado, defaultValue = 'Pendiente') {
 exports.crearCita = (req, res) => {
   const {
     idPaciente,
+    idUsuario,
     idProfesional,
     fecha,
     motivo,
     estado
   } = req.body;
 
+  console.log("📦 CREAR CITA - BODY:", req.body);
+
+  // ✅ El front envía idPaciente o idUsuario con el mismo valor (idUsuario)
+  const idUsuarioFinal = idUsuario ?? idPaciente;
+
   // ✅ Validación de campos obligatorios
-  if (!idPaciente || !idProfesional || !fecha || !motivo) {
+  if (!idUsuarioFinal || !idProfesional || !fecha || !motivo) {
     return res.status(400).json({
       ok: false,
-      message: "Faltan datos: idPaciente, idProfesional, fecha y motivo son obligatorios",
-      recibido: { idPaciente, idProfesional, fecha, motivo }
+      message: "Faltan datos: idPaciente/idUsuario, idProfesional, fecha y motivo son obligatorios",
+      recibido: { idPaciente, idUsuario, idProfesional, fecha, motivo }
     });
   }
 
@@ -68,7 +74,7 @@ exports.crearCita = (req, res) => {
 
   db.query(
     sql,
-    [idPaciente, idProfesional, fecha, motivo, estadoFinal],
+    [idUsuarioFinal, idProfesional, fecha, motivo, estadoFinal],
     (err, result) => {
       if (err) {
         console.log("❌ Error creando cita:", err);
@@ -90,6 +96,8 @@ exports.crearCita = (req, res) => {
 
 // ============================
 // 📅 CITA POR PACIENTE
+// ⚠️ El path param recibe un idUsuario (no un idPaciente real).
+//    La columna `cita.idPaciente` guarda un idUsuario (FK a usuario.idUsuario).
 // ============================
 exports.getByPaciente = (req, res) => {
   const { idPaciente } = req.params;
@@ -101,7 +109,8 @@ exports.getByPaciente = (req, res) => {
     });
   }
 
-  // ✅ JOIN con profesionalsalud para traer nombre del médico
+  console.log("🔍 getByPaciente - idUsuario recibido:", idPaciente);
+
   const sql = `
     SELECT
       c.idCita,
@@ -111,10 +120,13 @@ exports.getByPaciente = (req, res) => {
       c.motivo,
       c.estado,
       p.nombre       AS medicoNombre,
-      p.especialidad AS medicoEspecialidad
+      p.especialidad AS medicoEspecialidad,
+      u.nombre       AS pacienteNombre
     FROM cita c
     LEFT JOIN profesionalsalud p
       ON p.idProfesional = c.idProfesional
+    LEFT JOIN usuario u
+      ON u.idUsuario = c.idPaciente
     WHERE c.idPaciente = ?
     ORDER BY c.fecha DESC
   `;
@@ -128,6 +140,8 @@ exports.getByPaciente = (req, res) => {
       });
     }
 
+    console.log(`📥 getByPaciente => ${result.length} citas para usuario ${idPaciente}`);
+
     // ✅ Devuelve el array directamente (como espera el frontend)
     res.json(result);
   });
@@ -135,6 +149,8 @@ exports.getByPaciente = (req, res) => {
 
 // ============================
 // 📅 CITA POR MÉDICO
+// ✅ CORREGIDO: `cita.idPaciente` guarda un idUsuario, entonces hacemos
+//    JOIN con `usuario.idUsuario` (no con `paciente.idPaciente`).
 // ============================
 exports.getByMedico = (req, res) => {
   const { idProfesional } = req.params;
@@ -146,7 +162,6 @@ exports.getByMedico = (req, res) => {
     });
   }
 
-  // ✅ JOIN con paciente y usuario para traer nombre del paciente
   const sql = `
     SELECT
       c.idCita,
@@ -156,12 +171,13 @@ exports.getByMedico = (req, res) => {
       c.motivo,
       c.estado,
       u.nombre        AS pacienteNombre,
-      pa.idUsuario    AS pacienteIdUsuario
+      u.idUsuario     AS pacienteIdUsuario,
+      pa.idPaciente   AS idPacienteReal
     FROM cita c
-    LEFT JOIN paciente pa
-      ON pa.idPaciente = c.idPaciente
     LEFT JOIN usuario u
-      ON u.idUsuario = pa.idUsuario
+      ON u.idUsuario = c.idPaciente
+    LEFT JOIN paciente pa
+      ON pa.idUsuario = u.idUsuario
     WHERE c.idProfesional = ?
     ORDER BY c.fecha DESC
   `;
@@ -175,7 +191,7 @@ exports.getByMedico = (req, res) => {
       });
     }
 
-    console.log("📥 CITAS DB =>", result.length, "citas");
+    console.log("📥 CITAS DB =>", result.length, "citas para médico", idProfesional);
 
     // ✅ Devuelve el array directamente (como espera el frontend)
     res.json(result);
@@ -343,7 +359,7 @@ exports.editarCita = (req, res) => {
 };
 
 // ============================
-// 📊 ACTUALIZAR ESTADO (VERSIÓN SIMPLIFICADA - CON VALIDACIÓN)
+// 📊 ACTUALIZAR ESTADO (VERSIÓN SIMPLIFICADA)
 // ============================
 exports.actualizarEstado = (req, res) => {
   const { idCita } = req.params;
@@ -525,7 +541,7 @@ exports.rechazarCita = (req, res) => {
 };
 
 // ============================
-// 📊 OBTENER ESTADÍSTICAS DE CITAS (CON FILTROS OPCIONALES)
+// 📊 OBTENER ESTADÍSTICAS DE CITAS
 // ============================
 exports.obtenerEstadisticas = (req, res) => {
   const { idProfesional, idPaciente } = req.query;
