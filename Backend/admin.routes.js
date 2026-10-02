@@ -1315,6 +1315,87 @@ router.delete('/cuidadores/paciente/:idPaciente', async (req, res) => {
   }
 });
 
+// ✏️ EDITAR un cuidador de un paciente
+router.put('/cuidadores/:idUsuario/paciente/:idPaciente', async (req, res) => {
+  const { idUsuario, idPaciente } = req.params;
+  const { nombre, correo, relacion, contrasena } = req.body;
+
+  if (!nombre || !correo) {
+    return fail(res, 400, "Nombre y correo son obligatorios");
+  }
+  if (contrasena && contrasena.length < 6) {
+    return fail(res, 400, "La contraseña debe tener al menos 6 caracteres");
+  }
+
+  try {
+    // El cuidador debe estar asignado a ese paciente
+    const vinculo = await queryAsync(
+      `SELECT 1 FROM cuidador_paciente WHERE idPaciente = ? AND idUsuario = ?`,
+      [idPaciente, idUsuario]
+    );
+    if (vinculo.length === 0) {
+      return fail(res, 404, "Ese cuidador no está asignado al paciente");
+    }
+
+    // El correo no puede pertenecer a otro usuario
+    const dup = await queryAsync(
+      `SELECT idUsuario FROM usuario WHERE correo = ? AND idUsuario <> ?`,
+      [correo, idUsuario]
+    );
+    if (dup.length > 0) {
+      return fail(res, 409, "El correo ya está registrado por otro usuario");
+    }
+
+    if (contrasena) {
+      const hash = bcrypt.hashSync(contrasena, 10);
+      await queryAsync(
+        `UPDATE usuario SET nombre = ?, correo = ?, contrasena = ?
+         WHERE idUsuario = ? AND idRol = 4`,
+        [nombre, correo, hash, idUsuario]
+      );
+    } else {
+      await queryAsync(
+        `UPDATE usuario SET nombre = ?, correo = ?
+         WHERE idUsuario = ? AND idRol = 4`,
+        [nombre, correo, idUsuario]
+      );
+    }
+
+    await queryAsync(
+      `UPDATE cuidador_paciente SET relacion = ?
+       WHERE idPaciente = ? AND idUsuario = ?`,
+      [relacion || null, idPaciente, idUsuario]
+    );
+
+    // El nombre se guarda copiado en paciente.nombreCuidador:
+    // se actualiza en todos los pacientes que este cuidador atiende
+    const pacientes = await queryAsync(
+      `SELECT idPaciente FROM cuidador_paciente WHERE idUsuario = ?`,
+      [idUsuario]
+    );
+    for (const p of pacientes) {
+      await sincronizarCuidadorPrincipal(p.idPaciente);
+    }
+
+    await queryAsync(
+      `INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
+       VALUES (?, ?, ?, ?, NOW())`,
+      ['Cuidador editado',
+       `Cuidador ID: ${idUsuario}, Paciente ID: ${idPaciente}`,
+       'usuario', 'info']
+    );
+
+    res.json({
+      ok: true, success: true,
+      msg: "Cuidador actualizado correctamente",
+      message: "Cuidador actualizado correctamente"
+    });
+  } catch (e) {
+    console.error('❌ ERROR editar cuidador:', e);
+    fail(res, 500, e.message);
+  }
+});
+
 // 📋 Todos los cuidadores del sistema (admin)
 router.get('/cuidadores', (req, res) => {
   const sql = `

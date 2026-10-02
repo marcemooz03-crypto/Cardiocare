@@ -222,12 +222,13 @@ class AdminService {
 
   // =========================
   // 👥 OBTENER TODOS LOS USUARIOS
+  // ✅ CORREGIDO: la ruta del backend es /usuarios (antes /usuario)
   // =========================
   Future<List<Map<String, dynamic>>> getUsuarios() async {
     try {
       final res = await http
           .get(
-            Uri.parse("$baseUrl/usuario"),
+            Uri.parse("$baseUrl/usuarios"),
             headers: {"Content-Type": "application/json"},
           )
           .timeout(const Duration(seconds: 15));
@@ -247,7 +248,7 @@ class AdminService {
   }
 
   // =========================
-  // 👨‍👩‍👧 OBTENER CUIDADORES
+  // 👨‍👩‍👧 OBTENER CUIDADORES (todos, para admin)
   // =========================
   Future<List<Map<String, dynamic>>> getCuidadores() async {
     try {
@@ -381,7 +382,8 @@ class AdminService {
 
         return {
           "success": true,
-          "message": data["message"] ?? data["msg"] ?? "Usuario creado exitosamente",
+          "message":
+              data["message"] ?? data["msg"] ?? "Usuario creado exitosamente",
           "idUsuario": data["idUsuario"],
           "data": data,
         };
@@ -418,7 +420,7 @@ class AdminService {
       final idRol = _rolToId(rol);
 
       final body = {
-        "idUsuario": idUsuario,  // ✅ por si el backend lo requiere
+        "idUsuario": idUsuario,
         "nombre": nombre,
         "correo": correo,
         "rol": rol,
@@ -538,7 +540,8 @@ class AdminService {
 
         return {
           "success": data["success"] == true || data["ok"] == true,
-          "message": data["message"] ?? data["msg"] ?? "Rol actualizado exitosamente",
+          "message":
+              data["message"] ?? data["msg"] ?? "Rol actualizado exitosamente",
         };
       }
 
@@ -652,6 +655,7 @@ class AdminService {
 
   // ============================================================
   // 👤 OBTENER PACIENTE POR CUIDADOR
+  // (el backend resuelve cuidadores en /paciente/usuario/:id)
   // ============================================================
   Future<Map<String, dynamic>?> getPacientePorCuidador(int idUsuario) async {
     try {
@@ -703,7 +707,7 @@ class AdminService {
   }
 
   // ============================================================
-  // 👤 CREAR CUIDADOR
+  // 👤 CREAR CUIDADOR (se pueden agregar varios por paciente)
   // ============================================================
   Future<Map<String, dynamic>> crearCuidador({
     required String nombre,
@@ -746,7 +750,8 @@ class AdminService {
 
         return {
           "success": true,
-          "message": data["msg"] ?? data["message"] ?? "Cuidador creado exitosamente",
+          "message":
+              data["msg"] ?? data["message"] ?? "Cuidador creado exitosamente",
           "idUsuario": data["idUsuario"],
           "data": data,
         };
@@ -775,7 +780,7 @@ class AdminService {
   }
 
   // ============================================================
-  // 👤 OBTENER CUIDADOR POR PACIENTE
+  // 👤 OBTENER CUIDADOR PRINCIPAL POR PACIENTE
   // ============================================================
   Future<Map<String, dynamic>?> getCuidador(int idPaciente) async {
     try {
@@ -816,7 +821,39 @@ class AdminService {
   }
 
   // ============================================================
-  // 🗑️ ELIMINAR CUIDADOR POR PACIENTE
+  // 📋 OBTENER TODOS LOS CUIDADORES DE UN PACIENTE
+  // ============================================================
+  Future<List<Map<String, dynamic>>> getCuidadoresPaciente(
+      int idPaciente) async {
+    try {
+      final url = "$baseUrl/cuidadores/paciente/$idPaciente/lista";
+      print("📡 GET LISTA CUIDADORES: $url");
+
+      final res = await http
+          .get(
+            Uri.parse(url),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print("📥 LISTA CUIDADORES RESPONSE: ${res.statusCode} - ${res.body}");
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is List) return List<Map<String, dynamic>>.from(data);
+        if (data is Map && data["data"] is List) {
+          return List<Map<String, dynamic>>.from(data["data"]);
+        }
+      }
+      return [];
+    } catch (e) {
+      print("❌ ERROR getCuidadoresPaciente: $e");
+      return [];
+    }
+  }
+
+  // ============================================================
+  // 🗑️ ELIMINAR CUIDADOR PRINCIPAL POR PACIENTE (compatibilidad)
   // ============================================================
   Future<bool> eliminarCuidador(int idPaciente) async {
     try {
@@ -846,6 +883,105 @@ class AdminService {
     } catch (e) {
       print("❌ ERROR eliminarCuidador: $e");
       return false;
+    }
+  }
+
+  // ============================================================
+  // 🗑️ ELIMINAR UN CUIDADOR ESPECÍFICO DE UN PACIENTE
+  // ============================================================
+  Future<bool> eliminarCuidadorDePaciente(
+      int idPaciente, int idCuidador) async {
+    try {
+      final url = "$baseUrl/cuidadores/$idCuidador/paciente/$idPaciente";
+      print("📡 DELETE CUIDADOR ESPECÍFICO: $url");
+
+      final res = await http
+          .delete(
+            Uri.parse(url),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print("📥 DELETE CUIDADOR ESPECÍFICO RESPONSE: ${res.statusCode}");
+
+      if (res.statusCode == 200 || res.statusCode == 204) {
+        await _registrarLog(
+          accion: "Cuidador eliminado",
+          descripcion: "Cuidador ID: $idCuidador, Paciente ID: $idPaciente",
+          usuario: "admin",
+          modulo: "cuidador",
+          nivel: "warning",
+        );
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print("❌ ERROR eliminarCuidadorDePaciente: $e");
+      return false;
+    }
+  }
+    // ============================================================
+  // ✏️ EDITAR UN CUIDADOR DE UN PACIENTE
+  // `contrasena` null = no se cambia
+  // ============================================================
+  Future<Map<String, dynamic>> editarCuidador({
+    required int idPaciente,
+    required int idCuidador,
+    required String nombre,
+    required String correo,
+    required String relacion,
+    String? contrasena,
+  }) async {
+    try {
+      final body = {
+        "nombre": nombre,
+        "correo": correo,
+        "relacion": relacion,
+        if (contrasena != null && contrasena.isNotEmpty)
+          "contrasena": contrasena,
+      };
+
+      final url = "$baseUrl/cuidadores/$idCuidador/paciente/$idPaciente";
+      print("📦 EDITAR CUIDADOR: $url");
+
+      final res = await http
+          .put(
+            Uri.parse(url),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print("📥 EDITAR CUIDADOR RESPONSE: ${res.statusCode} - ${res.body}");
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        await _registrarLog(
+          accion: "Cuidador editado",
+          descripcion: "$nombre → paciente $idPaciente",
+          usuario: "admin",
+          modulo: "cuidador",
+          nivel: "info",
+        );
+        return {
+          "success": true,
+          "message": data["msg"] ?? data["message"] ?? "Cuidador actualizado",
+        };
+      }
+
+      String errorMsg = "Error al editar cuidador";
+      try {
+        final errorData = jsonDecode(res.body);
+        errorMsg = errorData["msg"] ??
+            errorData["message"] ??
+            errorData["error"] ??
+            errorMsg;
+      } catch (_) {}
+
+      return {"success": false, "message": errorMsg};
+    } catch (e) {
+      print("❌ ERROR editarCuidador: $e");
+      return {"success": false, "message": "Error de conexión: $e"};
     }
   }
 }
