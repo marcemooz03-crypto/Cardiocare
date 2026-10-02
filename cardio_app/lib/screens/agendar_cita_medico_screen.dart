@@ -6,15 +6,15 @@ import '../services/cita_service.dart';
 import '../services/horario_service.dart';
 
 class AgendarCitaMedicoScreen extends StatefulWidget {
-  /// ✅ ID del USUARIO del paciente (usuario.idUsuario).
-  final int idUsuarioPaciente;
+  /// ✅ ID del paciente
+  final int idPaciente;
 
   final int idProfesional;
   final String nombrePaciente;
 
   const AgendarCitaMedicoScreen({
     super.key,
-    required this.idUsuarioPaciente,
+    required this.idPaciente,
     required this.idProfesional,
     required this.nombrePaciente,
   });
@@ -124,9 +124,9 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
       _selectedTime!.minute,
     );
 
+    // ✅ CORREGIDO: usa widget.idPaciente
     final datosCita = {
-      "idPaciente": widget.idUsuarioPaciente,
-      "idUsuario": widget.idUsuarioPaciente,
+      "idPaciente": widget.idPaciente,
       "idProfesional": widget.idProfesional,
       "fecha": fechaHoraCompleta.toIso8601String(),
       "motivo": _motivoController.text.trim(),
@@ -284,7 +284,7 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
   }
 
   // ==============================================
-  // ✅ NUEVO: TARJETA DE DISPONIBILIDAD DEL MÉDICO
+  // ✅ TARJETA DE DISPONIBILIDAD DEL MÉDICO
   // ==============================================
   Widget _buildDisponibilidadMedico(
       AccessibilityProvider accessibility, bool isDark) {
@@ -577,7 +577,6 @@ class _AgendarCitaMedicoScreenState extends State<AgendarCitaMedicoScreen> {
                     ),
                   )
                 else
-                  // ✅ NUEVO: mostrar disponibilidad del médico
                   _buildDisponibilidadMedico(accessibility, isDark),
 
                 if (sinHorarios) const SizedBox(height: 16),

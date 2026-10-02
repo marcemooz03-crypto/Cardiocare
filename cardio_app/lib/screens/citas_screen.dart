@@ -20,42 +20,46 @@ class _CitasScreenState extends State<CitasScreen> {
   late List<Map<String, dynamic>> _citas;
   bool _isLoading = false;
 
+  /// Guardamos el idPaciente desde el inicio para poder recargar
+  /// aunque la lista se vacíe.
+  int? _idPacienteCache;
+
   // ✅ MAPA DE ESTADOS - Solo para mostrar en UI
   final Map<String, Map<String, dynamic>> _estadosConfig = {
     "Pendiente": {
       "label": "Pendiente de confirmación",
       "color": Colors.orange,
-      "bgColor": Color(0xFFFFF3E0),
+      "bgColor": const Color(0xFFFFF3E0),
       "icon": Icons.pending_actions,
     },
     "Confirmada": {
       "label": "Confirmada",
       "color": Colors.green,
-      "bgColor": Color(0xFFE8F5E9),
+      "bgColor": const Color(0xFFE8F5E9),
       "icon": Icons.check_circle,
     },
     "Aprobada": {
       "label": "Aprobada",
       "color": Colors.green,
-      "bgColor": Color(0xFFE8F5E9),
+      "bgColor": const Color(0xFFE8F5E9),
       "icon": Icons.check_circle,
     },
     "Rechazada": {
       "label": "Rechazada",
       "color": Colors.red,
-      "bgColor": Color(0xFFFFEBEE),
+      "bgColor": const Color(0xFFFFEBEE),
       "icon": Icons.cancel,
     },
     "Cancelada": {
       "label": "Cancelada",
       "color": Colors.grey,
-      "bgColor": Color(0xFFF5F5F5),
+      "bgColor": const Color(0xFFF5F5F5),
       "icon": Icons.block,
     },
     "Completada": {
       "label": "Completada",
       "color": Colors.blue,
-      "bgColor": Color(0xFFE3F2FD),
+      "bgColor": const Color(0xFFE3F2FD),
       "icon": Icons.assignment_turned_in,
     },
   };
@@ -65,10 +69,22 @@ class _CitasScreenState extends State<CitasScreen> {
     super.initState();
     _citas = List<Map<String, dynamic>>.from(widget.citas);
     _ordenarCitas();
+
+    // ✅ Cachear el idPaciente para poder recargar después
+    if (_citas.isNotEmpty) {
+      _idPacienteCache = _toInt(_citas.first["idPaciente"]);
+    }
+
     debugPrint("📋 CITAS RECIBIDAS: ${_citas.length}");
     for (var c in _citas) {
-      debugPrint("   - ${c['motivo']} | Estado: ${c['estado']}");
+      debugPrint("   - ${c['motivo']} | Estado: ${c['estado']} | idPaciente: ${c['idPaciente']}");
     }
+  }
+
+  int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    return int.tryParse(v.toString());
   }
 
   // ==============================
@@ -78,10 +94,15 @@ class _CitasScreenState extends State<CitasScreen> {
     if (fecha == null) return "Fecha no disponible";
     try {
       final f = DateTime.parse(fecha.toString());
-      final diasSemana = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-      final meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-      
-      return '${diasSemana[f.weekday]}, ${f.day} de ${meses[f.month - 1]} de ${f.year}';
+      final diasSemana = [
+        'Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'
+      ];
+      final meses = [
+        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+      ];
+
+      return '${diasSemana[f.weekday % 7]}, ${f.day} de ${meses[f.month - 1]} de ${f.year}';
     } catch (_) {
       return fecha.toString();
     }
@@ -114,21 +135,31 @@ class _CitasScreenState extends State<CitasScreen> {
   // 🔄 RECARGAR DESDE BACKEND
   // ==============================
   Future<void> _recargarCitas() async {
-    if (_citas.isEmpty) return;
-    
+    if (_idPacienteCache == null) {
+      debugPrint("⚠️ No hay idPaciente cacheado para recargar citas");
+      return;
+    }
+
     setState(() => _isLoading = true);
-    
+
     try {
-      final idPaciente = _citas.first["idPaciente"];
-      final data = await _citaService.getByPaciente(idPaciente);
+      debugPrint("🔍 Recargando citas para idPaciente: $_idPacienteCache");
+
+      final data = await _citaService.getByPaciente(_idPacienteCache!);
+
+      debugPrint("📦 Citas recargadas: ${data.length}");
+
       setState(() {
         _citas = List<Map<String, dynamic>>.from(data);
         _ordenarCitas();
       });
     } catch (e) {
-      _mostrarMensajeError('Error al recargar las citas');
+      debugPrint("❌ Error recargando citas: $e");
+      if (mounted) {
+        _mostrarMensajeError('Error al recargar las citas');
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -140,20 +171,21 @@ class _CitasScreenState extends State<CitasScreen> {
       'Confirmar cita',
       '¿Deseas confirmar esta cita médica?',
     );
-    
+
     if (!confirmacion) return;
 
     setState(() => _isLoading = true);
-    
+
     final exito = await _citaService.aprobarCita(id);
-    
+
+    if (!mounted) return;
     setState(() => _isLoading = false);
-    
+
     if (exito) {
       _mostrarMensajeExito('Cita confirmada exitosamente');
-      // 🔥 Actualizar el estado localmente
+      // Actualizar estado local
       setState(() {
-        final index = _citas.indexWhere((c) => c["idCita"] == id);
+        final index = _citas.indexWhere((c) => _toInt(c["idCita"]) == id);
         if (index != -1) {
           _citas[index]["estado"] = "Aprobada";
         }
@@ -173,20 +205,20 @@ class _CitasScreenState extends State<CitasScreen> {
       '¿Estás seguro de que deseas rechazar esta cita médica?',
       esRechazo: true,
     );
-    
+
     if (!confirmacion) return;
 
     setState(() => _isLoading = true);
-    
+
     final exito = await _citaService.rechazarCita(id);
-    
+
+    if (!mounted) return;
     setState(() => _isLoading = false);
-    
+
     if (exito) {
-      _mostrarMensajeExito('Cita rechazada', esError: false);
-      // 🔥 Actualizar el estado localmente
+      _mostrarMensajeExito('Cita rechazada', esInfo: true);
       setState(() {
-        final index = _citas.indexWhere((c) => c["idCita"] == id);
+        final index = _citas.indexWhere((c) => _toInt(c["idCita"]) == id);
         if (index != -1) {
           _citas[index]["estado"] = "Rechazada";
         }
@@ -206,20 +238,20 @@ class _CitasScreenState extends State<CitasScreen> {
       '¿Deseas cancelar esta cita médica?\n\nNota: Debes hacerlo con al menos 24 horas de anticipación.',
       esRechazo: true,
     );
-    
+
     if (!confirmacion) return;
 
     setState(() => _isLoading = true);
-    
+
     final exito = await _citaService.cancelarCita(id);
-    
+
+    if (!mounted) return;
     setState(() => _isLoading = false);
-    
+
     if (exito) {
-      _mostrarMensajeExito('Cita cancelada', esError: false);
-      // 🔥 Actualizar el estado localmente
+      _mostrarMensajeExito('Cita cancelada', esInfo: true);
       setState(() {
-        final index = _citas.indexWhere((c) => c["idCita"] == id);
+        final index = _citas.indexWhere((c) => _toInt(c["idCita"]) == id);
         if (index != -1) {
           _citas[index]["estado"] = "Cancelada";
         }
@@ -233,55 +265,63 @@ class _CitasScreenState extends State<CitasScreen> {
   // ==============================
   // 📋 DIÁLOGO DE CONFIRMACIÓN
   // ==============================
-  Future<bool> _mostrarDialogConfirmacion(String titulo, String mensaje, {bool esRechazo = false}) async {
+  Future<bool> _mostrarDialogConfirmacion(
+    String titulo,
+    String mensaje, {
+    bool esRechazo = false,
+  }) async {
     return await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            Icon(
-              esRechazo ? Icons.warning_amber_rounded : Icons.info_outline,
-              color: esRechazo ? Colors.red[700] : Colors.blue[700],
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Row(
+              children: [
+                Icon(
+                  esRechazo ? Icons.warning_amber_rounded : Icons.info_outline,
+                  color: esRechazo ? Colors.red[700] : Colors.blue[700],
+                ),
+                const SizedBox(width: 12),
+                Expanded(child: Text(titulo)),
+              ],
             ),
-            const SizedBox(width: 12),
-            Text(titulo),
-          ],
-        ),
-        content: Text(mensaje),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
+            content: Text(mensaje),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: esRechazo ? Colors.red : Colors.blue,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8)),
+                ),
+                child: Text(esRechazo ? 'Sí, rechazar' : 'Confirmar'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: esRechazo ? Colors.red : Colors.blue,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: Text(esRechazo ? 'Sí, rechazar' : 'Confirmar'),
-          ),
-        ],
-      ),
-    ) ?? false;
+        ) ??
+        false;
   }
 
   // ==============================
   // 💬 MENSAJES
   // ==============================
-  void _mostrarMensajeExito(String mensaje, {bool esError = true}) {
+  void _mostrarMensajeExito(String mensaje, {bool esInfo = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: [
-            Icon(esError ? Icons.check_circle : Icons.info, color: Colors.white),
+            Icon(esInfo ? Icons.info : Icons.check_circle, color: Colors.white),
             const SizedBox(width: 12),
             Expanded(child: Text(mensaje)),
           ],
         ),
-        backgroundColor: esError ? Colors.green[700] : Colors.blue[700],
+        backgroundColor: esInfo ? Colors.blue[700] : Colors.green[700],
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
       ),
@@ -289,6 +329,7 @@ class _CitasScreenState extends State<CitasScreen> {
   }
 
   void _mostrarMensajeError(String mensaje) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
@@ -308,14 +349,11 @@ class _CitasScreenState extends State<CitasScreen> {
   // 🎨 ESTADO CHIP
   // ==============================
   Widget _buildEstadoChip(String estado) {
-    // Buscar configuración exacta
     String? configKey;
-    
-    // Primero buscar coincidencia exacta
+
     if (_estadosConfig.containsKey(estado)) {
       configKey = estado;
     } else {
-      // Buscar por coincidencia de mayúsculas/minúsculas
       final estadoLower = estado.toLowerCase();
       for (var key in _estadosConfig.keys) {
         if (key.toLowerCase() == estadoLower) {
@@ -324,10 +362,10 @@ class _CitasScreenState extends State<CitasScreen> {
         }
       }
     }
-    
-    // Si no encuentra, usar "Pendiente" por defecto
-    final finalConfig = _estadosConfig[configKey ?? "Pendiente"] ?? _estadosConfig["Pendiente"]!;
-    
+
+    final finalConfig = _estadosConfig[configKey ?? "Pendiente"] ??
+        _estadosConfig["Pendiente"]!;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
@@ -355,12 +393,12 @@ class _CitasScreenState extends State<CitasScreen> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint("🔍 BUILD CITAS - Total: ${_citas.length}, esMedico: ${widget.esMedico}");
-    
+    debugPrint(
+        "🔍 BUILD CITAS - Total: ${_citas.length}, esMedico: ${widget.esMedico}");
+
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        // ✅ TÍTULO EN AZUL REY Y SIN EMOJIS
         title: Text(
           widget.esMedico ? "Agenda profesional" : "Mis citas",
           style: const TextStyle(
@@ -374,8 +412,8 @@ class _CitasScreenState extends State<CitasScreen> {
         centerTitle: false,
         actions: [
           if (_isLoading)
-            Padding(
-              padding: const EdgeInsets.all(12),
+            const Padding(
+              padding: EdgeInsets.all(12),
               child: SizedBox(
                 width: 20,
                 height: 20,
@@ -394,28 +432,33 @@ class _CitasScreenState extends State<CitasScreen> {
             ? _buildEmptyState()
             : ListView.builder(
                 padding: const EdgeInsets.all(16),
+                physics: const AlwaysScrollableScrollPhysics(),
                 itemCount: _citas.length,
                 itemBuilder: (context, index) {
                   final cita = _citas[index];
                   final estado = cita["estado"]?.toString() ?? "Pendiente";
-                  
-                  // 🔥 CORREGIDO: Usar mayúsculas para comparar
+
                   final estadoLower = estado.toLowerCase();
-                  
-                  // Para médico: solo mostrar citas pendientes o aprobadas
-                  final puedeGestionar = widget.esMedico && 
-                      (estadoLower == "pendiente" || estadoLower == "pendiente de confirmación");
-                  
-                  // Para paciente: puede cancelar si está pendiente o aprobada
-                  final puedeCancelar = !widget.esMedico && 
-                      (estadoLower == "pendiente" || 
-                       estadoLower == "pendiente de confirmación" || 
-                       estadoLower == "aprobada" || 
-                       estadoLower == "confirmada");
-                  
-                  debugPrint("📌 Cita ${index+1}: ${cita['motivo']} | Estado: '$estado' | puedeGestionar: $puedeGestionar");
-                  
-                  return _buildCitaCard(cita, estado, puedeGestionar, puedeCancelar);
+
+                  // Para médico: solo gestionar si está pendiente
+                  final puedeGestionar = widget.esMedico &&
+                      (estadoLower == "pendiente" ||
+                          estadoLower == "pendiente de confirmación" ||
+                          estadoLower == "pendiente de confirmacion");
+
+                  // Para paciente: cancelar si está pendiente o aprobada
+                  final puedeCancelar = !widget.esMedico &&
+                      (estadoLower == "pendiente" ||
+                          estadoLower == "pendiente de confirmación" ||
+                          estadoLower == "pendiente de confirmacion" ||
+                          estadoLower == "aprobada" ||
+                          estadoLower == "confirmada");
+
+                  debugPrint(
+                      "📌 Cita ${index + 1}: ${cita['motivo']} | Estado: '$estado' | gestionar: $puedeGestionar | cancelar: $puedeCancelar");
+
+                  return _buildCitaCard(
+                      cita, estado, puedeGestionar, puedeCancelar);
                 },
               ),
       ),
@@ -423,56 +466,71 @@ class _CitasScreenState extends State<CitasScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.calendar_today,
-            size: 64,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            widget.esMedico ? "No hay citas programadas" : "No tienes citas agendadas",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            widget.esMedico 
-                ? "Las citas aparecerán aquí cuando los pacientes las soliciten"
-                : "Agenda tu primera cita médica desde el inicio",
-            style: TextStyle(color: Colors.grey[500]),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 24),
-          if (!widget.esMedico)
-            ElevatedButton.icon(
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.add),
-              label: const Text('Agendar cita'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[700],
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+    return ListView(
+      // ✅ ListView permite scroll y por eso funciona el pull-to-refresh
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.calendar_today,
+                  size: 64,
+                  color: Colors.grey[400],
                 ),
-              ),
+                const SizedBox(height: 16),
+                Text(
+                  widget.esMedico
+                      ? "No hay citas programadas"
+                      : "No tienes citas agendadas",
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Text(
+                    widget.esMedico
+                        ? "Las citas aparecerán aquí cuando los pacientes las soliciten"
+                        : "Agenda tu primera cita médica desde el inicio",
+                    style: TextStyle(color: Colors.grey[500]),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                if (!widget.esMedico)
+                  ElevatedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Agendar cita'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue[700],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-        ],
-      ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildCitaCard(Map<String, dynamic> cita, String estado, bool puedeGestionar, bool puedeCancelar) {
+  Widget _buildCitaCard(Map<String, dynamic> cita, String estado,
+      bool puedeGestionar, bool puedeCancelar) {
     final fechaCompleta = _formatearFechaCompleta(cita["fecha"]);
     final hora = _formatearHora(cita["fecha"]);
     final tieneHora = hora.isNotEmpty;
-    
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
@@ -496,7 +554,6 @@ class _CitasScreenState extends State<CitasScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header con motivo y estado
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -506,7 +563,8 @@ class _CitasScreenState extends State<CitasScreen> {
                         color: Colors.blue[50],
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.medical_services, color: Colors.blue[700], size: 24),
+                      child: Icon(Icons.medical_services,
+                          color: Colors.blue[700], size: 24),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -529,20 +587,19 @@ class _CitasScreenState extends State<CitasScreen> {
                     ),
                   ],
                 ),
-                
                 const SizedBox(height: 16),
                 const Divider(height: 1),
                 const SizedBox(height: 12),
-                
-                // Información de fecha y hora
                 Row(
                   children: [
-                    Icon(Icons.calendar_today, size: 18, color: Colors.grey[600]),
+                    Icon(Icons.calendar_today,
+                        size: 18, color: Colors.grey[600]),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         fechaCompleta,
-                        style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                        style:
+                            TextStyle(fontSize: 14, color: Colors.grey[700]),
                       ),
                     ),
                   ],
@@ -551,7 +608,8 @@ class _CitasScreenState extends State<CitasScreen> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.access_time, size: 18, color: Colors.grey[600]),
+                      Icon(Icons.access_time,
+                          size: 18, color: Colors.grey[600]),
                       const SizedBox(width: 8),
                       Text(
                         '$hora hrs',
@@ -560,8 +618,6 @@ class _CitasScreenState extends State<CitasScreen> {
                     ],
                   ),
                 ],
-                
-                // Información adicional para médicos
                 if (widget.esMedico && cita["pacienteNombre"] != null) ...[
                   const SizedBox(height: 8),
                   Row(
@@ -575,8 +631,6 @@ class _CitasScreenState extends State<CitasScreen> {
                     ],
                   ),
                 ],
-                
-                // Botones de acción
                 if (puedeGestionar || puedeCancelar) ...[
                   const SizedBox(height: 16),
                   Row(
@@ -587,7 +641,8 @@ class _CitasScreenState extends State<CitasScreen> {
                             texto: 'Confirmar',
                             icon: Icons.check,
                             color: Colors.green,
-                            onPressed: () => _aprobarCita(cita["idCita"]),
+                            onPressed: () =>
+                                _aprobarCita(_toInt(cita["idCita"]) ?? 0),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -596,7 +651,8 @@ class _CitasScreenState extends State<CitasScreen> {
                             texto: 'Rechazar',
                             icon: Icons.close,
                             color: Colors.red,
-                            onPressed: () => _rechazarCita(cita["idCita"]),
+                            onPressed: () =>
+                                _rechazarCita(_toInt(cita["idCita"]) ?? 0),
                           ),
                         ),
                       ] else if (puedeCancelar) ...[
@@ -605,7 +661,8 @@ class _CitasScreenState extends State<CitasScreen> {
                             texto: 'Cancelar cita',
                             icon: Icons.cancel,
                             color: Colors.red,
-                            onPressed: () => _cancelarCita(cita["idCita"]),
+                            onPressed: () =>
+                                _cancelarCita(_toInt(cita["idCita"]) ?? 0),
                           ),
                         ),
                       ],
@@ -677,7 +734,8 @@ class _CitasScreenState extends State<CitasScreen> {
             _buildDetalleFila('Fecha', _formatearFechaCompleta(cita["fecha"])),
             if (_formatearHora(cita["fecha"]).isNotEmpty)
               _buildDetalleFila('Hora', _formatearHora(cita["fecha"])),
-            _buildDetalleFila('Estado', _obtenerEstadoLabel(cita["estado"] ?? 'Pendiente')),
+            _buildDetalleFila(
+                'Estado', _obtenerEstadoLabel(cita["estado"] ?? 'Pendiente')),
             _buildDetalleFila('ID Cita', cita["idCita"]?.toString() ?? 'N/A'),
             if (widget.esMedico && cita["pacienteNombre"] != null)
               _buildDetalleFila('Paciente', cita["pacienteNombre"]),
@@ -705,9 +763,8 @@ class _CitasScreenState extends State<CitasScreen> {
   }
 
   String _obtenerEstadoLabel(String estado) {
-    // Buscar configuración del estado
     String? configKey;
-    
+
     if (_estadosConfig.containsKey(estado)) {
       configKey = estado;
     } else {
@@ -719,12 +776,12 @@ class _CitasScreenState extends State<CitasScreen> {
         }
       }
     }
-    
+
     if (configKey != null && _estadosConfig[configKey] != null) {
       return _estadosConfig[configKey]!["label"];
     }
-    
-    return estado; // Si no encuentra, mostrar el estado original
+
+    return estado;
   }
 
   Widget _buildDetalleFila(String label, String valor) {

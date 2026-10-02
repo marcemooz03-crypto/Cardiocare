@@ -107,9 +107,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   static const Color _danger = AppTheme.danger;
   static const Color _info = AppTheme.info;
 
-  // ==============================================
-  // 🖥️ CONSTANTES RESPONSIVE
-  // ==============================================
   static const double _kMaxContentWidth = 1100;
 
   int _columnasMetricas(double width) {
@@ -163,15 +160,14 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   }
 
   // ==============================================
-  // 📅 AGENDAR CITA (MÉDICO) — CORREGIDO
+  // 📅 AGENDAR CITA (MÉDICO) — con idPaciente
   // ==============================================
   Future<void> _abrirAgendarCita() async {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => AgendarCitaMedicoScreen(
-          // ✅ Usamos idUsuarioPaciente porque la FK de `cita` apunta a usuario.idUsuario
-          idUsuarioPaciente: widget.idUsuarioPaciente,
+          idPaciente: widget.idPaciente,
           idProfesional: widget.idMedico,
           nombrePaciente: widget.nombre,
         ),
@@ -189,7 +185,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   // ==============================================
   Future<void> iniciarChat() async {
     try {
-      print(
+      debugPrint(
           "🔍 Iniciando chat: paciente(idUsuario=${widget.idUsuarioPaciente}) con medico(idProfesional=${widget.idMedico})");
 
       idConversacion = await chatService.getOrCreateConversacion(
@@ -197,7 +193,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         widget.idMedico,
       );
       if (idConversacion != null) {
-        print("✅ Conversación iniciada: $idConversacion");
+        debugPrint("✅ Conversación iniciada: $idConversacion");
         loadNotificaciones();
       }
     } catch (e) {
@@ -207,7 +203,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
 
   void abrirChat() async {
     try {
-      print(
+      debugPrint(
           "🔍 Abriendo chat: paciente(idUsuario=${widget.idUsuarioPaciente}) con medico(idProfesional=${widget.idMedico})");
 
       final convId = idConversacion ??
@@ -256,9 +252,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   // ==============================
   Future<void> loadAlertas() async {
     try {
-      print("🔍 Cargando alertas para paciente: ${widget.idPaciente}");
+      debugPrint("🔍 Cargando alertas para paciente: ${widget.idPaciente}");
       final data = await alertaService.getAlertas(widget.idPaciente);
-      print("📦 Alertas encontradas: ${data.length}");
+      debugPrint("📦 Alertas encontradas: ${data.length}");
 
       if (!mounted) return;
       setState(() => alertas = List<Map<String, dynamic>>.from(data));
@@ -345,7 +341,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
       if (!mounted) return;
       setState(() => metricas = data);
     } catch (e) {
-      print('❌ Error cargando métricas: $e');
+      debugPrint('❌ Error cargando métricas: $e');
     } finally {
       if (mounted) setState(() => _cargandoMetricas = false);
     }
@@ -386,25 +382,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         _snack("Error al guardar el archivo", isError: true);
       }
     } catch (e) {
-      print("❌ Error exportando: $e");
+      debugPrint("❌ Error exportando: $e");
       _snack("Error al exportar: ${e.toString()}", isError: true);
-
-      try {
-        final directory = await getTemporaryDirectory();
-        final fecha = DateTime.now().toIso8601String().split('T').first;
-        final fileName =
-            "paciente_${widget.nombre.replaceAll(' ', '_')}_$fecha.csv";
-        final path = "${directory.path}/$fileName";
-
-        final file = File(path);
-        await file.writeAsString(_buildCSVContent());
-
-        _snack("Archivo guardado en temporal: $fileName");
-        _mostrarDialogoArchivoGuardado(path, fileName);
-      } catch (e2) {
-        print("❌ Error en fallback: $e2");
-        _snack("No se pudo guardar el archivo", isError: true);
-      }
     } finally {
       setState(() => _exportando = false);
     }
@@ -420,7 +399,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         backgroundColor: isDark ? AppTheme.gray800 : AppTheme.white,
         title: Row(
           children: [
-            Icon(Icons.check_circle, color: AppTheme.success, size: 28),
+            const Icon(Icons.check_circle, color: AppTheme.success, size: 28),
             const SizedBox(width: 12),
             Text(
               "Archivo guardado",
@@ -452,21 +431,12 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               ),
               child: Text(
                 fileName,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
                   color: AppTheme.primary,
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "📂 ${path.split('/').last}",
-              style: TextStyle(
-                fontSize: 11,
-                color: isDark ? AppTheme.gray400 : AppTheme.gray400,
-              ),
-              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),
@@ -502,7 +472,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         _snack("No se pudo abrir el archivo", isError: true);
       }
     } catch (e) {
-      print("❌ Error abriendo archivo: $e");
+      debugPrint("❌ Error abriendo archivo: $e");
       _snack("No se pudo abrir el archivo", isError: true);
     }
   }
@@ -634,9 +604,9 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
   // ==============================================
   Future<void> loadSignos() async {
     try {
-      print("🔍 Buscando signos para usuario: ${widget.idUsuarioPaciente}");
+      debugPrint("🔍 Buscando signos para usuario: ${widget.idUsuarioPaciente}");
       final data = await signosService.getSignos(widget.idUsuarioPaciente);
-      print("📦 Signos encontrados: ${data.length}");
+      debugPrint("📦 Signos encontrados: ${data.length}");
 
       if (!mounted) return;
       final lista = List<Map<String, dynamic>>.from(data);
@@ -664,12 +634,10 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     } catch (_) {}
   }
 
-  // ✅ CORREGIDO: usa idUsuarioPaciente (FK apunta a usuario.idUsuario)
+  // ✅ Usa idPaciente
   Future<void> loadTratamientos() async {
     try {
-      final data = await tratamientoService.getByPaciente(
-        widget.idUsuarioPaciente,
-      );
+      final data = await tratamientoService.getByPaciente(widget.idPaciente);
       if (!mounted) return;
       setState(() => tratamientos = List<Map<String, dynamic>>.from(data));
     } catch (e) {
@@ -677,10 +645,22 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     }
   }
 
-  // ✅ CORREGIDO: usa idUsuarioPaciente (FK apunta a usuario.idUsuario)
+  // ✅ Usa idPaciente
   Future<void> loadCitas() async {
     try {
-      final data = await citaService.getByPaciente(widget.idUsuarioPaciente);
+      debugPrint("═══════════════════════════════════════");
+      debugPrint("🔍 loadCitas:");
+      debugPrint("   idPaciente = ${widget.idPaciente}");
+      debugPrint("═══════════════════════════════════════");
+
+      final data = await citaService.getByPaciente(widget.idPaciente);
+
+      debugPrint("📦 Citas recibidas: ${data.length}");
+      for (var c in data) {
+        debugPrint(
+            "   → idCita=${c["idCita"]}, motivo=${c["motivo"]}, estado=${c["estado"]}, fecha=${c["fecha"]}");
+      }
+
       if (!mounted) return;
       setState(() => citas = List<Map<String, dynamic>>.from(data));
     } catch (e) {
@@ -777,9 +757,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return int.tryParse(v.toString());
   }
 
-  // ==============================================
-  // 🎨 COLORES PARA MÉTRICAS
-  // ==============================================
   Color _getColorMetrica(dynamic valor, double objetivo) {
     final double val = _toDouble(valor);
     if (val >= objetivo) return AppTheme.success;
@@ -814,9 +791,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return valor.toString();
   }
 
-  // ==============================================
-  // 📊 VISTA DE MÉTRICAS (RESPONSIVE)
-  // ==============================================
   Widget _buildMetricasView(AccessibilityProvider accessibility, bool isDark) {
     if (_cargandoMetricas) {
       return const Center(child: CircularProgressIndicator());
@@ -1162,7 +1136,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         _snack("Error al guardar métricas", isError: true);
       }
     } catch (e) {
-      print("❌ Error exportando métricas: $e");
+      debugPrint("❌ Error exportando métricas: $e");
       _snack("Error al exportar métricas", isError: true);
     } finally {
       setState(() => _exportando = false);
@@ -1244,9 +1218,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     return buffer.toString();
   }
 
-  // ==============================================
-  // 🧭 FUNCIONES DEL TUTORIAL
-  // ==============================================
   void _abrirTutorial() {
     setState(() {
       _mostrarTutorial = true;
@@ -1308,7 +1279,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                               borderRadius: BorderRadius.circular(20)),
                           child: Text(
                               "Paso ${_pasoTutorial + 1} de ${_pasosTutorial.length}",
-                              style: TextStyle(
+                              style: const TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: AppTheme.primary)),
@@ -1358,9 +1329,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ==============================================
-  // 📋 VISTA DE ADHERENCIA (RESPONSIVE)
-  // ==============================================
   Widget _buildAdherenciaView(
       AccessibilityProvider accessibility, bool isDark) {
     if (_cargandoAdherencia) {
@@ -1603,7 +1571,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                         ),
                         child: Column(
                           children: [
-                            Icon(
+                            const Icon(
                               Icons.check_circle_outline,
                               size: 40,
                               color: AppTheme.success,
@@ -1764,8 +1732,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
             Text(
               rec["descripcion"],
               style: TextStyle(
-                fontSize:
-                    (isSmall ? 13 : 15) * accessibility.fontScale,
+                fontSize: (isSmall ? 13 : 15) * accessibility.fontScale,
                 color: leida
                     ? (isDark ? AppTheme.gray500 : AppTheme.gray400)
                     : (isDark ? AppTheme.gray300 : AppTheme.gray600),
@@ -1785,8 +1752,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               Text(
                 _formatFecha(rec["fecha"] ?? rec["fechaRegistro"]),
                 style: TextStyle(
-                  fontSize:
-                      (isSmall ? 11 : 13) * accessibility.fontScale,
+                  fontSize: (isSmall ? 11 : 13) * accessibility.fontScale,
                   color: AppTheme.gray500,
                 ),
               ),
@@ -1948,8 +1914,8 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                       isDark,
                     )
                   : ListView.builder(
-                      padding: EdgeInsets.symmetric(
-                          horizontal: horizontalPad),
+                      padding:
+                          EdgeInsets.symmetric(horizontal: horizontalPad),
                       itemCount: recomendaciones.length,
                       itemBuilder: (_, i) => _buildRecomendacionCard(
                           recomendaciones[i], accessibility, isDark),
@@ -2031,7 +1997,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
     );
   }
 
-  // ─── ALERTAS ───
   Widget _alertasView(AccessibilityProvider accessibility, bool isDark) {
     if (_cargandoAlertas) {
       return const Center(child: CircularProgressIndicator());
@@ -2207,7 +2172,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.access_time,
+                        const Icon(Icons.access_time,
                             size: 12, color: AppTheme.gray400),
                         const SizedBox(width: 4),
                         Expanded(
@@ -3341,8 +3306,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                     context,
                     MaterialPageRoute(
                       builder: (_) => CrearTratamientoScreen(
-                        // ✅ CAMBIO: pasar idUsuarioPaciente
-                        idUsuarioPaciente: widget.idUsuarioPaciente,
+                        idPaciente: widget.idPaciente,
                         idMedico: widget.idMedico,
                       ),
                     ),
@@ -3501,7 +3465,6 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
               padding: EdgeInsets.fromLTRB(horizontalPad, 16, horizontalPad, 12),
               child: Column(
                 children: [
-                  // ✅ NUEVO: botón para agendar cita desde el médico
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
@@ -3519,6 +3482,29 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
                         ),
                       ),
                       onPressed: _abrirAgendarCita,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.refresh, size: 24),
+                      label: Text(
+                        "Recargar citas (${citas.length})",
+                        style: TextStyle(
+                          fontSize: 16 * accessibility.fontScale,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: AppTheme.secondaryButtonStyle.copyWith(
+                        padding: WidgetStateProperty.all(
+                          const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                      ),
+                      onPressed: () async {
+                        await loadCitas();
+                        _snack("Citas recargadas: ${citas.length}");
+                      },
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -4061,7 +4047,7 @@ class _PacienteDetalleScreenState extends State<PacienteDetalleScreen>
         backgroundColor: isDark ? AppTheme.gray800 : AppTheme.white,
         title: Row(
           children: [
-            Icon(Icons.download, color: AppTheme.primary, size: 28),
+            const Icon(Icons.download, color: AppTheme.primary, size: 28),
             const SizedBox(width: 12),
             Text(
               "Exportar Datos",
