@@ -63,6 +63,19 @@ const COLS_CUIDADOR_PRINCIPAL = `
   COALESCE(cpp.relacion,  p.relacionCuidador)                  AS relacionCuidador
 `;
 
+// Nombre a mostrar de un usuario (alias de la tabla usuario):
+// 1) usuario.nombre  2) nombre antiguo guardado en paciente.nombreCuidador  3) correo
+const nombreUsuarioSql = (a) => `
+  COALESCE(
+    NULLIF(TRIM(${a}.nombre), ''),
+    (SELECT p2.nombreCuidador FROM paciente p2
+     WHERE p2.idCuidador = ${a}.idUsuario
+       AND TRIM(COALESCE(p2.nombreCuidador, '')) <> ''
+     LIMIT 1),
+    ${a}.correo
+  )
+`;
+
 // ==============================================
 // 📋 LOGS DEL SISTEMA
 // ==============================================
@@ -297,7 +310,7 @@ router.get('/usuarios', (req, res) => {
   const sql = `
     SELECT
       u.idUsuario,
-      u.nombre,
+      ${nombreUsuarioSql('u')} AS nombre,
       u.correo,
       u.idRol,
       r.nombreRol as rol,
@@ -1130,7 +1143,7 @@ router.get('/perfil/:idUsuario', (req, res) => {
 // Deja en paciente.* el primer cuidador de la tabla (o NULL si no hay)
 async function sincronizarCuidadorPrincipal(idPaciente) {
   const rows = await queryAsync(
-    `SELECT cp.idUsuario, cp.relacion, u.nombre
+    `SELECT cp.idUsuario, cp.relacion, ${nombreUsuarioSql('u')} AS nombre
      FROM cuidador_paciente cp
      JOIN usuario u ON u.idUsuario = cp.idUsuario
      WHERE cp.idPaciente = ?
@@ -1211,8 +1224,8 @@ router.get('/cuidadores/paciente/:idPaciente', async (req, res) => {
 router.get('/cuidadores/paciente/:idPaciente/lista', async (req, res) => {
   try {
     const rows = await queryAsync(
-      `SELECT cp.idUsuario AS idCuidador, u.nombre AS nombreCuidador,
-              u.nombre AS nombre, cp.idUsuario AS idUsuario,
+      `SELECT cp.idUsuario AS idCuidador, ${nombreUsuarioSql('u')} AS nombreCuidador,
+              ${nombreUsuarioSql('u')} AS nombre, cp.idUsuario AS idUsuario,
               u.correo, cp.relacion AS relacionCuidador, cp.idPaciente
        FROM cuidador_paciente cp
        JOIN usuario u ON u.idUsuario = cp.idUsuario
@@ -1450,11 +1463,11 @@ router.get('/cuidadores', (req, res) => {
   const sql = `
     SELECT
       p.idPaciente, u.nombre as paciente_nombre,
-      uc.nombre as nombreCuidador, cp.relacion as relacionCuidador,
+      ${nombreUsuarioSql('uc')} as nombreCuidador, cp.relacion as relacionCuidador,
       cp.idUsuario as idCuidador,
-      uc.nombre as cuidador_nombre, uc.correo as cuidador_correo,
+      ${nombreUsuarioSql('uc')} as cuidador_nombre, uc.correo as cuidador_correo,
       uc.idUsuario as cuidador_idUsuario,
-      uc.nombre as nombre, uc.correo as correo,
+      ${nombreUsuarioSql('uc')} as nombre, uc.correo as correo,
       uc.idUsuario as idUsuario, 4 as idRol, 'Cuidador' as rol
     FROM cuidador_paciente cp
     JOIN paciente p ON p.idPaciente = cp.idPaciente
