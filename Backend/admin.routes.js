@@ -1054,6 +1054,11 @@ router.patch('/usuarios/:id/rol', async (req, res) => {
       return res.status(404).json({ ok: false, message: "Usuario no actualizado" });
     }
 
+    // ✅ 2b) Si era cuidador y ahora es otro rol → quitar sus vínculos con pacientes
+    if (Number(rolAnterior) === 4 && rolFinal !== 4) {
+      await liberarVinculosCuidador(id);
+    }
+
     // ✅ 3) Si es MÉDICO → crear registro en profesionalsalud si no existe
     if (rolFinal === 2) {
       const psRows = await queryAsync(
@@ -1190,6 +1195,22 @@ async function quitarCuidador(idPaciente, idUsuario) {
 
   await sincronizarCuidadorPrincipal(idPaciente);
   return true;
+}
+
+// Si un usuario deja de ser cuidador (cambio de rol), se quitan sus vínculos
+// con pacientes y se resincroniza el cuidador principal de cada uno.
+// NO borra el usuario (a diferencia de quitarCuidador).
+async function liberarVinculosCuidador(idUsuario) {
+  const afectados = await queryAsync(
+    `SELECT idPaciente FROM cuidador_paciente WHERE idUsuario = ?`,
+    [idUsuario]
+  );
+  if (afectados.length === 0) return;
+
+  await queryAsync(`DELETE FROM cuidador_paciente WHERE idUsuario = ?`, [idUsuario]);
+  for (const a of afectados) {
+    await sincronizarCuidadorPrincipal(a.idPaciente);
+  }
 }
 
 // 📦 Cuidador PRINCIPAL de un paciente (la app actual usa esta ruta)
@@ -1462,18 +1483,19 @@ router.put('/cuidadores/:idUsuario/paciente/:idPaciente', async (req, res) => {
 router.get('/cuidadores', (req, res) => {
   const sql = `
     SELECT
-      p.idPaciente, u.nombre as paciente_nombre,
+      p.idPaciente, COALESCE(u.nombre, 'Sin paciente asignado') as paciente_nombre,
       ${nombreUsuarioSql('uc')} as nombreCuidador, cp.relacion as relacionCuidador,
-      cp.idUsuario as idCuidador,
+      uc.idUsuario as idCuidador,
       ${nombreUsuarioSql('uc')} as cuidador_nombre, uc.correo as cuidador_correo,
       uc.idUsuario as cuidador_idUsuario,
       ${nombreUsuarioSql('uc')} as nombre, uc.correo as correo,
       uc.idUsuario as idUsuario, 4 as idRol, 'Cuidador' as rol
-    FROM cuidador_paciente cp
-    JOIN paciente p ON p.idPaciente = cp.idPaciente
-    JOIN usuario u ON p.idUsuario = u.idUsuario
-    JOIN usuario uc ON uc.idUsuario = cp.idUsuario
-    ORDER BY u.nombre ASC, cp.fechaAsignacion ASC
+    FROM usuario uc
+    LEFT JOIN cuidador_paciente cp ON cp.idUsuario = uc.idUsuario
+    LEFT JOIN paciente p ON p.idPaciente = cp.idPaciente
+    LEFT JOIN usuario u ON p.idUsuario = u.idUsuario
+    WHERE uc.idRol = 4
+    ORDER BY (u.nombre IS NULL), u.nombre ASC, cp.fechaAsignacion ASC
   `;
 
   db.query(sql, (err, results) => {
