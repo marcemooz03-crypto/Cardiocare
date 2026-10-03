@@ -1,4 +1,6 @@
 // lib/screens/admin_dashboard.dart
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cardio_app/app.theme.dart';
 import 'package:cardio_app/screens/login_screen.dart';
@@ -22,7 +24,8 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> {
+class _AdminDashboardState extends State<AdminDashboard>
+    with WidgetsBindingObserver {
   final service = AdminService();
 
   List<Map<String, dynamic>> medicos = [];
@@ -32,6 +35,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Map<String, dynamic>? perfil;
 
   bool loading = true;
+
+  // 🔄 Actualización automática
+  static const _intervaloAutoRefresh = Duration(seconds: 15);
+  Timer? _autoRefreshTimer;
+  bool _cargando = false; // evita cargas superpuestas
 
   static const _primary = AppTheme.primary;
   static const _success = AppTheme.success;
@@ -48,18 +56,63 @@ class _AdminDashboardState extends State<AdminDashboard> {
   bool _isSmallScreen(BuildContext context) =>
       MediaQuery.of(context).size.width < 360;
 
+  // ==============================================
+  // 🔢 CONTEOS
+  // ==============================================
+  /// Cuidadores ÚNICOS: un cuidador con varios pacientes (o sin ninguno)
+  /// aparece en la lista, pero se cuenta una sola vez.
+  int get _totalCuidadores {
+    final ids = <String>{};
+    for (final c in cuidadores) {
+      final id = c["idCuidador"] ??
+          c["idUsuario"] ??
+          c["cuidador_idUsuario"] ??
+          c["correo"] ??
+          c["cuidador_correo"];
+      if (id != null) ids.add(id.toString());
+    }
+    return ids.length;
+  }
+
+  int get _totalUsuarios =>
+      medicos.length + pacientes.length + _totalCuidadores;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     loadAll();
+
+    // Refresca solo cada cierto tiempo mientras la pantalla está abierta
+    _autoRefreshTimer = Timer.periodic(_intervaloAutoRefresh, (_) {
+      if (mounted) loadAll();
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Al volver a la app desde segundo plano, se actualiza
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      loadAll();
+    }
   }
 
   Future<void> loadAll() async {
+    if (_cargando) return;
+    _cargando = true;
+
     try {
       final futures = await Future.wait([
         service.getMedicos(),
         service.getPacientes(),
-        service.getCuidadores(), // ✅ NUEVO
+        service.getCuidadores(),
         service.getPerfilAdmin(widget.idUsuario),
       ]);
 
@@ -76,6 +129,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
       debugPrint("❌ Error loadAll: $e");
       if (!mounted) return;
       setState(() => loading = false);
+    } finally {
+      _cargando = false;
     }
   }
 
@@ -132,8 +187,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     loadAll();
   }
 
-  void openConfiguracion() {
-    Navigator.push(
+  // ✅ Ahora recarga al volver de configuración
+  void openConfiguracion() async {
+    await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => ConfiguracionScreen(
@@ -142,6 +198,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
       ),
     );
+    if (mounted) loadAll();
+  }
+
+  // ✅ Abre el detalle y, al volver, actualiza las estadísticas
+  // (aquí se crean, editan y eliminan usuarios, y se cambian roles)
+  Future<void> _abrirDetalle(int tab) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AdminDetalleScreen(
+          idUsuario: widget.idUsuario,
+          initialTab: tab,
+        ),
+      ),
+    );
+    if (mounted) loadAll();
   }
 
   @override
@@ -529,14 +601,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ],
           ),
           const SizedBox(height: 10),
-          // ✅ Segunda fila: Cuidadores y Total
+          // ✅ Segunda fila: Cuidadores (únicos) y Total
           Row(
             children: [
               Expanded(
                 child: _infoRow(
                   Icons.people_outline,
                   "Cuidadores",
-                  "${cuidadores.length}",
+                  "$_totalCuidadores",
                   isSmall,
                   _cuidador,
                 ),
@@ -546,7 +618,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 child: _infoRow(
                   Icons.analytics_outlined,
                   "Total usuarios",
-                  "${medicos.length + pacientes.length + cuidadores.length}",
+                  "$_totalUsuarios",
                   isSmall,
                   _info,
                 ),
@@ -610,65 +682,25 @@ class _AdminDashboardState extends State<AdminDashboard> {
         "Usuarios",
         Icons.people_outline,
         AppTheme.primary,
-        () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AdminDetalleScreen(
-                idUsuario: widget.idUsuario,
-                initialTab: 0,
-              ),
-            ),
-          );
-        },
+        () => _abrirDetalle(0),
       ),
       _AccionItem(
         "Asignar",
         Icons.link,
         AppTheme.success,
-        () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AdminDetalleScreen(
-                idUsuario: widget.idUsuario,
-                initialTab: 1,
-              ),
-            ),
-          );
-        },
+        () => _abrirDetalle(1),
       ),
       _AccionItem(
         "Alertas",
         Icons.notifications_outlined,
         AppTheme.danger,
-        () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AdminDetalleScreen(
-                idUsuario: widget.idUsuario,
-                initialTab: 3,
-              ),
-            ),
-          );
-        },
+        () => _abrirDetalle(3),
       ),
       _AccionItem(
         "Logs",
         Icons.history,
         AppTheme.info,
-        () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AdminDetalleScreen(
-                idUsuario: widget.idUsuario,
-                initialTab: 4,
-              ),
-            ),
-          );
-        },
+        () => _abrirDetalle(4),
       ),
       _AccionItem(
         "Configuración",
@@ -680,17 +712,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         "IPs Bloqueadas",
         Icons.block,
         Colors.redAccent,
-        () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AdminDetalleScreen(
-                idUsuario: widget.idUsuario,
-                initialTab: 5,
-              ),
-            ),
-          );
-        },
+        () => _abrirDetalle(5),
       ),
     ];
 

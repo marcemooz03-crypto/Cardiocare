@@ -12,6 +12,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 // ✅ IMPORTAR PerfilDetalleScreen (por si se necesita)
 import 'package:cardio_app/screens/perfil_detalle.dart';
 
+// ✅ Pantalla de recuperación de contraseña
+import 'package:cardio_app/screens/olvide_password_screen.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -266,66 +269,23 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   // ==============================================
   // 🔐 RECUPERAR CONTRASEÑA
+  // Abre OlvidePasswordScreen (código de 6 dígitos + nueva contraseña)
   // ==============================================
   Future<void> _recuperarPassword() async {
-    final emailController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OlvidePasswordScreen(
+          correoInicial: correoCtrl.text.trim(),
         ),
-        title: const Text(
-          'Recuperar contraseña',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Ingresa tu correo electrónico para recibir un enlace de recuperación',
-              style: TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: AppTheme.inputDecoration(
-                label: 'Correo electrónico',
-                prefixIcon: Icons.email_outlined,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final email = emailController.text.trim();
-              if (email.isEmpty) {
-                _mostrarMensaje('Ingresa tu correo', esError: true);
-                return;
-              }
-              
-              Navigator.pop(context);
-              
-              final success = await auth.recuperarPassword(email);
-              if (success) {
-                _mostrarMensaje('📧 Correo de recuperación enviado');
-              } else {
-                _mostrarMensaje('❌ Error al enviar el correo', esError: true);
-              }
-            },
-            style: AppTheme.primaryButtonStyle,
-            child: const Text('Enviar'),
-          ),
-        ],
       ),
     );
+
+    if (ok == true && mounted) {
+      // La contraseña recordada ya no sirve: se limpia
+      passCtrl.clear();
+      _mostrarMensaje('Contraseña actualizada. Ya puedes iniciar sesión');
+    }
   }
 
   // ==============================================
