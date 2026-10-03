@@ -1212,6 +1212,7 @@ router.get('/cuidadores/paciente/:idPaciente/lista', async (req, res) => {
   try {
     const rows = await queryAsync(
       `SELECT cp.idUsuario AS idCuidador, u.nombre AS nombreCuidador,
+              u.nombre AS nombre, cp.idUsuario AS idUsuario,
               u.correo, cp.relacion AS relacionCuidador, cp.idPaciente
        FROM cuidador_paciente cp
        JOIN usuario u ON u.idUsuario = cp.idUsuario
@@ -1452,7 +1453,9 @@ router.get('/cuidadores', (req, res) => {
       uc.nombre as nombreCuidador, cp.relacion as relacionCuidador,
       cp.idUsuario as idCuidador,
       uc.nombre as cuidador_nombre, uc.correo as cuidador_correo,
-      uc.idUsuario as cuidador_idUsuario
+      uc.idUsuario as cuidador_idUsuario,
+      uc.nombre as nombre, uc.correo as correo,
+      uc.idUsuario as idUsuario, 4 as idRol, 'Cuidador' as rol
     FROM cuidador_paciente cp
     JOIN paciente p ON p.idPaciente = cp.idPaciente
     JOIN usuario u ON p.idUsuario = u.idUsuario
