@@ -13,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cardio_app/screens/perfil_detalle.dart';
 
 // ✅ Pantalla de recuperación de contraseña
-import 'package:cardio_app/screens/olvide_password_screen.dart';
+import 'package:cardio_app/services/olvide_password_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
