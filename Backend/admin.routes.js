@@ -53,13 +53,14 @@ const JOIN_CUIDADOR_PRINCIPAL = `
     ORDER BY cp2.fechaAsignacion ASC, cp2.idCuidadorPaciente ASC
     LIMIT 1
   )
-  LEFT JOIN usuario ucp ON ucp.idUsuario = cpp.idUsuario
+  LEFT JOIN usuario ucp ON ucp.idUsuario = COALESCE(cpp.idUsuario, p.idCuidador)
 `;
 
+// El nombre completo sale de usuario.nombre; la copia en paciente es solo respaldo
 const COLS_CUIDADOR_PRINCIPAL = `
-  COALESCE(cpp.idUsuario, p.idCuidador)        AS idCuidador,
-  COALESCE(ucp.nombre,    p.nombreCuidador)    AS nombreCuidador,
-  COALESCE(cpp.relacion,  p.relacionCuidador)  AS relacionCuidador
+  COALESCE(cpp.idUsuario, p.idCuidador)                        AS idCuidador,
+  COALESCE(NULLIF(TRIM(ucp.nombre), ''), p.nombreCuidador)     AS nombreCuidador,
+  COALESCE(cpp.relacion,  p.relacionCuidador)                  AS relacionCuidador
 `;
 
 // ==============================================
@@ -1186,20 +1187,19 @@ router.get('/cuidadores/paciente/:idPaciente', async (req, res) => {
 
   try {
     const rows = await queryAsync(
-      `SELECT cp.idUsuario AS idCuidador,
-              u.nombre     AS nombreCuidador,
-              cp.relacion  AS relacionCuidador,
-              u.correo,
-              cp.idPaciente
-       FROM cuidador_paciente cp
-       JOIN usuario u ON u.idUsuario = cp.idUsuario
-       WHERE cp.idPaciente = ?
-       ORDER BY cp.fechaAsignacion ASC, cp.idCuidadorPaciente ASC
+      `SELECT p.idPaciente,
+              ${COLS_CUIDADOR_PRINCIPAL},
+              ucp.correo AS correo
+       FROM paciente p
+       ${JOIN_CUIDADOR_PRINCIPAL}
+       WHERE p.idPaciente = ?
        LIMIT 1`,
       [idPaciente]
     );
 
-    if (rows.length === 0) return res.status(200).json(null);
+    if (rows.length === 0 || (!rows[0].idCuidador && !rows[0].nombreCuidador)) {
+      return res.status(200).json(null);
+    }
     res.json(rows[0]);
   } catch (e) {
     console.error('❌ ERROR obtenerCuidador:', e);
