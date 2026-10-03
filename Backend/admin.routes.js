@@ -3,6 +3,27 @@ const router = express.Router();
 const db = require('./db');
 const bcrypt = require('bcrypt');
 
+/*
+==============================================================
+ SQL de sincronización ÚNICA (ejecútalo una vez en MySQL).
+ Rellena paciente.idCuidador / nombreCuidador / relacionCuidador
+ con el cuidador principal que ya está en cuidador_paciente.
+
+ UPDATE paciente p
+ JOIN cuidador_paciente cp ON cp.idCuidadorPaciente = (
+   SELECT cp2.idCuidadorPaciente
+   FROM cuidador_paciente cp2
+   WHERE cp2.idPaciente = p.idPaciente
+   ORDER BY cp2.fechaAsignacion ASC, cp2.idCuidadorPaciente ASC
+   LIMIT 1
+ )
+ JOIN usuario u ON u.idUsuario = cp.idUsuario
+ SET p.idCuidador       = cp.idUsuario,
+     p.nombreCuidador   = u.nombre,
+     p.relacionCuidador = cp.relacion;
+==============================================================
+*/
+
 // ==============================================
 // 🔧 HELPER para usar async/await
 // ==============================================
@@ -18,6 +39,28 @@ function queryAsync(sql, params = []) {
 // Respuesta de error estándar (incluye msg y message por compatibilidad con la app)
 const fail = (res, code, m) =>
   res.status(code).json({ ok: false, success: false, msg: m, message: m });
+
+// ==============================================
+// 👥 CUIDADOR PRINCIPAL: se lee SIEMPRE de cuidador_paciente
+// (las columnas paciente.* quedan solo como respaldo con COALESCE)
+// Requiere que la consulta use el alias "p" para la tabla paciente.
+// ==============================================
+const JOIN_CUIDADOR_PRINCIPAL = `
+  LEFT JOIN cuidador_paciente cpp ON cpp.idCuidadorPaciente = (
+    SELECT cp2.idCuidadorPaciente
+    FROM cuidador_paciente cp2
+    WHERE cp2.idPaciente = p.idPaciente
+    ORDER BY cp2.fechaAsignacion ASC, cp2.idCuidadorPaciente ASC
+    LIMIT 1
+  )
+  LEFT JOIN usuario ucp ON ucp.idUsuario = cpp.idUsuario
+`;
+
+const COLS_CUIDADOR_PRINCIPAL = `
+  COALESCE(cpp.idUsuario, p.idCuidador)        AS idCuidador,
+  COALESCE(ucp.nombre,    p.nombreCuidador)    AS nombreCuidador,
+  COALESCE(cpp.relacion,  p.relacionCuidador)  AS relacionCuidador
+`;
 
 // ==============================================
 // 📋 LOGS DEL SISTEMA
@@ -353,10 +396,11 @@ router.get('/pacientes', (req, res) => {
       p.idPaciente, u.idUsuario, u.nombre, u.correo,
       p.genero, p.fechaNacimiento, p.tipoHipertension,
       e.nombre as eps,
-      p.idCuidador, p.nombreCuidador, p.relacionCuidador
+      ${COLS_CUIDADOR_PRINCIPAL}
     FROM paciente p
     JOIN usuario u ON p.idUsuario = u.idUsuario
     LEFT JOIN eps e ON p.idEps = e.idEps
+    ${JOIN_CUIDADOR_PRINCIPAL}
     WHERE u.idRol = 3
     ORDER BY u.nombre ASC
   `;
@@ -382,10 +426,11 @@ router.get('/paciente/usuario/:idUsuario', (req, res) => {
       p.idPaciente, u.idUsuario, u.nombre, u.correo,
       p.genero, p.fechaNacimiento, p.tipoHipertension,
       e.nombre as eps, e.idEps,
-      p.idCuidador, p.nombreCuidador, p.relacionCuidador
+      ${COLS_CUIDADOR_PRINCIPAL}
     FROM paciente p
     JOIN usuario u ON p.idUsuario = u.idUsuario
     LEFT JOIN eps e ON p.idEps = e.idEps
+    ${JOIN_CUIDADOR_PRINCIPAL}
     WHERE u.idUsuario = ?
     LIMIT 1
   `;
@@ -410,13 +455,14 @@ router.get('/paciente/usuario/:idUsuario', (req, res) => {
         u.nombre as paciente_nombre,
         u.idUsuario as paciente_idUsuario,
         u.correo as paciente_correo,
-        p.idCuidador, p.nombreCuidador, p.relacionCuidador,
+        ${COLS_CUIDADOR_PRINCIPAL},
         p.genero, p.fechaNacimiento, p.tipoHipertension,
         e.nombre as eps, e.idEps
       FROM paciente p
       JOIN usuario u ON p.idUsuario = u.idUsuario
       LEFT JOIN cuidador_paciente cp ON cp.idPaciente = p.idPaciente
       LEFT JOIN eps e ON p.idEps = e.idEps
+      ${JOIN_CUIDADOR_PRINCIPAL}
       WHERE cp.idUsuario = ? OR p.idCuidador = ?
       LIMIT 1
     `;
@@ -465,11 +511,12 @@ router.get('/paciente/cuidador/:idCuidador', (req, res) => {
       p.idPaciente, u.idUsuario, u.nombre, u.correo,
       p.genero, p.fechaNacimiento, p.tipoHipertension,
       e.nombre as eps, e.idEps,
-      p.idCuidador, p.nombreCuidador, p.relacionCuidador
+      ${COLS_CUIDADOR_PRINCIPAL}
     FROM paciente p
     JOIN usuario u ON p.idUsuario = u.idUsuario
     LEFT JOIN cuidador_paciente cp ON cp.idPaciente = p.idPaciente
     LEFT JOIN eps e ON p.idEps = e.idEps
+    ${JOIN_CUIDADOR_PRINCIPAL}
     WHERE cp.idUsuario = ? OR p.idCuidador = ?
     LIMIT 1
   `;
@@ -500,11 +547,12 @@ router.get('/medico/:idMedico/pacientes', (req, res) => {
       p.idPaciente, u.idUsuario, u.nombre, u.correo,
       p.genero, p.fechaNacimiento, p.tipoHipertension,
       e.nombre as eps,
-      p.idCuidador, p.nombreCuidador, p.relacionCuidador
+      ${COLS_CUIDADOR_PRINCIPAL}
     FROM paciente p
     JOIN usuario u ON p.idUsuario = u.idUsuario
     LEFT JOIN eps e ON p.idEps = e.idEps
     JOIN medicopaciente mp ON p.idPaciente = mp.idPaciente
+    ${JOIN_CUIDADOR_PRINCIPAL}
     WHERE mp.idProfesional = (
       SELECT idProfesional FROM profesionalsalud WHERE idUsuario = ?
     )
@@ -1075,6 +1123,7 @@ router.get('/perfil/:idUsuario', (req, res) => {
 // Usa la tabla cuidador_paciente. Las columnas paciente.idCuidador,
 // nombreCuidador y relacionCuidador guardan al cuidador PRINCIPAL
 // (el más antiguo) para compatibilidad con login y pantallas de admin.
+// Las lecturas se hacen SIEMPRE desde cuidador_paciente.
 // ==============================================
 
 // Deja en paciente.* el primer cuidador de la tabla (o NULL si no hay)
@@ -1130,37 +1179,32 @@ async function quitarCuidador(idPaciente, idUsuario) {
 }
 
 // 📦 Cuidador PRINCIPAL de un paciente (la app actual usa esta ruta)
-router.get('/cuidadores/paciente/:idPaciente', (req, res) => {
+// ✅ Ahora lee de cuidador_paciente (antes devolvía null si paciente.nombreCuidador estaba vacío)
+router.get('/cuidadores/paciente/:idPaciente', async (req, res) => {
   const { idPaciente } = req.params;
   console.log("📦 Buscando cuidador para paciente:", idPaciente);
 
-  const sql = `
-    SELECT p.idPaciente, p.nombreCuidador, p.relacionCuidador, p.idCuidador,
-           uc.correo
-    FROM paciente p
-    LEFT JOIN usuario uc ON uc.idUsuario = p.idCuidador
-    WHERE p.idPaciente = ?
-    LIMIT 1
-  `;
+  try {
+    const rows = await queryAsync(
+      `SELECT cp.idUsuario AS idCuidador,
+              u.nombre     AS nombreCuidador,
+              cp.relacion  AS relacionCuidador,
+              u.correo,
+              cp.idPaciente
+       FROM cuidador_paciente cp
+       JOIN usuario u ON u.idUsuario = cp.idUsuario
+       WHERE cp.idPaciente = ?
+       ORDER BY cp.fechaAsignacion ASC, cp.idCuidadorPaciente ASC
+       LIMIT 1`,
+      [idPaciente]
+    );
 
-  db.query(sql, [idPaciente], (err, result) => {
-    if (err) {
-      console.error('❌ ERROR obtenerCuidador:', err);
-      return res.status(500).json({ ok: false, error: err.message });
-    }
-
-    if (result.length === 0 || !result[0].nombreCuidador) {
-      return res.status(200).json(null);
-    }
-
-    res.json({
-      idCuidador: result[0].idCuidador,
-      nombreCuidador: result[0].nombreCuidador,
-      relacionCuidador: result[0].relacionCuidador,
-      correo: result[0].correo,
-      idPaciente: result[0].idPaciente
-    });
-  });
+    if (rows.length === 0) return res.status(200).json(null);
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('❌ ERROR obtenerCuidador:', e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
 });
 
 // 📋 LISTA de TODOS los cuidadores de un paciente
@@ -1288,15 +1332,19 @@ router.delete('/cuidadores/paciente/:idPaciente', async (req, res) => {
   console.log("🗑️ Eliminando cuidador principal del paciente:", idPaciente);
 
   try {
+    // Se toma el principal desde cuidador_paciente (no depende de paciente.idCuidador)
     const p = await queryAsync(
-      `SELECT idCuidador FROM paciente WHERE idPaciente = ?`,
+      `SELECT idUsuario FROM cuidador_paciente
+       WHERE idPaciente = ?
+       ORDER BY fechaAsignacion ASC, idCuidadorPaciente ASC
+       LIMIT 1`,
       [idPaciente]
     );
-    if (p.length === 0 || !p[0].idCuidador) {
+    if (p.length === 0) {
       return fail(res, 404, "No hay cuidador asignado");
     }
 
-    await quitarCuidador(idPaciente, p[0].idCuidador);
+    await quitarCuidador(idPaciente, p[0].idUsuario);
 
     await queryAsync(
       `INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
