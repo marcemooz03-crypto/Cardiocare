@@ -15,7 +15,7 @@ import 'package:cardio_app/config/api_config.dart';
 // ==============================================
 class RecuperarPasswordService {
   // Debe coincidir con app.use('/api/recuperar', ...) del servidor
-  final String baseUrl = "${ApiConfig.baseUrl}/recuperar";
+  final String baseUrl = "${ApiConfig.baseUrl}/api/recuperar";
 
   /// Si el servidor está en modo simulación, trae el código en codigoSimulado.
   Future<SolicitudResultado> solicitarCodigo(String correo) async {

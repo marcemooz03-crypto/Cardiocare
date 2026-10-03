@@ -26,7 +26,7 @@ app.use("/api/recomendaciones" , require("./recomendacion.routes"));
 app.use("/api/adherencia", require("./adherencia.routes"));
 app.use("/api/tomas", require("./tomamedicamento.routes"));
 app.use("/api/horarios", require("./horario_medico.routes"));
-
+app.use("/api/recuperar", require("./recuperar"));
 app.get("/", (_, res) => res.json({ status: "ok" }));
 
 const PORT = process.env.PORT || 3000;
