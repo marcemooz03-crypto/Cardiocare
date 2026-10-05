@@ -1,5 +1,8 @@
 // lib/screens/admin_detalle_screen.dart
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:cardio_app/app.theme.dart';
 import '../services/admin_service.dart';
 import 'login_screen.dart';
@@ -32,7 +35,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   List<Map<String, dynamic>> usuarios = [];
   List<Map<String, dynamic>> medicos = [];
   List<Map<String, dynamic>> pacientes = [];
-  List<Map<String, dynamic>> cuidadores = [];
+  List<Map<String, dynamic>> cuidadores = []; // un registro por cuidador
   List<Map<String, dynamic>> logs = [];
   List<Map<String, dynamic>> alertas = [];
 
@@ -40,6 +43,14 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
 
   int? selectedMedico;
   int? selectedPaciente;
+
+  // ✅ Asignación de cuidadores (pestaña Asignar)
+  int? selectedPacienteCuidador;
+  int? selectedCuidadorExistente;
+  final TextEditingController relacionCuidadorCtrl = TextEditingController();
+  List<Map<String, dynamic>> cuidadoresDePaciente = [];
+  bool _cargandoCuidadoresPaciente = false;
+  bool _guardandoCuidador = false;
 
   bool loading = true;
   bool _cargandoAlertas = false;
@@ -77,6 +88,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   void dispose() {
     _tabController.dispose();
     buscarCtrl.dispose();
+    relacionCuidadorCtrl.dispose();
     super.dispose();
   }
 
@@ -105,8 +117,16 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       final alertasData = List<Map<String, dynamic>>.from(futures[3] as List);
       final asignacionesData =
           List<Map<String, dynamic>>.from(futures[4] as List);
-      final cuidadoresData =
+      final cuidadoresRaw =
           List<Map<String, dynamic>>.from(futures[5] as List);
+
+      // ✅ El endpoint trae una fila por cada cuidador y paciente:
+      // aquí se deja un solo registro por cuidador para listas y contadores
+      final vistos = <int>{};
+      final cuidadoresData = cuidadoresRaw.where((c) {
+        final id = _idCuidadorDe(c);
+        return id == null || vistos.add(id);
+      }).toList();
 
       // ✅ Combinar todos los usuarios con sus roles
       final usuariosCombinados = <Map<String, dynamic>>[
@@ -161,6 +181,11 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
 
         loading = false;
       });
+
+      // ✅ Si hay un paciente elegido en la sección de cuidadores, se actualiza su lista
+      if (selectedPacienteCuidador != null) {
+        _cargarCuidadoresDePaciente();
+      }
 
       // ✅ Reaplicar filtro de búsqueda actual
       if (buscarCtrl.text.isNotEmpty) {
@@ -445,6 +470,11 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     return int.tryParse(v.toString());
   }
 
+  // Id del usuario cuidador, venga como idCuidador, idUsuario o cuidador_idUsuario
+  int? _idCuidadorDe(Map<String, dynamic> c) {
+    return safeId(c["idCuidador"] ?? c["idUsuario"] ?? c["cuidador_idUsuario"]);
+  }
+
   void _snack(String msg, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -528,6 +558,275 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       });
       await loadAll(forceConfig: true);
     }
+  }
+
+  // =====================================================
+  // ✅ CUIDADORES DE UN PACIENTE (asignar / crear / editar / quitar)
+  // =====================================================
+  Future<void> _cargarCuidadoresDePaciente() async {
+    if (selectedPacienteCuidador == null) {
+      if (mounted) setState(() => cuidadoresDePaciente = []);
+      return;
+    }
+
+    if (mounted) setState(() => _cargandoCuidadoresPaciente = true);
+    final lista =
+        await service.getCuidadoresPaciente(selectedPacienteCuidador!);
+    if (!mounted) return;
+    setState(() {
+      cuidadoresDePaciente = lista;
+      _cargandoCuidadoresPaciente = false;
+    });
+  }
+
+  // Asigna un cuidador que YA existe (usuario con rol cuidador) a un paciente
+  Future<Map<String, dynamic>> _postAsignarCuidadorExistente({
+    required int idUsuario,
+    required int idPaciente,
+    String? relacion,
+  }) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse("${service.baseUrl}/cuidadores/asignar"),
+            headers: {"Content-Type": "application/json"},
+            body: jsonEncode({
+              "idUsuario": idUsuario,
+              "idPaciente": idPaciente,
+              "relacion": relacion,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      Map<String, dynamic> data = {};
+      try {
+        data = jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {}
+
+      final ok = res.statusCode == 200 || res.statusCode == 201;
+      return {
+        "success": ok,
+        "message": data["msg"] ??
+            data["message"] ??
+            (ok ? "Cuidador asignado" : "Error al asignar cuidador"),
+      };
+    } catch (e) {
+      return {"success": false, "message": "Error de conexión: $e"};
+    }
+  }
+
+  Future<void> asignarCuidadorExistente() async {
+    if (selectedPacienteCuidador == null ||
+        selectedCuidadorExistente == null) {
+      _snack("Selecciona paciente y cuidador", isError: true);
+      return;
+    }
+
+    setState(() => _guardandoCuidador = true);
+    final r = await _postAsignarCuidadorExistente(
+      idUsuario: selectedCuidadorExistente!,
+      idPaciente: selectedPacienteCuidador!,
+      relacion: relacionCuidadorCtrl.text.trim().isEmpty
+          ? null
+          : relacionCuidadorCtrl.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _guardandoCuidador = false);
+
+    _snack(
+      r["success"] == true ? "✓ ${r["message"]}" : "✗ ${r["message"]}",
+      isError: r["success"] != true,
+    );
+
+    if (r["success"] == true) {
+      setState(() => selectedCuidadorExistente = null);
+      relacionCuidadorCtrl.clear();
+      await loadAll(forceConfig: true);
+    }
+  }
+
+  // Diálogo para crear o editar un cuidador. Devuelve null si se cancela.
+  Future<Map<String, String>?> _dialogoCuidador({
+    required String titulo,
+    required bool esNuevo,
+    String nombre = "",
+    String correo = "",
+    String relacion = "",
+  }) {
+    final nombreCtrl = TextEditingController(text: nombre);
+    final correoCtrl = TextEditingController(text: correo);
+    final relacionCtrl = TextEditingController(text: relacion);
+    final passCtrl = TextEditingController();
+    String? error;
+
+    return showDialog<Map<String, String>>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDlg) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text(titulo, style: AppTheme.title2),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nombreCtrl,
+                  textCapitalization: TextCapitalization.words,
+                  decoration:
+                      const InputDecoration(labelText: "Nombre completo"),
+                ),
+                TextField(
+                  controller: correoCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration:
+                      const InputDecoration(labelText: "Correo electrónico"),
+                ),
+                TextField(
+                  controller: relacionCtrl,
+                  decoration: const InputDecoration(labelText: "Relación"),
+                ),
+                TextField(
+                  controller: passCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: esNuevo
+                        ? "Contraseña"
+                        : "Nueva contraseña (opcional)",
+                  ),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 12),
+                  Text(error!, style: const TextStyle(color: _danger)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Cancelar"),
+            ),
+            ElevatedButton(
+              style: AppTheme.primaryButtonStyle,
+              onPressed: () {
+                final n = nombreCtrl.text.trim();
+                final c = correoCtrl.text.trim();
+                final p = passCtrl.text;
+
+                if (n.isEmpty || c.isEmpty) {
+                  setDlg(() => error = "Nombre y correo son obligatorios");
+                  return;
+                }
+                if (!c.contains("@")) {
+                  setDlg(() => error = "Correo inválido");
+                  return;
+                }
+                if ((esNuevo && p.length < 6) ||
+                    (!esNuevo && p.isNotEmpty && p.length < 6)) {
+                  setDlg(() => error =
+                      "La contraseña debe tener al menos 6 caracteres");
+                  return;
+                }
+
+                Navigator.pop(ctx, {
+                  "nombre": n,
+                  "correo": c,
+                  "relacion": relacionCtrl.text.trim(),
+                  if (p.isNotEmpty) "contrasena": p,
+                });
+              },
+              child: const Text("Guardar"),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> crearCuidadorNuevo() async {
+    if (selectedPacienteCuidador == null) {
+      _snack("Primero selecciona un paciente", isError: true);
+      return;
+    }
+
+    final datos =
+        await _dialogoCuidador(titulo: "Nuevo cuidador", esNuevo: true);
+    if (datos == null) return;
+
+    setState(() => _guardandoCuidador = true);
+    final r = await service.crearCuidador(
+      nombre: datos["nombre"]!,
+      correo: datos["correo"]!,
+      contrasena: datos["contrasena"]!,
+      relacion: datos["relacion"] ?? "",
+      idPaciente: selectedPacienteCuidador!,
+    );
+    if (!mounted) return;
+    setState(() => _guardandoCuidador = false);
+
+    _snack(
+      r["success"] == true ? "✓ ${r["message"]}" : "✗ ${r["message"]}",
+      isError: r["success"] != true,
+    );
+    if (r["success"] == true) await loadAll(forceConfig: true);
+  }
+
+  Future<void> editarCuidadorDePaciente(Map<String, dynamic> c) async {
+    final idCuidador = _idCuidadorDe(c);
+    if (idCuidador == null || selectedPacienteCuidador == null) return;
+
+    final datos = await _dialogoCuidador(
+      titulo: "Editar cuidador",
+      esNuevo: false,
+      nombre: (c["nombre"] ?? c["nombreCuidador"] ?? "").toString(),
+      correo: (c["correo"] ?? "").toString(),
+      relacion: (c["relacionCuidador"] ?? "").toString(),
+    );
+    if (datos == null) return;
+
+    final r = await service.editarCuidador(
+      idPaciente: selectedPacienteCuidador!,
+      idCuidador: idCuidador,
+      nombre: datos["nombre"]!,
+      correo: datos["correo"]!,
+      relacion: datos["relacion"] ?? "",
+      contrasena: datos["contrasena"],
+    );
+    if (!mounted) return;
+
+    _snack(
+      r["success"] == true ? "✓ ${r["message"]}" : "✗ ${r["message"]}",
+      isError: r["success"] != true,
+    );
+    if (r["success"] == true) await loadAll(forceConfig: true);
+  }
+
+  Future<void> quitarCuidadorDePaciente(Map<String, dynamic> c) async {
+    final idCuidador = _idCuidadorDe(c);
+    if (idCuidador == null || selectedPacienteCuidador == null) return;
+
+    final nombre =
+        (c["nombre"] ?? c["nombreCuidador"] ?? "este cuidador").toString();
+
+    if (!await _confirm(
+      "¿Quitar cuidador?",
+      "$nombre dejará de ser cuidador de este paciente. "
+          "Su cuenta se conserva y podrás asignarlo de nuevo.",
+    )) {
+      return;
+    }
+
+    final ok = await service.eliminarCuidadorDePaciente(
+        selectedPacienteCuidador!, idCuidador);
+    if (!mounted) return;
+
+    _snack(
+      ok ? "✓ Cuidador quitado" : "✗ No se pudo quitar",
+      isError: !ok,
+    );
+    if (ok) await loadAll(forceConfig: true);
   }
 
   // =====================================================
@@ -1207,7 +1506,223 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                 );
               },
             ),
+
+          // ✅ Asignación de cuidadores a pacientes
+          const SizedBox(height: 24),
+          _buildSeccionCuidadores(),
         ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // ✅ SECCIÓN: CUIDADORES DE UN PACIENTE
+  // =====================================================
+  Widget _buildSeccionCuidadores() {
+    final idsAsignados =
+        cuidadoresDePaciente.map((c) => _idCuidadorDe(c)).toSet();
+
+    // Cuidadores del sistema que todavía no están asignados a este paciente
+    final disponibles = cuidadores.where((c) {
+      final id = _idCuidadorDe(c);
+      return id != null && !idsAsignados.contains(id);
+    }).toList();
+
+    final cuidadorValido = disponibles
+            .any((c) => _idCuidadorDe(c) == selectedCuidadorExistente)
+        ? selectedCuidadorExistente
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: AppTheme.subtleShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Icon(Icons.people_outline, size: 48, color: _cuidador),
+          const SizedBox(height: 12),
+          const Text(
+            "Asignar Cuidador a Paciente",
+            style: AppTheme.title1,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 20),
+          _buildDropdown<int>(
+            hint: "Seleccionar Paciente",
+            value: selectedPacienteCuidador,
+            items: pacientes
+                .map((p) => DropdownMenuItem<int>(
+                      value: safeId(p["idPaciente"]),
+                      child: Text(
+                        (p["nombre"] ?? "").toString(),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ))
+                .where((e) => e.value != null)
+                .toList(),
+            onChanged: (v) {
+              setState(() {
+                selectedPacienteCuidador = v;
+                selectedCuidadorExistente = null;
+              });
+              _cargarCuidadoresDePaciente();
+            },
+            icon: Icons.person,
+          ),
+          if (selectedPacienteCuidador != null) ...[
+            const SizedBox(height: 20),
+            const Text("Cuidadores de este paciente",
+                style: AppTheme.title2),
+            const SizedBox(height: 8),
+            if (_cargandoCuidadoresPaciente)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (cuidadoresDePaciente.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.gray50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  "Este paciente aún no tiene cuidadores",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: AppTheme.gray500),
+                ),
+              )
+            else
+              ...cuidadoresDePaciente.map(_tarjetaCuidadorPaciente),
+            const SizedBox(height: 20),
+            const Divider(height: 1),
+            const SizedBox(height: 20),
+            const Text("Agregar un cuidador existente",
+                style: AppTheme.title2),
+            const SizedBox(height: 8),
+            if (disponibles.isEmpty)
+              const Text(
+                "No hay más cuidadores registrados. Puedes crear uno nuevo "
+                "o cambiar el rol de un usuario a Cuidador desde la pestaña Usuarios.",
+                style: TextStyle(fontSize: 12, color: AppTheme.gray500),
+              )
+            else ...[
+              _buildDropdown<int>(
+                hint: "Seleccionar Cuidador",
+                value: cuidadorValido,
+                items: disponibles
+                    .map((c) => DropdownMenuItem<int>(
+                          value: _idCuidadorDe(c),
+                          child: Text(
+                            (c["nombre"] ??
+                                    c["nombreCuidador"] ??
+                                    c["cuidador_nombre"] ??
+                                    "Sin nombre")
+                                .toString(),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ))
+                    .toList(),
+                onChanged: (v) =>
+                    setState(() => selectedCuidadorExistente = v),
+                icon: Icons.people_outline,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: relacionCuidadorCtrl,
+                decoration: InputDecoration(
+                  labelText: "Relación (hijo/a, esposo/a, enfermero/a...)",
+                  prefixIcon: const Icon(Icons.favorite_border, size: 20),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 45,
+                child: ElevatedButton.icon(
+                  onPressed:
+                      _guardandoCuidador ? null : asignarCuidadorExistente,
+                  icon: const Icon(Icons.link, size: 18),
+                  label: const Text("Asignar cuidador"),
+                  style: AppTheme.primaryButtonStyle,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 45,
+              child: OutlinedButton.icon(
+                onPressed: _guardandoCuidador ? null : crearCuidadorNuevo,
+                icon: const Icon(Icons.person_add_alt_1, size: 18),
+                label: const Text("Crear cuidador nuevo"),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _cuidador,
+                  side: const BorderSide(color: _cuidador),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _tarjetaCuidadorPaciente(Map<String, dynamic> c) {
+    final nombre =
+        (c["nombre"] ?? c["nombreCuidador"] ?? "Sin nombre").toString();
+    final correo = (c["correo"] ?? "").toString();
+    final relacion = (c["relacionCuidador"] ?? "").toString();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        color: _cuidador.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _cuidador.withOpacity(0.25)),
+      ),
+      child: ListTile(
+        dense: true,
+        leading: CircleAvatar(
+          backgroundColor: _cuidador.withOpacity(0.15),
+          child: const Icon(Icons.people_outline, color: _cuidador, size: 20),
+        ),
+        title: Text(
+          nombre,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          [
+            if (relacion.isNotEmpty) relacion,
+            if (correo.isNotEmpty) correo,
+          ].join(" · "),
+          style: const TextStyle(fontSize: 11),
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              tooltip: "Editar",
+              onPressed: () => editarCuidadorDePaciente(c),
+            ),
+            IconButton(
+              icon: const Icon(Icons.link_off, size: 20, color: _danger),
+              tooltip: "Quitar del paciente",
+              onPressed: () => quitarCuidadorDePaciente(c),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1227,6 +1742,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       ),
       child: DropdownButtonFormField<T>(
         value: value,
+        isExpanded: true,
         hint: Row(
           children: [
             Icon(icon, size: 18, color: _textSub),

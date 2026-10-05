@@ -1174,24 +1174,15 @@ async function sincronizarCuidadorPrincipal(idPaciente) {
   }
 }
 
-// Quita un cuidador de un paciente; borra su usuario si ya no cuida a nadie
+// Quita un cuidador de un paciente.
+// El usuario NO se borra: sigue existiendo como cuidador (sin paciente asignado)
+// y se puede asignar a otro paciente. Para borrarlo del todo: DELETE /usuarios/:id
 async function quitarCuidador(idPaciente, idUsuario) {
   const r = await queryAsync(
     `DELETE FROM cuidador_paciente WHERE idPaciente = ? AND idUsuario = ?`,
     [idPaciente, idUsuario]
   );
   if (r.affectedRows === 0) return false;
-
-  const otros = await queryAsync(
-    `SELECT 1 FROM cuidador_paciente WHERE idUsuario = ? LIMIT 1`,
-    [idUsuario]
-  );
-  if (otros.length === 0) {
-    await queryAsync(
-      `DELETE FROM usuario WHERE idUsuario = ? AND idRol = 4`,
-      [idUsuario]
-    );
-  }
 
   await sincronizarCuidadorPrincipal(idPaciente);
   return true;
@@ -1329,6 +1320,67 @@ router.post('/cuidadores', async (req, res) => {
     });
   } catch (e) {
     console.error('❌ ERROR agregar cuidador:', e);
+    fail(res, 500, e.message);
+  }
+});
+
+// 🔗 ASIGNAR un cuidador YA EXISTENTE (usuario con rol 4) a un paciente
+// (no crea cuentas: sirve, por ejemplo, para un paciente que se pasó a cuidador)
+router.post('/cuidadores/asignar', async (req, res) => {
+  const { idUsuario, idPaciente, relacion } = req.body;
+
+  if (!idUsuario || !idPaciente) {
+    return fail(res, 400, "Faltan datos obligatorios");
+  }
+
+  try {
+    const u = await queryAsync(
+      `SELECT idUsuario, idRol FROM usuario WHERE idUsuario = ?`,
+      [idUsuario]
+    );
+    if (u.length === 0) return fail(res, 404, "Usuario no encontrado");
+    if (Number(u[0].idRol) !== 4) {
+      return fail(res, 400, "El usuario no tiene rol de cuidador");
+    }
+
+    const pac = await queryAsync(
+      `SELECT idPaciente, idUsuario FROM paciente WHERE idPaciente = ?`,
+      [idPaciente]
+    );
+    if (pac.length === 0) return fail(res, 404, "Paciente no encontrado");
+    if (Number(pac[0].idUsuario) === Number(idUsuario)) {
+      return fail(res, 400, "Un paciente no puede ser su propio cuidador");
+    }
+
+    const dup = await queryAsync(
+      `SELECT 1 FROM cuidador_paciente WHERE idPaciente = ? AND idUsuario = ?`,
+      [idPaciente, idUsuario]
+    );
+    if (dup.length > 0) {
+      return fail(res, 409, "Este cuidador ya está asignado a este paciente");
+    }
+
+    await queryAsync(
+      `INSERT INTO cuidador_paciente (idPaciente, idUsuario, relacion) VALUES (?, ?, ?)`,
+      [idPaciente, idUsuario, relacion || null]
+    );
+    await sincronizarCuidadorPrincipal(idPaciente);
+
+    await queryAsync(
+      `INSERT INTO log_sistema (accion, descripcion, modulo, nivel, fecha)
+       VALUES (?, ?, ?, ?, NOW())`,
+      ['Cuidador asignado',
+       `Cuidador ID: ${idUsuario}, Paciente ID: ${idPaciente}`,
+       'usuario', 'info']
+    );
+
+    res.status(201).json({
+      ok: true, success: true,
+      msg: "Cuidador asignado correctamente",
+      message: "Cuidador asignado correctamente"
+    });
+  } catch (e) {
+    console.error('❌ ERROR asignar cuidador existente:', e);
     fail(res, 500, e.message);
   }
 });
