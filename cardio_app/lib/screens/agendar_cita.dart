@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cardio_app/accesibility_provider.dart';
+import 'package:cardio_app/app.theme.dart';
 import '../services/cita_service.dart';
 import '../services/horario_service.dart';
+import 'agendar_cita_widgets.dart';
 
 class AgendarCitaScreen extends StatefulWidget {
   final int idPaciente;
@@ -27,9 +31,11 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
   TimeOfDay? _selectedTime;
   bool _isLoading = false;
   bool _cargandoHorarios = false;
+  bool _errorCarga = false;
 
-  /// Mapa: díaSemana (1=Lunes ... 7=Domingo) -> lista de horarios
+  /// díaSemana (1=Lunes ... 7=Domingo) -> franjas
   Map<int, List<Map<String, dynamic>>> _horariosPorDia = {};
+  List<DateTime> _fechasDisponibles = [];
 
   static const List<String> _estadosCita = [
     "Pendiente",
@@ -38,18 +44,7 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
     "Cancelada",
   ];
 
-  static const List<String> _nombresDias = [
-    'Lunes',
-    'Martes',
-    'Miércoles',
-    'Jueves',
-    'Viernes',
-    'Sábado',
-    'Domingo',
-  ];
-
-  bool _isSmallScreen(BuildContext context) =>
-      MediaQuery.of(context).size.width < 360;
+  static const int _diasAdelante = 90;
 
   @override
   void dispose() {
@@ -58,66 +53,129 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
   }
 
   // ==============================================
-  // 📅 CARGAR HORARIOS DEL MÉDICO SELECCIONADO
+  // 🔧 HELPERS
   // ==============================================
-  Future<void> _cargarHorariosDelMedico(int idProfesional) async {
+  int? _idDe(dynamic medico) =>
+      int.tryParse(medico["idProfesional"].toString());
+
+  Map<String, dynamic>? get _medicoActual {
+    for (final m in widget.medicos) {
+      if (_idDe(m) == _selectedMedicoId) {
+        return Map<String, dynamic>.from(m as Map);
+      }
+    }
+    return null;
+  }
+
+  String _iniciales(String nombre) {
+    final limpio = nombre
+        .replaceFirst(RegExp(r'^(dr\.?|dra\.?)\s+', caseSensitive: false), '')
+        .trim();
+    return limpio.isEmpty ? '?' : limpio[0].toUpperCase();
+  }
+
+  bool get _sinHorarios =>
+      _selectedMedicoId != null &&
+      !_cargandoHorarios &&
+      !_errorCarga &&
+      _fechasDisponibles.isEmpty;
+
+  bool get _listo =>
+      _selectedMedicoId != null &&
+      _selectedDate != null &&
+      _selectedTime != null;
+
+  // ==============================================
+  // 📅 SELECCIONAR MÉDICO Y CARGAR SUS HORARIOS
+  // ==============================================
+  Future<void> _seleccionarMedico(int id) async {
+    if (id == _selectedMedicoId && !_errorCarga) return;
+
     setState(() {
+      _selectedMedicoId = id;
       _cargandoHorarios = true;
+      _errorCarga = false;
       _selectedDate = null;
       _selectedTime = null;
       _horariosPorDia = {};
+      _fechasDisponibles = [];
     });
 
     try {
-      final data = await _horarioService.getByProfesional(idProfesional);
-      if (!mounted) return;
+      final data = await _horarioService.getByProfesional(id);
+      if (!mounted || _selectedMedicoId != id) return;
 
-      final Map<int, List<Map<String, dynamic>>> agrupados = {};
-      for (var h in data) {
-        final diaRaw = h["diaSemana"];
-        final dia = diaRaw is int ? diaRaw : int.tryParse("$diaRaw") ?? 0;
-        if (dia < 1 || dia > 7) continue;
-        agrupados.putIfAbsent(dia, () => []).add(h);
-      }
-
+      final agrupados = AgendaUtils.agrupar(data);
       setState(() {
         _horariosPorDia = agrupados;
+        _fechasDisponibles =
+            AgendaUtils.proximasFechas(agrupados, diasMax: _diasAdelante);
         _cargandoHorarios = false;
       });
     } catch (e) {
       debugPrint("❌ Error cargando horarios: $e");
-      if (!mounted) return;
-      setState(() => _cargandoHorarios = false);
+      if (!mounted || _selectedMedicoId != id) return;
+      setState(() {
+        _cargandoHorarios = false;
+        _errorCarga = true;
+      });
     }
+  }
+
+  void _seleccionarFecha(DateTime d) {
+    setState(() {
+      _selectedDate = d;
+      _selectedTime = null;
+    });
+  }
+
+  Future<void> _abrirCalendario() async {
+    if (_fechasDisponibles.isEmpty) return;
+    final hoy = DateTime.now();
+    final primero = DateTime(hoy.year, hoy.month, hoy.day);
+
+    final fecha = await showDatePicker(
+      context: context,
+      firstDate: primero,
+      lastDate: primero.add(const Duration(days: _diasAdelante)),
+      initialDate: _selectedDate ?? _fechasDisponibles.first,
+      helpText: 'Selecciona la fecha',
+      cancelText: 'Cancelar',
+      confirmText: 'Aceptar',
+      selectableDayPredicate: (d) => _horariosPorDia.containsKey(d.weekday),
+      builder: AgendaUtils.temaPicker,
+    );
+
+    if (fecha == null || !mounted) return;
+
+    if (AgendaUtils.slots(fecha, _horariosPorDia).isEmpty) {
+      _mostrarMensajeError('Ya no hay horas disponibles ese día');
+      return;
+    }
+    _seleccionarFecha(fecha);
   }
 
   // ==============================================
   // 💾 AGENDAR CITA
   // ==============================================
   Future<void> _agendarCita() async {
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
+    if (!_listo) return;
 
-    if (_selectedMedicoId == null) {
-      _mostrarMensajeError('Por favor, selecciona un médico');
-      return;
-    }
-
-    if (_selectedDate == null || _selectedTime == null) {
-      _mostrarMensajeError('Por favor, selecciona fecha y hora');
-      return;
-    }
-
-    final horariosDelDia = _horariosPorDia[_selectedDate!.weekday] ?? [];
-    if (!_horaEnRango(_selectedTime!, horariosDelDia)) {
-      _mostrarMensajeError(
-        'La hora seleccionada está fuera del horario del médico',
-      );
+    // La hora debe seguir siendo válida (por si pasó mientras tanto)
+    final libres = AgendaUtils.slots(_selectedDate!, _horariosPorDia);
+    final sigueLibre = libres.any((t) =>
+        t.hour == _selectedTime!.hour && t.minute == _selectedTime!.minute);
+    if (!sigueLibre) {
+      _mostrarMensajeError('Esa hora ya no está disponible. Elige otra.');
+      setState(() => _selectedTime = null);
       return;
     }
 
     setState(() => _isLoading = true);
 
-    final fechaHoraCompleta = DateTime(
+    final fechaHora = DateTime(
       _selectedDate!.year,
       _selectedDate!.month,
       _selectedDate!.day,
@@ -128,752 +186,110 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
     final datosCita = {
       "idPaciente": widget.idPaciente,
       "idProfesional": _selectedMedicoId,
-      "fecha": fechaHoraCompleta.toIso8601String(),
+      "fecha": fechaHora.toIso8601String(),
       "motivo": _motivoController.text.trim(),
       "estado": _estadosCita[0],
       "fechaSolicitud": DateTime.now().toIso8601String(),
     };
 
-    debugPrint("📤 Enviando cita con estado: '${datosCita["estado"]}'");
-
-    final exito = await _citaService.agendarCita(datosCita);
+    bool exito = false;
+    try {
+      exito = await _citaService.agendarCita(datosCita);
+    } catch (e) {
+      debugPrint("❌ Error agendando cita: $e");
+    }
 
     if (!mounted) return;
     setState(() => _isLoading = false);
 
     if (exito) {
-      _mostrarMensajeExito();
+      _mostrarSnack('Cita solicitada. El médico la confirmará pronto.',
+          AppTheme.success, Icons.check_circle_rounded);
       Navigator.pop(context, true);
     } else {
-      _mostrarMensajeError('No se pudo agendar la cita. Intenta nuevamente');
+      _mostrarMensajeError('No se pudo agendar la cita. Intenta nuevamente.');
     }
   }
 
-  void _mostrarMensajeExito() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Row(
-          children: [
-            Icon(Icons.check_circle, color: Colors.white),
-            SizedBox(width: 12),
-            Expanded(child: Text('Cita agendada exitosamente')),
-          ],
-        ),
-        backgroundColor: Colors.green[700],
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  void _mostrarMensajeError(String mensaje) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            const Icon(Icons.error_outline, color: Colors.white),
-            const SizedBox(width: 12),
-            Expanded(child: Text(mensaje)),
-          ],
-        ),
-        backgroundColor: Colors.red[700],
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  // ==============================================
-  // 🕐 SELECCIÓN DE FECHA Y HORA CON VALIDACIÓN
-  // ==============================================
-  Future<void> _seleccionarFechaYHora() async {
-    if (_selectedMedicoId == null) {
-      _mostrarMensajeError('Primero selecciona un médico');
-      return;
-    }
-
-    if (_cargandoHorarios) {
-      _mostrarMensajeError('Cargando horarios del médico, espera un momento');
-      return;
-    }
-
-    if (_horariosPorDia.isEmpty) {
-      _mostrarMensajeError(
-        'El médico seleccionado no tiene horarios configurados',
-      );
-      return;
-    }
-
-    // ✅ Buscar el próximo día con horario para el initialDate
-    DateTime initialDate = DateTime.now();
-    for (int i = 0; i < 90; i++) {
-      final candidate = DateTime.now().add(Duration(days: i));
-      if (_horariosPorDia.containsKey(candidate.weekday)) {
-        initialDate =
-            DateTime(candidate.year, candidate.month, candidate.day);
-        break;
-      }
-    }
-
-    final fechaSeleccionada = await showDatePicker(
-      context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
-      initialDate: initialDate,
-      helpText: 'Selecciona la fecha',
-      cancelText: 'Cancelar',
-      confirmText: 'Siguiente',
-      selectableDayPredicate: (DateTime dia) {
-        return _horariosPorDia.containsKey(dia.weekday);
-      },
-    );
-
-    if (fechaSeleccionada == null || !mounted) return;
-
-    final horariosDelDia = _horariosPorDia[fechaSeleccionada.weekday] ?? [];
-
-    TimeOfDay initial = TimeOfDay.now();
-    if (horariosDelDia.isNotEmpty) {
-      initial = _parseHora(horariosDelDia.first["horaInicio"] as String);
-    }
-
-    final horaSeleccionada = await showTimePicker(
-      context: context,
-      initialTime: initial,
-      helpText: 'Selecciona la hora',
-      cancelText: 'Cancelar',
-      confirmText: 'Aceptar',
-    );
-
-    if (horaSeleccionada == null) return;
-
-    if (!_horaEnRango(horaSeleccionada, horariosDelDia)) {
-      _mostrarMensajeError(
-        'La hora seleccionada está fuera del horario del médico',
-      );
-      return;
-    }
-
-    setState(() {
-      _selectedDate = fechaSeleccionada;
-      _selectedTime = horaSeleccionada;
-    });
-  }
-
-  // ==============================================
-  // 🔧 HELPERS
-  // ==============================================
-  bool _horaEnRango(TimeOfDay hora, List<Map<String, dynamic>> rangos) {
-    final minutos = hora.hour * 60 + hora.minute;
-    for (final r in rangos) {
-      final ini = _toMinutos(r["horaInicio"] as String);
-      final fin = _toMinutos(r["horaFin"] as String);
-      if (minutos >= ini && minutos <= fin) return true;
-    }
-    return false;
-  }
-
-  int _toMinutos(String hhmm) {
-    final p = hhmm.split(":");
-    return int.parse(p[0]) * 60 + int.parse(p[1]);
-  }
-
-  TimeOfDay _parseHora(String hhmm) {
-    final p = hhmm.split(":");
-    return TimeOfDay(hour: int.parse(p[0]), minute: int.parse(p[1]));
-  }
-
-  String _formatearFecha(DateTime fecha) {
-    final diasSemana = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-    final meses = [
-      'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
-      'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
-    ];
-    return '${diasSemana[fecha.weekday % 7]}, ${fecha.day} ${meses[fecha.month - 1]} ${fecha.year}';
-  }
-
-  // ==============================================
-  // ✅ NUEVO: TARJETA DE DISPONIBILIDAD DEL MÉDICO
-  // ==============================================
-  Widget _buildDisponibilidadMedico(
-      bool isSmall, double fontSizeSmall, double fontSizeBody) {
-    final List<int> diasOrdenados = _horariosPorDia.keys.toList()..sort();
-
-    return Container(
-      padding: EdgeInsets.all(isSmall ? 12 : 16),
-      decoration: BoxDecoration(
-        color: Colors.green[50],
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.green[200]!, width: 1.5),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  void _mostrarSnack(String msg, Color color, IconData icono) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.green[100],
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.event_available,
-                  color: Colors.green[800],
-                  size: isSmall ? 18 : 22,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Disponibilidad del médico',
-                      style: TextStyle(
-                        fontSize: fontSizeBody,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green[900],
-                      ),
-                    ),
-                    Text(
-                      'Estos son los días y horarios de atención',
-                      style: TextStyle(
-                        fontSize: fontSizeSmall,
-                        color: Colors.green[700],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              Icon(icono, color: Colors.white, size: 20),
+              const SizedBox(width: 12),
+              Expanded(child: Text(msg)),
             ],
           ),
-          const SizedBox(height: 12),
-
-          ...diasOrdenados.map((dia) {
-            final rangos = _horariosPorDia[dia] ?? [];
-            final nombre = _nombresDias[dia - 1];
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: isSmall ? 70 : 90,
-                    child: Text(
-                      nombre,
-                      style: TextStyle(
-                        fontSize: fontSizeSmall,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.green[900],
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      children: rangos.map((r) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: Colors.green[300]!,
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.access_time,
-                                size: isSmall ? 11 : 13,
-                                color: Colors.green[700],
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                '${r["horaInicio"]} - ${r["horaFin"]}',
-                                style: TextStyle(
-                                  fontSize: fontSizeSmall,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green[800],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.green[100],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.info_outline,
-                  size: isSmall ? 14 : 16,
-                  color: Colors.green[800],
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Elige una fecha dentro de estos días y una hora dentro de los rangos mostrados',
-                    style: TextStyle(
-                      fontSize: fontSizeSmall,
-                      color: Colors.green[900],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.all(16),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+      );
   }
+
+  void _mostrarMensajeError(String msg) =>
+      _mostrarSnack(msg, AppTheme.danger, Icons.error_outline_rounded);
 
   // ==============================================
   // 🏗 BUILD
   // ==============================================
   @override
   Widget build(BuildContext context) {
-    final isSmall = _isSmallScreen(context);
-    final screenHeight = MediaQuery.of(context).size.height;
+    final scale = Provider.of<AccessibilityProvider>(context).fontScale;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final double paddingHorizontal = isSmall ? 12.0 : 20.0;
-    final double paddingVertical = isSmall ? 12.0 : 20.0;
-    final double spacing = isSmall ? 12.0 : 16.0;
-    final double buttonHeight = isSmall ? 44.0 : 52.0;
-    final double fontSizeTitle = isSmall ? 16.0 : 18.0;
-    final double fontSizeBody = isSmall ? 13.0 : 14.0;
-    final double fontSizeSmall = isSmall ? 11.0 : 12.0;
-    final double iconSize = isSmall ? 20.0 : 22.0;
-
-    final bool sinHorarios = _selectedMedicoId != null &&
-        !_cargandoHorarios &&
-        _horariosPorDia.isEmpty;
+    String? resumen;
+    if (_listo) {
+      final nombre = _medicoActual?["nombre"]?.toString() ?? 'Médico';
+      resumen =
+          '$nombre\n${AgendaUtils.fechaLarga(_selectedDate!)} • ${_selectedTime!.format(context)}';
+    }
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
       appBar: AppBar(
         title: Text(
-          'Agendar cita médica',
+          'Agendar cita',
           style: TextStyle(
-            fontWeight: FontWeight.w600,
-            fontSize: fontSizeTitle,
+            fontWeight: FontWeight.bold,
+            fontSize: 20 * scale,
           ),
         ),
+        centerTitle: true,
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.blue[800],
-        centerTitle: false,
-        toolbarHeight: isSmall ? 50.0 : 56.0,
       ),
-      body: SafeArea(
-        child: Form(
-          key: _formKey,
+      bottomNavigationBar: BarraConfirmar(
+        resumen: resumen,
+        hint: 'Elige médico, fecha y hora para continuar',
+        texto: 'Solicitar cita',
+        cargando: _isLoading,
+        habilitado: _listo,
+        onPressed: _agendarCita,
+        isDark: isDark,
+        scale: scale,
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 700),
           child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.symmetric(
-              horizontal: paddingHorizontal,
-              vertical: paddingVertical,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: screenHeight - (isSmall ? 120 : 150),
-              ),
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Form(
+              key: _formKey,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Tarjeta informativa
-                  Container(
-                    padding: EdgeInsets.all(isSmall ? 12 : 16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue[100]!),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.health_and_safety,
-                          color: Colors.blue[700],
-                          size: isSmall ? 24 : 28,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Selecciona todos los datos para agendar tu cita',
-                            style: TextStyle(
-                              color: Colors.blue[800],
-                              fontSize: isSmall ? 12 : 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  SizedBox(height: spacing),
-
-                  // CAMPO: MÉDICO
-                  Container(
-                    decoration: _tarjetaDecoracion(isSmall),
-                    child: DropdownButtonFormField<int>(
-                      value: _selectedMedicoId,
-                      decoration: _inputDecoracion(
-                        'Médico especialista',
-                        Icons.medical_services,
-                        isSmall,
-                      ),
-                      isExpanded: true,
-                      hint: Text(
-                        'Selecciona un especialista',
-                        style: TextStyle(
-                          fontSize: fontSizeBody,
-                          color: Colors.grey[500],
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      items: widget.medicos.map((medico) {
-                        final id = int.tryParse(
-                            medico["idProfesional"].toString());
-                        final nombre = medico["nombre"] ?? 'Sin nombre';
-                        final especialidad =
-                            medico["especialidad"] ?? 'Especialista';
-
-                        return DropdownMenuItem<int>(
-                          value: id,
-                          child: Wrap(
-                            spacing: 2,
-                            runSpacing: 2,
-                            children: [
-                              Text(
-                                nombre,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                  fontSize: fontSizeBody,
-                                ),
-                              ),
-                              Text(
-                                " • $especialidad",
-                                style: TextStyle(
-                                  fontSize: fontSizeSmall,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        if (value == null) return;
-                        setState(() => _selectedMedicoId = value);
-                        _cargarHorariosDelMedico(value);
-                      },
-                      validator: (value) =>
-                          value == null ? 'Selecciona un médico' : null,
-                    ),
-                  ),
-
-                  // Cargando horarios
-                  if (_cargandoHorarios) ...[
-                    SizedBox(height: spacing),
-                    Container(
-                      padding: EdgeInsets.all(isSmall ? 12 : 16),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.blue[200]!),
-                      ),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Colors.blue[700]!,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          Text(
-                            'Consultando disponibilidad del médico...',
-                            style: TextStyle(
-                              fontSize: fontSizeSmall,
-                              color: Colors.blue[800],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ]
-                  // Mostrar disponibilidad si hay horarios
-                  else if (_selectedMedicoId != null &&
-                      _horariosPorDia.isNotEmpty) ...[
-                    SizedBox(height: spacing),
-                    _buildDisponibilidadMedico(
-                        isSmall, fontSizeSmall, fontSizeBody),
-                  ],
-
-                  // Aviso si no hay horarios
-                  if (sinHorarios) ...[
-                    SizedBox(height: spacing),
-                    Container(
-                      padding: EdgeInsets.all(isSmall ? 12 : 14),
-                      decoration: BoxDecoration(
-                        color: Colors.orange[50],
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange[200]!),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.warning_amber,
-                            color: Colors.orange[800],
-                            size: isSmall ? 20 : 22,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Este médico aún no tiene horarios configurados. Intenta con otro especialista.',
-                              style: TextStyle(
-                                fontSize: fontSizeSmall,
-                                color: Colors.orange[900],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  SizedBox(height: spacing),
-
-                  // Campo: Motivo
-                  Container(
-                    decoration: _tarjetaDecoracion(isSmall),
-                    child: TextFormField(
-                      controller: _motivoController,
-                      decoration: _inputDecoracion(
-                        'Motivo de la consulta',
-                        Icons.description,
-                        isSmall,
-                      ),
-                      maxLines: isSmall ? 2 : 3,
-                      maxLength: 200,
-                      style: TextStyle(fontSize: fontSizeBody),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Por favor, describe el motivo de tu consulta';
-                        }
-                        if (value.length < 10) {
-                          return 'Describe brevemente tu síntoma o motivo';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  SizedBox(height: spacing),
-
-                  // Campo: Fecha y hora
-                  Container(
-                    decoration: _tarjetaDecoracion(isSmall),
-                    child: InkWell(
-                      onTap: (_selectedMedicoId == null ||
-                              _cargandoHorarios ||
-                              sinHorarios)
-                          ? null
-                          : _seleccionarFechaYHora,
-                      borderRadius: BorderRadius.circular(12),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: isSmall ? 12 : 16,
-                          vertical: isSmall ? 12 : 16,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.calendar_today,
-                                  color: (_selectedMedicoId == null ||
-                                          sinHorarios)
-                                      ? Colors.grey[400]
-                                      : Colors.blue[700],
-                                  size: iconSize,
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        'Fecha y hora',
-                                        style: TextStyle(
-                                          color: Colors.grey[600],
-                                          fontSize: fontSizeSmall,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        _selectedDate != null &&
-                                                _selectedTime != null
-                                            ? '${_formatearFecha(_selectedDate!)} - ${_selectedTime!.format(context)}'
-                                            : _selectedMedicoId == null
-                                                ? 'Primero selecciona un médico'
-                                                : 'Selecciona fecha y hora disponible',
-                                        style: TextStyle(
-                                          color: _selectedDate != null
-                                              ? Colors.black87
-                                              : Colors.grey[500],
-                                          fontWeight: _selectedDate != null
-                                              ? FontWeight.w500
-                                              : FontWeight.normal,
-                                          fontSize: fontSizeBody,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Icon(
-                                  Icons.arrow_forward_ios,
-                                  color: Colors.grey[400],
-                                  size: isSmall ? 14 : 16,
-                                ),
-                              ],
-                            ),
-                            if (_selectedDate != null &&
-                                (_horariosPorDia[_selectedDate!.weekday] ??
-                                        [])
-                                    .isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 6,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.blue[50],
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.access_time,
-                                      size: 14,
-                                      color: Colors.blue[800],
-                                    ),
-                                    const SizedBox(width: 6),
-                                    Expanded(
-                                      child: Text(
-                                        'Disponible: ${(_horariosPorDia[_selectedDate!.weekday] ?? []).map((h) => "${h["horaInicio"]}-${h["horaFin"]}").join(", ")}',
-                                        style: TextStyle(
-                                          fontSize: fontSizeSmall,
-                                          color: Colors.blue[800],
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: isSmall ? 8 : 12),
-
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.access_time,
-                        size: isSmall ? 14 : 16,
-                        color: Colors.grey[600],
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _selectedMedicoId == null
-                              ? 'Selecciona un médico para ver su disponibilidad'
-                              : 'Solo verás días y horas dentro del horario del médico',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: isSmall ? 10 : 12,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: isSmall ? 24 : 32),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: buttonHeight,
-                    child: ElevatedButton(
-                      onPressed: (_isLoading ||
-                              _cargandoHorarios ||
-                              sinHorarios)
-                          ? null
-                          : _agendarCita,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue[700],
-                        foregroundColor: Colors.white,
-                        elevation: 2,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: _isLoading
-                          ? SizedBox(
-                              height: isSmall ? 18 : 20,
-                              width: isSmall ? 18 : 20,
-                              child: const CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white),
-                              ),
-                            )
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.check_circle_outline,
-                                  size: isSmall ? 18 : 22,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Confirmar cita',
-                                  style: TextStyle(
-                                    fontSize: isSmall ? 14 : 16,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  ),
+                  _buildSeccionMedico(isDark, scale),
+                  const SizedBox(height: 16),
+                  _buildSeccionFechaHora(isDark, scale),
+                  const SizedBox(height: 16),
+                  _buildSeccionMotivo(isDark, scale),
                 ],
               ),
             ),
@@ -883,62 +299,278 @@ class _AgendarCitaScreenState extends State<AgendarCitaScreen> {
     );
   }
 
-  InputDecoration _inputDecoracion(String label, IconData icon, bool isSmall) {
-    final double fontSizeLabel = isSmall ? 12.0 : 13.0;
-    final double iconSize = isSmall ? 18.0 : 22.0;
-    final double paddingVertical = isSmall ? 12.0 : 16.0;
-    final double paddingHorizontal = isSmall ? 12.0 : 16.0;
+  // ---------- MÉDICO ----------
+  Widget _buildSeccionMedico(bool isDark, double scale) {
+    return SeccionAgendar(
+      icon: Icons.medical_services_rounded,
+      title: 'Especialista',
+      subtitle: 'Elige con quién quieres tu cita',
+      isDark: isDark,
+      scale: scale,
+      child: widget.medicos.isEmpty
+          ? AvisoAgendar(
+              icon: Icons.info_outline_rounded,
+              color: AppTheme.warning,
+              texto: 'No hay especialistas disponibles por ahora.',
+              scale: scale,
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  height: 84 * scale.clamp(1.0, 1.4),
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: widget.medicos.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (context, i) {
+                      final m = widget.medicos[i];
+                      return _buildMedicoCard(m, isDark, scale);
+                    },
+                  ),
+                ),
+                if (_selectedMedicoId != null &&
+                    !_cargandoHorarios &&
+                    _horariosPorDia.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  ResumenHorario(
+                    porDia: _horariosPorDia,
+                    titulo: 'Horario de atención',
+                    isDark: isDark,
+                    scale: scale,
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
 
-    return InputDecoration(
-      labelText: label,
-      labelStyle: TextStyle(
-        color: Colors.grey[600],
-        fontSize: fontSizeLabel,
-      ),
-      prefixIcon: Icon(icon, color: Colors.blue[700], size: iconSize),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.grey[300]!),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.blue[700]!, width: 2),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.red[400]!, width: 2),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: Colors.red[400]!, width: 2),
-      ),
-      contentPadding: EdgeInsets.symmetric(
-        horizontal: paddingHorizontal,
-        vertical: paddingVertical,
-      ),
-      isDense: true,
-      errorStyle: TextStyle(
-        fontSize: isSmall ? 11 : 12,
+  Widget _buildMedicoCard(dynamic m, bool isDark, double scale) {
+    final id = _idDe(m);
+    final nombre = (m["nombre"] ?? 'Sin nombre').toString();
+    final especialidad = (m["especialidad"] ?? 'Especialista').toString();
+    final sel = id != null && id == _selectedMedicoId;
+
+    return Material(
+      color: sel
+          ? AppTheme.primary.withAlpha(24)
+          : (isDark ? AppTheme.gray900 : AppTheme.gray100),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: id == null ? null : () => _seleccionarMedico(id),
+        child: Container(
+          width: 230,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: sel ? AppTheme.primary : AppTheme.gray300,
+              width: sel ? 1.8 : 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor:
+                    sel ? AppTheme.primary : AppTheme.primary.withAlpha(40),
+                child: Text(
+                  _iniciales(nombre),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: sel ? Colors.white : AppTheme.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      nombre,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 14 * scale,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      especialidad,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12 * scale,
+                        color: AppTheme.gray500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (sel)
+                const Icon(Icons.check_circle_rounded,
+                    color: AppTheme.primary, size: 20),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  BoxDecoration _tarjetaDecoracion(bool isSmall) {
-    return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(12),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.grey.withOpacity(0.1),
-          spreadRadius: 1,
-          blurRadius: isSmall ? 2 : 4,
-          offset: const Offset(0, 2),
+  // ---------- FECHA Y HORA ----------
+  Widget _buildSeccionFechaHora(bool isDark, double scale) {
+    Widget contenido;
+
+    if (_selectedMedicoId == null) {
+      contenido = AvisoAgendar(
+        icon: Icons.arrow_upward_rounded,
+        color: AppTheme.gray500,
+        texto: 'Primero elige un especialista para ver su disponibilidad.',
+        scale: scale,
+      );
+    } else if (_cargandoHorarios) {
+      contenido = Row(
+        children: [
+          const SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Consultando disponibilidad...',
+            style: TextStyle(fontSize: 13 * scale, color: AppTheme.gray500),
+          ),
+        ],
+      );
+    } else if (_errorCarga) {
+      contenido = AvisoAgendar(
+        icon: Icons.wifi_off_rounded,
+        color: AppTheme.danger,
+        texto: 'No se pudo cargar la disponibilidad del médico.',
+        scale: scale,
+        accion: TextButton.icon(
+          onPressed: () => _seleccionarMedico(_selectedMedicoId!),
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+          label: const Text('Reintentar'),
         ),
-      ],
+      );
+    } else if (_sinHorarios) {
+      contenido = AvisoAgendar(
+        icon: Icons.event_busy_rounded,
+        color: AppTheme.warning,
+        texto:
+            'Este médico no tiene horas disponibles próximamente. Prueba con otro especialista.',
+        scale: scale,
+      );
+    } else {
+      final horas = _selectedDate == null
+          ? <TimeOfDay>[]
+          : AgendaUtils.slots(_selectedDate!, _horariosPorDia);
+
+      contenido = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SelectorFecha(
+            fechas: _fechasDisponibles,
+            seleccionada: _selectedDate,
+            onSeleccion: _seleccionarFecha,
+            onCalendario: _abrirCalendario,
+            isDark: isDark,
+            scale: scale,
+          ),
+          const SizedBox(height: 16),
+          if (_selectedDate == null)
+            Text(
+              'Elige un día para ver las horas disponibles.',
+              style: TextStyle(fontSize: 13 * scale, color: AppTheme.gray500),
+            )
+          else ...[
+            Text(
+              'Horas disponibles • ${AgendaUtils.fechaLarga(_selectedDate!)}',
+              style: TextStyle(
+                fontSize: 13 * scale,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.gray500,
+              ),
+            ),
+            const SizedBox(height: 10),
+            SelectorHora(
+              horas: horas,
+              seleccionada: _selectedTime,
+              onSeleccion: (t) => setState(() => _selectedTime = t),
+              isDark: isDark,
+              scale: scale,
+            ),
+          ],
+        ],
+      );
+    }
+
+    return SeccionAgendar(
+      icon: Icons.event_rounded,
+      title: 'Fecha y hora',
+      subtitle: 'Solo se muestran los días y horas del médico',
+      isDark: isDark,
+      scale: scale,
+      child: contenido,
+    );
+  }
+
+  // ---------- MOTIVO ----------
+  Widget _buildSeccionMotivo(bool isDark, double scale) {
+    return SeccionAgendar(
+      icon: Icons.description_rounded,
+      title: 'Motivo de la consulta',
+      subtitle: 'Cuéntale brevemente al médico qué sientes',
+      isDark: isDark,
+      scale: scale,
+      child: TextFormField(
+        controller: _motivoController,
+        minLines: 3,
+        maxLines: 4,
+        maxLength: 200,
+        textCapitalization: TextCapitalization.sentences,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
+        style: TextStyle(fontSize: 15 * scale),
+        decoration: InputDecoration(
+          hintText: 'Ej: Control de presión arterial, dolor en el pecho...',
+          hintStyle: TextStyle(color: AppTheme.gray400, fontSize: 14 * scale),
+          filled: true,
+          fillColor:
+              isDark ? AppTheme.gray900 : AppTheme.gray100.withAlpha(150),
+          contentPadding: const EdgeInsets.all(14),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: AppTheme.gray300),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(color: AppTheme.gray300),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppTheme.primary, width: 1.8),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppTheme.danger),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppTheme.danger, width: 1.8),
+          ),
+        ),
+        validator: (value) {
+          final t = value?.trim() ?? '';
+          if (t.isEmpty) return 'Describe el motivo de tu consulta';
+          if (t.length < 10) return 'Describe brevemente tu síntoma o motivo';
+          return null;
+        },
+      ),
     );
   }
 }

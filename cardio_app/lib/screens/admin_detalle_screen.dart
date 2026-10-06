@@ -35,21 +35,23 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   List<Map<String, dynamic>> usuarios = [];
   List<Map<String, dynamic>> medicos = [];
   List<Map<String, dynamic>> pacientes = [];
-  List<Map<String, dynamic>> cuidadores = []; // un registro por cuidador
+  List<Map<String, dynamic>> cuidadores = [];
   List<Map<String, dynamic>> logs = [];
   List<Map<String, dynamic>> alertas = [];
 
   int tab = 0;
 
+  // 🎯 Filtro por rol en la pestaña Usuarios
+  String _filtroRol = "todos"; // todos | medico | paciente | cuidador | admin
+
   int? selectedMedico;
   int? selectedPaciente;
 
-  // ✅ Asignación de cuidadores (pestaña Asignar)
+  int _modoAsignar = 0;
   int? selectedPacienteCuidador;
   int? selectedCuidadorExistente;
   final TextEditingController relacionCuidadorCtrl = TextEditingController();
-  List<Map<String, dynamic>> cuidadoresDePaciente = [];
-  bool _cargandoCuidadoresPaciente = false;
+  List<Map<String, dynamic>> asignacionesCuidadores = [];
   bool _guardandoCuidador = false;
 
   bool loading = true;
@@ -63,6 +65,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
 
   late TabController _tabController = TabController(length: 6, vsync: this);
 
+  // 🎨 Paleta
   static const Color _primary = AppTheme.primary;
   static const Color _success = AppTheme.success;
   static const Color _warning = AppTheme.warning;
@@ -72,15 +75,14 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   static const Color _textSub = AppTheme.gray500;
   static const Color _border = AppTheme.gray300;
 
+  Color _soft(Color c) => c.withOpacity(0.10);
+  Color _softer(Color c) => c.withOpacity(0.06);
+
   @override
   void initState() {
     super.initState();
     tab = widget.initialTab;
-
-    if (tab >= 0 && tab < 6) {
-      _tabController.index = tab;
-    }
-
+    if (tab >= 0 && tab < 6) _tabController.index = tab;
     loadAll();
   }
 
@@ -93,7 +95,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   }
 
   // =====================================================
-  // ✅ CARGAR TODOS LOS DATOS
+  // ✅ CARGA DE DATOS
   // =====================================================
   Future<void> loadAll({bool forceConfig = false}) async {
     try {
@@ -120,15 +122,12 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       final cuidadoresRaw =
           List<Map<String, dynamic>>.from(futures[5] as List);
 
-      // ✅ El endpoint trae una fila por cada cuidador y paciente:
-      // aquí se deja un solo registro por cuidador para listas y contadores
       final vistos = <int>{};
       final cuidadoresData = cuidadoresRaw.where((c) {
         final id = _idCuidadorDe(c);
         return id == null || vistos.add(id);
       }).toList();
 
-      // ✅ Combinar todos los usuarios con sus roles
       final usuariosCombinados = <Map<String, dynamic>>[
         ...medicosData.map((m) => {
               ...m,
@@ -162,6 +161,9 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
         medicos = medicosData;
         pacientes = pacientesData;
         cuidadores = cuidadoresData;
+        asignacionesCuidadores = cuidadoresRaw
+            .where((c) => safeId(c["idPaciente"]) != null)
+            .toList();
         usuarios = usuariosCombinados;
         usuariosFiltrados = usuariosCombinados;
         logs = logsData;
@@ -174,23 +176,13 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
           mantenimientoActivo = config["modo_mantenimiento"] == "true";
           denegacionActiva = config["denegacion_accesos"] == "true";
           sesionTimeout =
-              int.tryParse(config["sesion_timeout"]?.toString() ?? "30") ??
-                  30;
+              int.tryParse(config["sesion_timeout"]?.toString() ?? "30") ?? 30;
           configLoaded = true;
         }
-
         loading = false;
       });
 
-      // ✅ Si hay un paciente elegido en la sección de cuidadores, se actualiza su lista
-      if (selectedPacienteCuidador != null) {
-        _cargarCuidadoresDePaciente();
-      }
-
-      // ✅ Reaplicar filtro de búsqueda actual
-      if (buscarCtrl.text.isNotEmpty) {
-        filtrarUsuarios(buscarCtrl.text);
-      }
+      if (buscarCtrl.text.isNotEmpty) filtrarUsuarios(buscarCtrl.text);
     } catch (e) {
       debugPrint("❌ ERROR loadAll => $e");
       if (mounted) {
@@ -200,277 +192,44 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     }
   }
 
+  // =====================================================
+  // ✅ FILTROS
+  // =====================================================
   void filtrarUsuarios(String query) {
     final texto = query.toLowerCase();
     setState(() {
       usuariosFiltrados = usuarios.where((u) {
+        final rol = (u["rol"] ?? "").toString().toLowerCase();
+
+        // 🎯 Filtro por rol
+        if (_filtroRol != "todos" && rol != _filtroRol) return false;
+
+        // 🔍 Filtro por texto
         final nombre = (u["nombre"] ?? "").toString().toLowerCase();
         final correo = (u["correo"] ?? "").toString().toLowerCase();
-        final rol =
+        final rolLabel =
             (u["rolLabel"] ?? u["rol"] ?? "").toString().toLowerCase();
         return nombre.contains(texto) ||
             correo.contains(texto) ||
-            rol.contains(texto);
+            rolLabel.contains(texto);
       }).toList();
     });
+  }
+
+  void _setFiltroRol(String rol) {
+    setState(() => _filtroRol = rol);
+    filtrarUsuarios(buscarCtrl.text);
   }
 
   void _crearUsuario() => _showUsuarioForm(null);
   void _editarUsuario(Map<String, dynamic> usuario) =>
       _showUsuarioForm(usuario);
 
-  // =====================================================
-  // ✅ DROPDOWN DE ROLES
-  // =====================================================
-  List<DropdownMenuItem<String>> _buildRolItems() {
-    return [
-      const DropdownMenuItem(
-        value: "admin",
-        child: Row(children: [
-          Icon(Icons.admin_panel_settings, size: 18, color: _danger),
-          SizedBox(width: 8),
-          Text("Administrador"),
-        ]),
-      ),
-      const DropdownMenuItem(
-        value: "medico",
-        child: Row(children: [
-          Icon(Icons.medical_services, size: 18, color: _primary),
-          SizedBox(width: 8),
-          Text("Médico"),
-        ]),
-      ),
-      const DropdownMenuItem(
-        value: "paciente",
-        child: Row(children: [
-          Icon(Icons.person, size: 18, color: _success),
-          SizedBox(width: 8),
-          Text("Paciente"),
-        ]),
-      ),
-      const DropdownMenuItem(
-        value: "cuidador",
-        child: Row(children: [
-          Icon(Icons.people_outline, size: 18, color: _cuidador),
-          SizedBox(width: 8),
-          Text("Cuidador"),
-        ]),
-      ),
-    ];
-  }
-
-  // =====================================================
-  // ✅ FORMULARIO DE USUARIO
-  // =====================================================
-  void _showUsuarioForm(Map<String, dynamic>? usuario) {
-    final nombreCtrl =
-        TextEditingController(text: usuario?["nombre"] ?? "");
-    final correoCtrl =
-        TextEditingController(text: usuario?["correo"] ?? "");
-    final passCtrl = TextEditingController();
-
-    String rolSel = usuario?["rol"] ?? "paciente";
-
-    final int? idUsuarioEditar = usuario != null
-        ? int.tryParse(usuario["idUsuario"]?.toString() ?? "")
-        : null;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      backgroundColor: AppTheme.white,
-      builder: (_) => StatefulBuilder(
-        builder: (ctx, setModal) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: AppTheme.gray300,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Icon(
-                    usuario == null ? Icons.person_add : Icons.edit,
-                    size: 48,
-                    color: _primary,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    usuario == null ? "Crear Usuario" : "Editar Usuario",
-                    style: AppTheme.title1,
-                  ),
-                  if (idUsuarioEditar != null)
-                    Text(
-                      "ID Usuario: $idUsuarioEditar",
-                      style: AppTheme.caption.copyWith(color: _textSub),
-                    ),
-                  const SizedBox(height: 20),
-                  _buildModalTextField(
-                    controller: nombreCtrl,
-                    label: "Nombre completo",
-                    icon: Icons.person_outline,
-                  ),
-                  const SizedBox(height: 15),
-                  _buildModalTextField(
-                    controller: correoCtrl,
-                    label: "Correo electrónico",
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  if (usuario == null) ...[
-                    const SizedBox(height: 15),
-                    _buildModalTextField(
-                      controller: passCtrl,
-                      label: "Contraseña",
-                      icon: Icons.lock_outline,
-                      obscureText: true,
-                    ),
-                  ],
-                  const SizedBox(height: 15),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: _border),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButtonFormField<String>(
-                        value: rolSel,
-                        decoration: const InputDecoration(
-                          labelText: "Rol",
-                          border: InputBorder.none,
-                          prefixIcon: Icon(Icons.assignment_ind, size: 20),
-                        ),
-                        items: _buildRolItems(),
-                        onChanged: (v) {
-                          if (v != null) setModal(() => rolSel = v);
-                        },
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: ElevatedButton.icon(
-                      style: AppTheme.primaryButtonStyle,
-                      icon: Icon(usuario == null
-                          ? Icons.person_add
-                          : Icons.save),
-                      label: Text(usuario == null
-                          ? "Crear usuario"
-                          : "Guardar cambios"),
-                      onPressed: () async {
-                        if (nombreCtrl.text.trim().isEmpty ||
-                            correoCtrl.text.trim().isEmpty) {
-                          _snack("Completa todos los campos", isError: true);
-                          return;
-                        }
-
-                        Map<String, dynamic> resultado;
-
-                        if (usuario == null) {
-                          if (passCtrl.text.trim().isEmpty) {
-                            _snack("Ingresa una contraseña", isError: true);
-                            return;
-                          }
-                          resultado = await service.crearUsuario(
-                            nombre: nombreCtrl.text.trim(),
-                            correo: correoCtrl.text.trim(),
-                            password: passCtrl.text.trim(),
-                            rol: rolSel,
-                          );
-                        } else {
-                          if (idUsuarioEditar == null) {
-                            _snack("ID de usuario inválido", isError: true);
-                            return;
-                          }
-                          resultado = await service.editarUsuario(
-                            idUsuario: idUsuarioEditar,
-                            nombre: nombreCtrl.text.trim(),
-                            correo: correoCtrl.text.trim(),
-                            rol: rolSel,
-                          );
-                        }
-
-                        if (!mounted) return;
-                        Navigator.pop(ctx);
-
-                        _snack(
-                          resultado["success"] == true
-                              ? "✓ ${resultado["message"]}"
-                              : "✗ ${resultado["message"]}",
-                          isError: resultado["success"] != true,
-                        );
-
-                        // ✅ Recargar SIEMPRE después de crear/editar
-                        await loadAll(forceConfig: true);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildModalTextField({
-    required TextEditingController controller,
-    required String label,
-    required IconData icon,
-    TextInputType keyboardType = TextInputType.text,
-    bool obscureText = false,
-  }) {
-    return TextField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, size: 20, color: _textSub),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _primary, width: 2),
-        ),
-      ),
-    );
-  }
-
   int? safeId(dynamic v) {
     if (v == null) return null;
     return int.tryParse(v.toString());
   }
 
-  // Id del usuario cuidador, venga como idCuidador, idUsuario o cuidador_idUsuario
   int? _idCuidadorDe(Map<String, dynamic> c) {
     return safeId(c["idCuidador"] ?? c["idUsuario"] ?? c["cuidador_idUsuario"]);
   }
@@ -490,11 +249,9 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
             Expanded(child: Text(msg)),
           ],
         ),
-        backgroundColor: isError ? AppTheme.danger : AppTheme.success,
+        backgroundColor: isError ? _danger : _success,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         duration: const Duration(seconds: 2),
         margin: const EdgeInsets.all(16),
       ),
@@ -510,7 +267,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
             ),
             title: Row(
               children: [
-                Icon(Icons.warning_amber, color: _warning, size: 28),
+                Icon(Icons.warning_amber_rounded, color: _warning, size: 28),
                 const SizedBox(width: 12),
                 Expanded(child: Text(title, style: AppTheme.title2)),
               ],
@@ -533,24 +290,20 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   }
 
   // =====================================================
-  // ✅ ASIGNAR MÉDICO A PACIENTE
+  // ✅ ACCIONES
   // =====================================================
   Future<void> asignar() async {
     if (selectedMedico == null || selectedPaciente == null) {
       _snack("Selecciona médico y paciente", isError: true);
       return;
     }
-
-    final resultado =
-        await service.asignar(selectedPaciente!, selectedMedico!);
-
+    final resultado = await service.asignar(selectedPaciente!, selectedMedico!);
     _snack(
       resultado["success"] == true
           ? "✓ ${resultado["message"]}"
           : "✗ ${resultado["message"]}",
       isError: resultado["success"] != true,
     );
-
     if (resultado["success"] == true) {
       setState(() {
         selectedMedico = null;
@@ -560,26 +313,6 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     }
   }
 
-  // =====================================================
-  // ✅ CUIDADORES DE UN PACIENTE (asignar / crear / editar / quitar)
-  // =====================================================
-  Future<void> _cargarCuidadoresDePaciente() async {
-    if (selectedPacienteCuidador == null) {
-      if (mounted) setState(() => cuidadoresDePaciente = []);
-      return;
-    }
-
-    if (mounted) setState(() => _cargandoCuidadoresPaciente = true);
-    final lista =
-        await service.getCuidadoresPaciente(selectedPacienteCuidador!);
-    if (!mounted) return;
-    setState(() {
-      cuidadoresDePaciente = lista;
-      _cargandoCuidadoresPaciente = false;
-    });
-  }
-
-  // Asigna un cuidador que YA existe (usuario con rol cuidador) a un paciente
   Future<Map<String, dynamic>> _postAsignarCuidadorExistente({
     required int idUsuario,
     required int idPaciente,
@@ -616,12 +349,10 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   }
 
   Future<void> asignarCuidadorExistente() async {
-    if (selectedPacienteCuidador == null ||
-        selectedCuidadorExistente == null) {
+    if (selectedPacienteCuidador == null || selectedCuidadorExistente == null) {
       _snack("Selecciona paciente y cuidador", isError: true);
       return;
     }
-
     setState(() => _guardandoCuidador = true);
     final r = await _postAsignarCuidadorExistente(
       idUsuario: selectedCuidadorExistente!,
@@ -632,12 +363,10 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     );
     if (!mounted) return;
     setState(() => _guardandoCuidador = false);
-
     _snack(
       r["success"] == true ? "✓ ${r["message"]}" : "✗ ${r["message"]}",
       isError: r["success"] != true,
     );
-
     if (r["success"] == true) {
       setState(() => selectedCuidadorExistente = null);
       relacionCuidadorCtrl.clear();
@@ -645,7 +374,6 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     }
   }
 
-  // Diálogo para crear o editar un cuidador. Devuelve null si se cancela.
   Future<Map<String, String>?> _dialogoCuidador({
     required String titulo,
     required bool esNuevo,
@@ -750,7 +478,6 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       _snack("Primero selecciona un paciente", isError: true);
       return;
     }
-
     final datos =
         await _dialogoCuidador(titulo: "Nuevo cuidador", esNuevo: true);
     if (datos == null) return;
@@ -775,19 +502,20 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
 
   Future<void> editarCuidadorDePaciente(Map<String, dynamic> c) async {
     final idCuidador = _idCuidadorDe(c);
-    if (idCuidador == null || selectedPacienteCuidador == null) return;
+    final idPaciente = safeId(c["idPaciente"]);
+    if (idCuidador == null || idPaciente == null) return;
 
     final datos = await _dialogoCuidador(
       titulo: "Editar cuidador",
       esNuevo: false,
-      nombre: (c["nombre"] ?? c["nombreCuidador"] ?? "").toString(),
-      correo: (c["correo"] ?? "").toString(),
+      nombre: (c["nombreCuidador"] ?? c["nombre"] ?? "").toString(),
+      correo: (c["correo"] ?? c["cuidador_correo"] ?? "").toString(),
       relacion: (c["relacionCuidador"] ?? "").toString(),
     );
     if (datos == null) return;
 
     final r = await service.editarCuidador(
-      idPaciente: selectedPacienteCuidador!,
+      idPaciente: idPaciente,
       idCuidador: idCuidador,
       nombre: datos["nombre"]!,
       correo: datos["correo"]!,
@@ -795,7 +523,6 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
       contrasena: datos["contrasena"],
     );
     if (!mounted) return;
-
     _snack(
       r["success"] == true ? "✓ ${r["message"]}" : "✗ ${r["message"]}",
       isError: r["success"] != true,
@@ -805,46 +532,33 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
 
   Future<void> quitarCuidadorDePaciente(Map<String, dynamic> c) async {
     final idCuidador = _idCuidadorDe(c);
-    if (idCuidador == null || selectedPacienteCuidador == null) return;
+    final idPaciente = safeId(c["idPaciente"]);
+    if (idCuidador == null || idPaciente == null) return;
 
     final nombre =
-        (c["nombre"] ?? c["nombreCuidador"] ?? "este cuidador").toString();
+        (c["nombreCuidador"] ?? c["nombre"] ?? "este cuidador").toString();
+    final paciente = (c["paciente_nombre"] ?? "el paciente").toString();
 
     if (!await _confirm(
       "¿Quitar cuidador?",
-      "$nombre dejará de ser cuidador de este paciente. "
-          "Su cuenta se conserva y podrás asignarlo de nuevo.",
+      "$nombre dejará de cuidar a $paciente. Su cuenta se conserva.",
     )) {
       return;
     }
-
-    final ok = await service.eliminarCuidadorDePaciente(
-        selectedPacienteCuidador!, idCuidador);
+    final ok = await service.eliminarCuidadorDePaciente(idPaciente, idCuidador);
     if (!mounted) return;
-
-    _snack(
-      ok ? "✓ Cuidador quitado" : "✗ No se pudo quitar",
-      isError: !ok,
-    );
+    _snack(ok ? "✓ Cuidador quitado" : "✗ No se pudo quitar", isError: !ok);
     if (ok) await loadAll(forceConfig: true);
   }
 
-  // =====================================================
-  // ✅ CAMBIAR ROL (con recarga)
-  // =====================================================
   Future<void> cambiarRol(int idUsuario, String rol) async {
-    print("🔄 cambiarRol → idUsuario=$idUsuario, rol=$rol");
-
     final resultado = await service.cambiarRol(idUsuario, rol);
-
     _snack(
       resultado["success"] == true
           ? "✓ ${resultado["message"]}"
           : "✗ ${resultado["message"]}",
       isError: resultado["success"] != true,
     );
-
-    // ✅ Recargar SIEMPRE después de cambiar el rol
     await loadAll(forceConfig: true);
   }
 
@@ -858,50 +572,61 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     _snack(ok ? "✓ Usuario eliminado" : "✗ Error al eliminar", isError: !ok);
   }
 
+  // =====================================================
+  // ✅ HELPERS DE FORMATO
+  // =====================================================
   String _formatFecha(dynamic fecha) {
     if (fecha == null) return "";
     try {
       final f = DateTime.parse(fecha.toString()).toLocal();
       final meses = [
-        'Ene',
-        'Feb',
-        'Mar',
-        'Abr',
-        'May',
-        'Jun',
-        'Jul',
-        'Ago',
-        'Sep',
-        'Oct',
-        'Nov',
-        'Dic'
+        'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
+        'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'
       ];
-      return "${f.day} ${meses[f.month - 1]}, ${f.year} • ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}";
+      return "${f.day} ${meses[f.month - 1]}, ${f.year} · ${f.hour.toString().padLeft(2, '0')}:${f.minute.toString().padLeft(2, '0')}";
     } catch (_) {
       return fecha.toString();
     }
   }
 
+  String _fechaCorta(dynamic fecha) {
+    if (fecha == null) return "";
+    try {
+      final f = DateTime.parse(fecha.toString()).toLocal();
+      final d = f.day.toString().padLeft(2, '0');
+      final m = f.month.toString().padLeft(2, '0');
+      return "$d/$m/${f.year.toString().substring(2)}";
+    } catch (_) {
+      return "";
+    }
+  }
+
   Map<String, dynamic> _getOrigenData(String origen) {
     switch (origen.toLowerCase()) {
-      case 'sistema':
+      case 'medico':
         return {
-          'label': 'Sistema',
-          'icon': Icons.computer,
-          'color': Colors.grey.shade600
+          'label': 'Médico',
+          'icon': Icons.medical_services_rounded,
+          'color': AppTheme.primary,
         };
       case 'admin':
         return {
           'label': 'Admin',
-          'icon': Icons.admin_panel_settings,
-          'color': Colors.indigo
+          'icon': Icons.admin_panel_settings_rounded,
+          'color': Colors.indigo,
+        };
+      case 'sistema':
+        return {
+          'label': 'Sistema',
+          'icon': Icons.computer_rounded,
+          'color': Colors.grey.shade600,
         };
       case 'paciente':
       default:
         return {
           'label': 'Paciente',
-          'icon': Icons.person,
-          'color': Colors.green
+          'icon': Icons.person_rounded,
+          'color': AppTheme.success,
         };
     }
   }
@@ -935,130 +660,25 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     }
   }
 
+  // =====================================================
+  // 🎨 BUILD PRINCIPAL
+  // =====================================================
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
+      backgroundColor: isDark ? AppTheme.gray900 : const Color(0xFFF7F8FC),
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              color: isDark ? AppTheme.gray800 : AppTheme.white,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 8, 8, 4),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            Icons.arrow_back,
-                            color: isDark ? Colors.white : AppTheme.gray700,
-                          ),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "Panel Administrador",
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.white
-                                      : AppTheme.gray700,
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Text(
-                                "${usuarios.length} usuarios · ${alertas.length} alertas · ${asignaciones.length} asignaciones",
-                                style: const TextStyle(
-                                  color: AppTheme.gray500,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.person_add,
-                            color: isDark ? Colors.white : AppTheme.gray700,
-                          ),
-                          onPressed: _crearUsuario,
-                          tooltip: "Crear usuario",
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.refresh,
-                            color: isDark ? Colors.white : AppTheme.gray700,
-                          ),
-                          onPressed: () => loadAll(forceConfig: true),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            Icons.logout,
-                            color: isDark ? Colors.white : AppTheme.gray700,
-                          ),
-                          onPressed: () => Navigator.pushAndRemoveUntil(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => const LoginScreen(),
-                            ),
-                            (route) => false,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: isDark ? AppTheme.gray800 : AppTheme.gray50,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: TabBar(
-                      controller: _tabController,
-                      labelColor: AppTheme.primary,
-                      unselectedLabelColor: AppTheme.gray500,
-                      indicator: const BoxDecoration(),
-                      labelStyle: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      tabs: const [
-                        Tab(
-                          icon: Icon(Icons.people_outline, size: 18),
-                          text: "Usuarios",
-                        ),
-                        Tab(icon: Icon(Icons.link, size: 18), text: "Asignar"),
-                        Tab(icon: Icon(Icons.tune, size: 18), text: "Config."),
-                        Tab(
-                          icon: Icon(Icons.notifications_outlined, size: 18),
-                          text: "Alertas",
-                        ),
-                        Tab(icon: Icon(Icons.history, size: 18), text: "Logs"),
-                        Tab(
-                          icon: Icon(Icons.block, size: 18),
-                          text: "IPs Bloq.",
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildHeader(isDark),
             Expanded(
               child: loading
                   ? const Center(child: CircularProgressIndicator())
                   : RefreshIndicator(
                       onRefresh: () => loadAll(forceConfig: true),
-                      color: AppTheme.primary,
+                      color: _primary,
                       child: TabBarView(
                         controller: _tabController,
                         children: [
@@ -1079,26 +699,336 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   }
 
   // =====================================================
-  // ✅ TAB USUARIOS
+  // 🎨 HEADER
+  // =====================================================
+  Widget _buildHeader(bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.gray800 : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 12, 12, 8),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    size: 20,
+                    color: isDark ? Colors.white : AppTheme.gray700,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: _soft(_primary),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Icon(
+                              Icons.admin_panel_settings_rounded,
+                              size: 18,
+                              color: _primary,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Panel Admin",
+                            style: TextStyle(
+                              color: isDark ? Colors.white : AppTheme.gray700,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Padding(
+                        padding: EdgeInsets.only(left: 4),
+                        child: Text(
+                          "Gestiona usuarios, alertas y configuración",
+                          style: TextStyle(color: _textSub, fontSize: 11.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _headerIconButton(
+                  icon: Icons.person_add_alt_1_rounded,
+                  tooltip: "Crear usuario",
+                  color: _primary,
+                  onPressed: _crearUsuario,
+                ),
+                const SizedBox(width: 4),
+                _headerIconButton(
+                  icon: Icons.logout_rounded,
+                  tooltip: "Salir",
+                  color: _danger,
+                  onPressed: () => Navigator.pushAndRemoveUntil(
+                    context,
+                    MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    (route) => false,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // 📊 Resumen rápido
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Row(
+              children: [
+                _statPill(
+                  icon: Icons.people_alt_rounded,
+                  label: "Usuarios",
+                  value: usuarios.length,
+                  color: _primary,
+                ),
+                const SizedBox(width: 8),
+                _statPill(
+                  icon: Icons.notifications_active_rounded,
+                  label: "Alertas",
+                  value: alertas.length,
+                  color: _warning,
+                ),
+                const SizedBox(width: 8),
+                _statPill(
+                  icon: Icons.link_rounded,
+                  label: "Asignac.",
+                  value: asignaciones.length + asignacionesCuidadores.length,
+                  color: _success,
+                ),
+              ],
+            ),
+          ),
+          // 🎯 Tabs tipo píldora
+          Container(
+            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.gray900 : const Color(0xFFF1F3F9),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelColor: Colors.white,
+              unselectedLabelColor: _textSub,
+              indicator: BoxDecoration(
+                color: _primary,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: _primary.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              indicatorSize: TabBarIndicatorSize.tab,
+              dividerColor: Colors.transparent,
+              labelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              tabs: const [
+                Tab(
+                  height: 38,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.people_outline_rounded, size: 16),
+                      SizedBox(width: 6),
+                      Text("Usuarios"),
+                    ],
+                  ),
+                ),
+                Tab(
+                  height: 38,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.link_rounded, size: 16),
+                      SizedBox(width: 6),
+                      Text("Asignar"),
+                    ],
+                  ),
+                ),
+                Tab(
+                  height: 38,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.tune_rounded, size: 16),
+                      SizedBox(width: 6),
+                      Text("Config"),
+                    ],
+                  ),
+                ),
+                Tab(
+                  height: 38,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.notifications_outlined, size: 16),
+                      SizedBox(width: 6),
+                      Text("Alertas"),
+                    ],
+                  ),
+                ),
+                Tab(
+                  height: 38,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.history_rounded, size: 16),
+                      SizedBox(width: 6),
+                      Text("Logs"),
+                    ],
+                  ),
+                ),
+                Tab(
+                  height: 38,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.block_rounded, size: 16),
+                      SizedBox(width: 6),
+                      Text("IPs"),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerIconButton({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Material(
+        color: _soft(color),
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: onPressed,
+          child: Tooltip(
+            message: tooltip,
+            child: Padding(
+              padding: const EdgeInsets.all(8),
+              child: Icon(icon, size: 18, color: color),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _statPill({
+    required IconData icon,
+    required String label,
+    required int value,
+    required Color color,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: _softer(color),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(0.15)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: _soft(color),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, size: 16, color: color),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "$value",
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: color,
+                      height: 1.1,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: _textSub,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // =====================================================
+  // 🎨 TAB USUARIOS
   // =====================================================
   Widget _tabUsuarios() {
-    if (usuarios.isEmpty) {
-      return _buildEmpty("No hay usuarios", Icons.people_outline);
-    }
+    final adminsCount = usuarios.where((u) => u["rol"] == "admin").length;
 
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
           child: TextField(
             controller: buscarCtrl,
             onChanged: filtrarUsuarios,
             decoration: InputDecoration(
-              hintText: "Buscar por nombre, correo o rol...",
-              prefixIcon: const Icon(Icons.search, color: _textSub),
+              hintText: "Buscar usuario...",
+              hintStyle: const TextStyle(fontSize: 14, color: _textSub),
+              prefixIcon: const Icon(Icons.search_rounded, color: _textSub),
               suffixIcon: buscarCtrl.text.isNotEmpty
                   ? IconButton(
-                      icon: const Icon(Icons.close),
+                      icon: const Icon(Icons.close_rounded, size: 18),
                       onPressed: () {
                         buscarCtrl.clear();
                         filtrarUsuarios("");
@@ -1106,183 +1036,250 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                     )
                   : null,
               filled: true,
-              fillColor: AppTheme.white,
+              fillColor: Colors.white,
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 borderSide: BorderSide.none,
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
-                vertical: 12,
+                vertical: 14,
               ),
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
+        // 🎯 Filtros de rol seleccionables
+        SizedBox(
+          height: 76,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             children: [
-              _buildRolChip("Médicos", medicos.length, _primary),
+              _filterChip(
+                label: "Todos",
+                count: usuarios.length,
+                color: _primary,
+                selected: _filtroRol == "todos",
+                onTap: () => _setFiltroRol("todos"),
+              ),
               const SizedBox(width: 8),
-              _buildRolChip("Pacientes", pacientes.length, _success),
+              _filterChip(
+                label: "Médicos",
+                count: medicos.length,
+                color: _primary,
+                selected: _filtroRol == "medico",
+                onTap: () => _setFiltroRol("medico"),
+              ),
               const SizedBox(width: 8),
-              _buildRolChip("Cuidadores", cuidadores.length, _cuidador),
+              _filterChip(
+                label: "Pacientes",
+                count: pacientes.length,
+                color: _success,
+                selected: _filtroRol == "paciente",
+                onTap: () => _setFiltroRol("paciente"),
+              ),
+              const SizedBox(width: 8),
+              _filterChip(
+                label: "Cuidadores",
+                count: cuidadores.length,
+                color: _cuidador,
+                selected: _filtroRol == "cuidador",
+                onTap: () => _setFiltroRol("cuidador"),
+              ),
+              const SizedBox(width: 8),
+              _filterChip(
+                label: "Admins",
+                count: adminsCount,
+                color: _danger,
+                selected: _filtroRol == "admin",
+                onTap: () => _setFiltroRol("admin"),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: usuariosFiltrados.length,
-            itemBuilder: (_, i) {
-              final u = usuariosFiltrados[i];
-              final nombre = u["nombre"] ?? "Sin nombre";
-              final correo = u["correo"] ?? "";
-              final rol = u["rol"] ?? "usuario";
-              final rolLabel = u["rolLabel"] ?? rol;
+          child: usuariosFiltrados.isEmpty
+              ? _buildEmpty("Sin resultados", Icons.search_off_rounded)
+              : ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  itemCount: usuariosFiltrados.length,
+                  itemBuilder: (_, i) {
+                    final u = usuariosFiltrados[i];
+                    final nombre = u["nombre"] ?? "Sin nombre";
+                    final correo = u["correo"] ?? "";
+                    final rol = u["rol"] ?? "usuario";
+                    final rolLabel = u["rolLabel"] ?? rol;
+                    final int? idUsuario =
+                        int.tryParse(u["idUsuario"]?.toString() ?? "");
+                    final rolData = _getRolData(rol);
+                    final rolColor = rolData["color"] as Color;
 
-              final int? idUsuario =
-                  int.tryParse(u["idUsuario"]?.toString() ?? "");
-
-              final rolData = _getRolData(rol);
-
-              return Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        (rolData["color"] as Color).withOpacity(0.1),
-                    child: Icon(
-                      rolData["icon"] as IconData,
-                      color: rolData["color"] as Color,
-                      size: 22,
-                    ),
-                  ),
-                  title: Text(nombre, style: AppTheme.title2),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(correo, style: AppTheme.caption),
-                      Text(
-                        "ID: ${idUsuario ?? "N/A"} · $rolLabel",
-                        style: TextStyle(fontSize: 10, color: _textSub),
-                      ),
-                    ],
-                  ),
-                  trailing: PopupMenuButton<String>(
-                    onSelected: (value) {
-                      if (idUsuario == null) {
-                        _snack("ID de usuario inválido", isError: true);
-                        return;
-                      }
-                      if (value == "edit") _editarUsuario(u);
-                      if (value == "delete") {
-                        eliminarUsuario(idUsuario, nombre);
-                      }
-                      if (value == "admin") cambiarRol(idUsuario, "admin");
-                      if (value == "medico") cambiarRol(idUsuario, "medico");
-                      if (value == "paciente") {
-                        cambiarRol(idUsuario, "paciente");
-                      }
-                      if (value == "cuidador") {
-                        cambiarRol(idUsuario, "cuidador");
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      const PopupMenuItem(
-                        value: "edit",
-                        child: Row(children: [
-                          Icon(Icons.edit, size: 16),
-                          SizedBox(width: 8),
-                          Text("Editar"),
-                        ]),
-                      ),
-                      const PopupMenuDivider(),
-                      const PopupMenuItem(
-                        value: "admin",
-                        child: Row(children: [
-                          Icon(Icons.admin_panel_settings,
-                              size: 16, color: _danger),
-                          SizedBox(width: 8),
-                          Text("Cambiar a Admin"),
-                        ]),
-                      ),
-                      const PopupMenuItem(
-                        value: "medico",
-                        child: Row(children: [
-                          Icon(Icons.medical_services,
-                              size: 16, color: _primary),
-                          SizedBox(width: 8),
-                          Text("Cambiar a Médico"),
-                        ]),
-                      ),
-                      const PopupMenuItem(
-                        value: "paciente",
-                        child: Row(children: [
-                          Icon(Icons.person, size: 16, color: _success),
-                          SizedBox(width: 8),
-                          Text("Cambiar a Paciente"),
-                        ]),
-                      ),
-                      const PopupMenuItem(
-                        value: "cuidador",
-                        child: Row(children: [
-                          Icon(Icons.people_outline,
-                              size: 16, color: _cuidador),
-                          SizedBox(width: 8),
-                          Text("Cambiar a Cuidador"),
-                        ]),
-                      ),
-                      const PopupMenuDivider(),
-                      const PopupMenuItem(
-                        value: "delete",
-                        child: Row(children: [
-                          Icon(Icons.delete, size: 16, color: _danger),
-                          SizedBox(width: 8),
-                          Text(
-                            "Eliminar",
-                            style: TextStyle(color: _danger),
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.03),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
                           ),
-                        ]),
+                        ],
                       ),
-                    ],
-                  ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(16),
+                          onTap: () {},
+                          child: Padding(
+                            padding: const EdgeInsets.all(14),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        rolColor.withOpacity(0.25),
+                                        rolColor.withOpacity(0.10),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  child: Icon(
+                                    rolData["icon"] as IconData,
+                                    color: rolColor,
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        nombre,
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF1F2937),
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        correo,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          color: _textSub,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Row(
+                                        children: [
+                                          Container(
+                                            padding: const EdgeInsets
+                                                .symmetric(
+                                              horizontal: 8,
+                                              vertical: 3,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: _soft(rolColor),
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
+                                            ),
+                                            child: Text(
+                                              rolLabel,
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w600,
+                                                color: rolColor,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            "ID $idUsuario",
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: _textSub,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                _popupMenuUsuario(
+                                    u, idUsuario, nombre, rolColor),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-          ),
         ),
       ],
     );
   }
 
-  Widget _buildRolChip(String label, int count, Color color) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+  Widget _filterChip({
+    required String label,
+    required int count,
+    required Color color,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        width: 96,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withOpacity(0.3)),
+          color: selected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? color : color.withOpacity(0.3),
+          ),
+          boxShadow: selected
+              ? [
+                  BoxShadow(
+                    color: color.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
               "$count",
               style: TextStyle(
-                color: color,
-                fontSize: 18,
+                color: selected ? Colors.white : color,
+                fontSize: 17,
                 fontWeight: FontWeight.bold,
+                height: 1.1,
               ),
             ),
+            const SizedBox(height: 2),
             Text(
               label,
               style: TextStyle(
-                color: color,
+                color: selected ? Colors.white : color,
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
               ),
@@ -1294,436 +1291,657 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     );
   }
 
-  // =====================================================
-  // ✅ TAB ASIGNAR
-  // =====================================================
-  Widget _tabAsignar() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _popupMenuUsuario(
+      Map<String, dynamic> u, int? idUsuario, String nombre, Color rolColor) {
+    return PopupMenuButton<String>(
+      icon: Container(
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF1F3F9),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(Icons.more_horiz_rounded, size: 18, color: _textSub),
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      onSelected: (value) {
+        if (idUsuario == null) {
+          _snack("ID de usuario inválido", isError: true);
+          return;
+        }
+        if (value == "edit") _editarUsuario(u);
+        if (value == "delete") eliminarUsuario(idUsuario, nombre);
+        if (value == "admin") cambiarRol(idUsuario, "admin");
+        if (value == "medico") cambiarRol(idUsuario, "medico");
+        if (value == "paciente") cambiarRol(idUsuario, "paciente");
+        if (value == "cuidador") cambiarRol(idUsuario, "cuidador");
+      },
+      itemBuilder: (_) => [
+        _popupItem("edit", Icons.edit_rounded, "Editar", _primary),
+        const PopupMenuDivider(),
+        _popupItem("admin", Icons.admin_panel_settings_rounded, "Hacer Admin",
+            _danger),
+        _popupItem(
+            "medico", Icons.medical_services_rounded, "Hacer Médico", _primary),
+        _popupItem(
+            "paciente", Icons.person_rounded, "Hacer Paciente", _success),
+        _popupItem("cuidador", Icons.people_outline_rounded, "Hacer Cuidador",
+            _cuidador),
+        const PopupMenuDivider(),
+        _popupItem(
+            "delete", Icons.delete_outline_rounded, "Eliminar", _danger),
+      ],
+    );
+  }
+
+  PopupMenuItem<String> _popupItem(
+      String value, IconData icon, String label, Color color) {
+    return PopupMenuItem(
+      value: value,
+      child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: AppTheme.subtleShadow,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.link, size: 48, color: _primary),
-                const SizedBox(height: 12),
-                const Text("Asignar Médico a Paciente",
-                    style: AppTheme.title1),
-                const SizedBox(height: 20),
-                _buildDropdown<int>(
-                  hint: "Seleccionar Médico",
-                  value: selectedMedico,
-                  items: medicos
-                      .map((m) => DropdownMenuItem<int>(
-                            value: safeId(m["idProfesional"]),
-                            child: Text(m["nombre"] ?? ""),
-                          ))
-                      .where((e) => e.value != null)
-                      .toList(),
-                  onChanged: (v) => setState(() => selectedMedico = v),
-                  icon: Icons.medical_services,
-                ),
-                const SizedBox(height: 12),
-                _buildDropdown<int>(
-                  hint: "Seleccionar Paciente",
-                  value: selectedPaciente,
-                  items: pacientes
-                      .map((p) => DropdownMenuItem<int>(
-                            value: safeId(p["idPaciente"]),
-                            child: Text(p["nombre"] ?? ""),
-                          ))
-                      .where((e) => e.value != null)
-                      .toList(),
-                  onChanged: (v) => setState(() => selectedPaciente = v),
-                  icon: Icons.person,
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  height: 45,
-                  child: ElevatedButton.icon(
-                    onPressed: asignar,
-                    icon: const Icon(Icons.save, size: 18),
-                    label: const Text("Asignar"),
-                    style: AppTheme.primaryButtonStyle,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              const Icon(Icons.list_alt, color: _primary, size: 24),
-              const SizedBox(width: 8),
-              const Text("Asignaciones Existentes", style: AppTheme.title1),
-              const Spacer(),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  "${asignaciones.length}",
-                  style: const TextStyle(
-                    color: _primary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          if (asignaciones.isEmpty)
-            Container(
-              padding: const EdgeInsets.all(32),
-              decoration: BoxDecoration(
-                color: AppTheme.gray50,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.link_off,
-                        size: 48, color: AppTheme.gray400),
-                    SizedBox(height: 12),
-                    Text(
-                      "No hay asignaciones creadas",
-                      style: TextStyle(color: AppTheme.gray500),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: asignaciones.length,
-              itemBuilder: (_, i) {
-                final a = asignaciones[i];
-                final nombreMedico =
-                    a["nombreMedico"] ?? a["medico"] ?? "Médico";
-                final nombrePaciente =
-                    a["nombrePaciente"] ?? a["paciente"] ?? "Paciente";
-                final idAsignacion =
-                    safeId(a["idMedicoPaciente"] ?? a["id"]);
-                final fecha = a["fechaAsignacion"] ?? a["fecha"];
-
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: _primary.withOpacity(0.1),
-                      child: const Icon(Icons.link,
-                          color: _primary, size: 20),
-                    ),
-                    title: Text(
-                      "$nombreMedico → $nombrePaciente",
-                      style:
-                          const TextStyle(fontWeight: FontWeight.w600),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            const Icon(Icons.medical_services,
-                                size: 12, color: _primary),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                nombreMedico,
-                                style: const TextStyle(fontSize: 11),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        Row(
-                          children: [
-                            const Icon(Icons.person,
-                                size: 12, color: _success),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                nombrePaciente,
-                                style: const TextStyle(fontSize: 11),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (fecha != null)
-                          Text(
-                            _formatFecha(fecha),
-                            style: const TextStyle(
-                              fontSize: 10,
-                              color: _textSub,
-                            ),
-                          ),
-                      ],
-                    ),
-                    trailing: idAsignacion != null
-                        ? IconButton(
-                            icon: const Icon(Icons.delete_outline,
-                                color: _danger),
-                            onPressed: () async {
-                              final confirm = await _confirm(
-                                "¿Eliminar asignación?",
-                                "Se eliminará la asignación entre $nombreMedico y $nombrePaciente",
-                              );
-                              if (confirm) {
-                                final ok = await service
-                                    .eliminarAsignacion(idAsignacion);
-                                if (ok) {
-                                  _snack("✓ Asignación eliminada");
-                                  await loadAll(forceConfig: true);
-                                } else {
-                                  _snack("✗ Error al eliminar",
-                                      isError: true);
-                                }
-                              }
-                            },
-                          )
-                        : null,
-                  ),
-                );
-              },
-            ),
-
-          // ✅ Asignación de cuidadores a pacientes
-          const SizedBox(height: 24),
-          _buildSeccionCuidadores(),
+          Icon(icon, size: 18, color: color),
+          const SizedBox(width: 10),
+          Text(label, style: TextStyle(color: color, fontSize: 13)),
         ],
       ),
     );
   }
 
   // =====================================================
-  // ✅ SECCIÓN: CUIDADORES DE UN PACIENTE
+  // 🎨 TAB ASIGNAR
   // =====================================================
-  Widget _buildSeccionCuidadores() {
-    final idsAsignados =
-        cuidadoresDePaciente.map((c) => _idCuidadorDe(c)).toSet();
+  Widget _tabAsignar() {
+    final esMedico = _modoAsignar == 0;
+    final color = esMedico ? _primary : _cuidador;
 
-    // Cuidadores del sistema que todavía no están asignados a este paciente
-    final disponibles = cuidadores.where((c) {
-      final id = _idCuidadorDe(c);
-      return id != null && !idsAsignados.contains(id);
-    }).toList();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildSelectorModo(),
+          const SizedBox(height: 16),
+          esMedico ? _buildFormMedico() : _buildFormCuidador(),
+          const SizedBox(height: 22),
+          _buildEncabezadoTabla(esMedico, color),
+          const SizedBox(height: 10),
+          esMedico ? _buildTablaMedicos() : _buildTablaCuidadores(),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
 
-    final cuidadorValido = disponibles
-            .any((c) => _idCuidadorDe(c) == selectedCuidadorExistente)
-        ? selectedCuidadorExistente
-        : null;
-
+  Widget _buildSelectorModo() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(5),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: AppTheme.subtleShadow,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _segmento(0, "Médicos", Icons.medical_services_rounded, _primary,
+              asignaciones.length),
+          _segmento(1, "Cuidadores", Icons.people_outline_rounded, _cuidador,
+              asignacionesCuidadores.length),
+        ],
+      ),
+    );
+  }
+
+  Widget _segmento(
+      int modo, String label, IconData icon, Color color, int count) {
+    final sel = _modoAsignar == modo;
+    final c = sel ? color : _textSub;
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _modoAsignar = modo),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: sel ? _soft(color) : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            border: sel
+                ? Border.all(color: color.withOpacity(0.3))
+                : Border.all(color: Colors.transparent),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: c),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                  color: c,
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                decoration: BoxDecoration(
+                  color: c.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  "$count",
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: c,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _tarjetaForm({
+    required Color color,
+    required IconData icon,
+    required String titulo,
+    required List<Widget> hijos,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Icon(Icons.people_outline, size: 48, color: _cuidador),
-          const SizedBox(height: 12),
-          const Text(
-            "Asignar Cuidador a Paciente",
-            style: AppTheme.title1,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 20),
-          _buildDropdown<int>(
-            hint: "Seleccionar Paciente",
-            value: selectedPacienteCuidador,
-            items: pacientes
-                .map((p) => DropdownMenuItem<int>(
-                      value: safeId(p["idPaciente"]),
-                      child: Text(
-                        (p["nombre"] ?? "").toString(),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ))
-                .where((e) => e.value != null)
-                .toList(),
-            onChanged: (v) {
-              setState(() {
-                selectedPacienteCuidador = v;
-                selectedCuidadorExistente = null;
-              });
-              _cargarCuidadoresDePaciente();
-            },
-            icon: Icons.person,
-          ),
-          if (selectedPacienteCuidador != null) ...[
-            const SizedBox(height: 20),
-            const Text("Cuidadores de este paciente",
-                style: AppTheme.title2),
-            const SizedBox(height: 8),
-            if (_cargandoCuidadoresPaciente)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (cuidadoresDePaciente.isEmpty)
+          Row(
+            children: [
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: AppTheme.gray50,
+                  color: _soft(color),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  "Este paciente aún no tiene cuidadores",
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppTheme.gray500),
-                ),
-              )
-            else
-              ...cuidadoresDePaciente.map(_tarjetaCuidadorPaciente),
-            const SizedBox(height: 20),
-            const Divider(height: 1),
-            const SizedBox(height: 20),
-            const Text("Agregar un cuidador existente",
-                style: AppTheme.title2),
-            const SizedBox(height: 8),
-            if (disponibles.isEmpty)
-              const Text(
-                "No hay más cuidadores registrados. Puedes crear uno nuevo "
-                "o cambiar el rol de un usuario a Cuidador desde la pestaña Usuarios.",
-                style: TextStyle(fontSize: 12, color: AppTheme.gray500),
-              )
-            else ...[
-              _buildDropdown<int>(
-                hint: "Seleccionar Cuidador",
-                value: cuidadorValido,
-                items: disponibles
-                    .map((c) => DropdownMenuItem<int>(
-                          value: _idCuidadorDe(c),
-                          child: Text(
-                            (c["nombre"] ??
-                                    c["nombreCuidador"] ??
-                                    c["cuidador_nombre"] ??
-                                    "Sin nombre")
-                                .toString(),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ))
-                    .toList(),
-                onChanged: (v) =>
-                    setState(() => selectedCuidadorExistente = v),
-                icon: Icons.people_outline,
+                child: Icon(icon, size: 20, color: color),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: relacionCuidadorCtrl,
-                decoration: InputDecoration(
-                  labelText: "Relación (hijo/a, esposo/a, enfermero/a...)",
-                  prefixIcon: const Icon(Icons.favorite_border, size: 20),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 45,
-                child: ElevatedButton.icon(
-                  onPressed:
-                      _guardandoCuidador ? null : asignarCuidadorExistente,
-                  icon: const Icon(Icons.link, size: 18),
-                  label: const Text("Asignar cuidador"),
-                  style: AppTheme.primaryButtonStyle,
-                ),
-              ),
+              const SizedBox(width: 12),
+              Text(titulo, style: AppTheme.title2),
             ],
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 45,
-              child: OutlinedButton.icon(
-                onPressed: _guardandoCuidador ? null : crearCuidadorNuevo,
-                icon: const Icon(Icons.person_add_alt_1, size: 18),
-                label: const Text("Crear cuidador nuevo"),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: _cuidador,
-                  side: const BorderSide(color: _cuidador),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ),
-          ],
+          ),
+          const SizedBox(height: 16),
+          ...hijos,
         ],
       ),
     );
   }
 
-  Widget _tarjetaCuidadorPaciente(Map<String, dynamic> c) {
-    final nombre =
-        (c["nombre"] ?? c["nombreCuidador"] ?? "Sin nombre").toString();
-    final correo = (c["correo"] ?? "").toString();
-    final relacion = (c["relacionCuidador"] ?? "").toString();
+  Widget _botonAccion({
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback? onPressed,
+  }) {
+    return SizedBox(
+      height: 48,
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFormMedico() {
+    return _tarjetaForm(
+      color: _primary,
+      icon: Icons.medical_services_rounded,
+      titulo: "Asignar médico a paciente",
+      hijos: [
+        _buildDropdown<int>(
+          hint: "Selecciona médico",
+          value: selectedMedico,
+          items: medicos
+              .map((m) => DropdownMenuItem<int>(
+                    value: safeId(m["idProfesional"]),
+                    child: Text(
+                      (m["nombre"] ?? "").toString(),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .where((e) => e.value != null)
+              .toList(),
+          onChanged: (v) => setState(() => selectedMedico = v),
+          icon: Icons.medical_services_outlined,
+        ),
+        const SizedBox(height: 10),
+        _buildDropdown<int>(
+          hint: "Selecciona paciente",
+          value: selectedPaciente,
+          items: pacientes
+              .map((p) => DropdownMenuItem<int>(
+                    value: safeId(p["idPaciente"]),
+                    child: Text(
+                      (p["nombre"] ?? "").toString(),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .where((e) => e.value != null)
+              .toList(),
+          onChanged: (v) => setState(() => selectedPaciente = v),
+          icon: Icons.person_outline,
+        ),
+        const SizedBox(height: 16),
+        _botonAccion(
+          label: "Asignar médico",
+          icon: Icons.link_rounded,
+          color: _primary,
+          onPressed: asignar,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFormCuidador() {
+    final yaAsignados = asignacionesCuidadores
+        .where((c) => safeId(c["idPaciente"]) == selectedPacienteCuidador)
+        .map((c) => _idCuidadorDe(c))
+        .toSet();
+
+    final disponibles = cuidadores.where((c) {
+      final id = _idCuidadorDe(c);
+      return id != null && !yaAsignados.contains(id);
+    }).toList();
+
+    final cuidadorValido =
+        disponibles.any((c) => _idCuidadorDe(c) == selectedCuidadorExistente)
+            ? selectedCuidadorExistente
+            : null;
+
+    return _tarjetaForm(
+      color: _cuidador,
+      icon: Icons.people_outline_rounded,
+      titulo: "Asignar cuidador a paciente",
+      hijos: [
+        _buildDropdown<int>(
+          hint: "Selecciona paciente",
+          value: selectedPacienteCuidador,
+          items: pacientes
+              .map((p) => DropdownMenuItem<int>(
+                    value: safeId(p["idPaciente"]),
+                    child: Text(
+                      (p["nombre"] ?? "").toString(),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .where((e) => e.value != null)
+              .toList(),
+          onChanged: (v) => setState(() {
+            selectedPacienteCuidador = v;
+            selectedCuidadorExistente = null;
+          }),
+          icon: Icons.person_outline,
+        ),
+        if (selectedPacienteCuidador != null) ...[
+          const SizedBox(height: 10),
+          _buildDropdown<int>(
+            hint: "Selecciona cuidador",
+            value: cuidadorValido,
+            items: disponibles
+                .map((c) => DropdownMenuItem<int>(
+                      value: _idCuidadorDe(c),
+                      child: Text(
+                        (c["nombre"] ??
+                                c["nombreCuidador"] ??
+                                c["cuidador_nombre"] ??
+                                "Sin nombre")
+                            .toString(),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ))
+                .toList(),
+            onChanged: (v) => setState(() => selectedCuidadorExistente = v),
+            icon: Icons.people_outline,
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            controller: relacionCuidadorCtrl,
+            decoration: InputDecoration(
+              hintText: "Relación (ej: madre, hijo)",
+              hintStyle: const TextStyle(fontSize: 13, color: _textSub),
+              prefixIcon: const Icon(Icons.favorite_border_rounded,
+                  size: 18, color: _textSub),
+              filled: true,
+              fillColor: const Color(0xFFF7F8FC),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _botonAccion(
+                  label: "Asignar",
+                  icon: Icons.link_rounded,
+                  color: _cuidador,
+                  onPressed: (_guardandoCuidador || cuidadorValido == null)
+                      ? null
+                      : asignarCuidadorExistente,
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                height: 48,
+                child: OutlinedButton.icon(
+                  onPressed: _guardandoCuidador ? null : crearCuidadorNuevo,
+                  icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                  label: const Text("Nuevo"),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _cuidador,
+                    side: const BorderSide(color: _cuidador),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildEncabezadoTabla(bool esMedico, Color color) {
+    final n = esMedico ? asignaciones.length : asignacionesCuidadores.length;
+
+    return Row(
+      children: [
+        Icon(Icons.list_alt_rounded, size: 20, color: color),
+        const SizedBox(width: 8),
+        const Text("Asignaciones actuales", style: AppTheme.title2),
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: _soft(color),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            "$n",
+            style: TextStyle(color: color, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _tablaAsignaciones({
+    required Color color,
+    required String col1,
+    required String col2,
+    required double anchoAcciones,
+    required List<Widget> filas,
+  }) {
+    final estiloCabecera = TextStyle(
+      fontSize: 10.5,
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.6,
+      color: color,
+    );
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: _cuidador.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _cuidador.withOpacity(0.25)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      child: ListTile(
-        dense: true,
-        leading: CircleAvatar(
-          backgroundColor: _cuidador.withOpacity(0.15),
-          child: const Icon(Icons.people_outline, color: _cuidador, size: 20),
-        ),
-        title: Text(
-          nombre,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          [
-            if (relacion.isNotEmpty) relacion,
-            if (correo.isNotEmpty) correo,
-          ].join(" · "),
-          style: const TextStyle(fontSize: 11),
-          overflow: TextOverflow.ellipsis,
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.edit_outlined, size: 20),
-              tooltip: "Editar",
-              onPressed: () => editarCuidadorDePaciente(c),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          Container(
+            color: _soft(color),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+            child: Row(
+              children: [
+                Expanded(
+                    flex: 5,
+                    child: Text(col1.toUpperCase(), style: estiloCabecera)),
+                Expanded(
+                    flex: 5,
+                    child: Text(col2.toUpperCase(), style: estiloCabecera)),
+                SizedBox(width: anchoAcciones),
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.link_off, size: 20, color: _danger),
-              tooltip: "Quitar del paciente",
-              onPressed: () => quitarCuidadorDePaciente(c),
+          ),
+          if (filas.isEmpty)
+            Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: const [
+                  Icon(Icons.link_off_rounded,
+                      size: 40, color: AppTheme.gray300),
+                  SizedBox(height: 10),
+                  Text("Aún no hay asignaciones",
+                      style: TextStyle(color: _textSub, fontSize: 13)),
+                ],
+              ),
+            )
+          else
+            ...List.generate(
+              filas.length,
+              (i) => Container(
+                color: i.isOdd ? const Color(0xFFF9FAFC) : Colors.white,
+                padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+                child: filas[i],
+              ),
             ),
-          ],
-        ),
+        ],
       ),
+    );
+  }
+
+  Widget _filaAsignacion({
+    required Widget c1,
+    required Widget c2,
+    required double anchoAcciones,
+    required List<Widget> acciones,
+  }) {
+    return Row(
+      children: [
+        Expanded(flex: 5, child: c1),
+        Expanded(flex: 5, child: c2),
+        SizedBox(
+          width: anchoAcciones,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: acciones,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _celdaPersona({
+    required IconData icon,
+    required Color color,
+    required String titulo,
+    String? subtitulo,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: _soft(color),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 16, color: color),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  titulo,
+                  style: const TextStyle(
+                      fontSize: 13, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (subtitulo != null && subtitulo.isNotEmpty)
+                  Text(
+                    subtitulo,
+                    style: const TextStyle(fontSize: 10.5, color: _textSub),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _iconoAccion(
+      IconData icon, Color color, String tooltip, VoidCallback onPressed) {
+    return IconButton(
+      icon: Icon(icon, size: 19, color: color),
+      tooltip: tooltip,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+      onPressed: onPressed,
+    );
+  }
+
+  Widget _buildTablaMedicos() {
+    final filas = asignaciones.map((a) {
+      final nombreMedico =
+          (a["nombreMedico"] ?? a["medico"] ?? "Médico").toString();
+      final nombrePaciente =
+          (a["nombrePaciente"] ?? a["paciente"] ?? "Paciente").toString();
+      final idAsignacion = safeId(a["idMedicoPaciente"] ?? a["id"]);
+
+      return _filaAsignacion(
+        anchoAcciones: 40,
+        c1: _celdaPersona(
+          icon: Icons.medical_services_rounded,
+          color: _primary,
+          titulo: nombreMedico,
+        ),
+        c2: _celdaPersona(
+          icon: Icons.person_rounded,
+          color: _success,
+          titulo: nombrePaciente,
+          subtitulo: _fechaCorta(a["fechaAsignacion"] ?? a["fecha"]),
+        ),
+        acciones: [
+          if (idAsignacion != null)
+            _iconoAccion(Icons.delete_outline_rounded, _danger, "Eliminar",
+                () async {
+              final confirm = await _confirm(
+                "¿Eliminar asignación?",
+                "$nombreMedico → $nombrePaciente",
+              );
+              if (!confirm) return;
+              final ok = await service.eliminarAsignacion(idAsignacion);
+              _snack(ok ? "✓ Asignación eliminada" : "✗ Error al eliminar",
+                  isError: !ok);
+              if (ok) await loadAll(forceConfig: true);
+            }),
+        ],
+      );
+    }).toList();
+
+    return _tablaAsignaciones(
+      color: _primary,
+      col1: "Médico",
+      col2: "Paciente",
+      anchoAcciones: 40,
+      filas: filas,
+    );
+  }
+
+  Widget _buildTablaCuidadores() {
+    final filas = asignacionesCuidadores.map((c) {
+      final nombre =
+          (c["nombreCuidador"] ?? c["nombre"] ?? "Sin nombre").toString();
+      final paciente = (c["paciente_nombre"] ?? "Paciente").toString();
+      final relacion = (c["relacionCuidador"] ?? "").toString();
+
+      return _filaAsignacion(
+        anchoAcciones: 76,
+        c1: _celdaPersona(
+          icon: Icons.people_outline_rounded,
+          color: _cuidador,
+          titulo: nombre,
+          subtitulo: relacion,
+        ),
+        c2: _celdaPersona(
+          icon: Icons.person_rounded,
+          color: _success,
+          titulo: paciente,
+        ),
+        acciones: [
+          _iconoAccion(Icons.edit_outlined, _textSub, "Editar",
+              () => editarCuidadorDePaciente(c)),
+          _iconoAccion(Icons.link_off_rounded, _danger, "Quitar",
+              () => quitarCuidadorDePaciente(c)),
+        ],
+      );
+    }).toList();
+
+    return _tablaAsignaciones(
+      color: _cuidador,
+      col1: "Cuidador",
+      col2: "Paciente",
+      anchoAcciones: 76,
+      filas: filas,
     );
   }
 
@@ -1736,87 +1954,130 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: AppTheme.gray50,
+        color: const Color(0xFFF7F8FC),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _border),
+        border: Border.all(color: _border.withOpacity(0.5)),
       ),
       child: DropdownButtonFormField<T>(
         value: value,
         isExpanded: true,
+        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: _textSub),
         hint: Row(
           children: [
             Icon(icon, size: 18, color: _textSub),
             const SizedBox(width: 8),
-            Text(hint),
+            Text(hint, style: const TextStyle(fontSize: 13, color: _textSub)),
           ],
         ),
         items: items,
         onChanged: onChanged,
         decoration: const InputDecoration(
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         ),
       ),
     );
   }
 
   // =====================================================
-  // ✅ TAB CONFIG
+  // 🎨 TAB CONFIG
   // =====================================================
   Widget _tabConfig() {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Container(
-          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: AppTheme.subtleShadow,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Column(
             children: [
-              SwitchListTile(
-                title:
-                    const Text("🔔 Alertas activas", style: AppTheme.title2),
-                subtitle: const Text("Recibir notificaciones",
-                    style: AppTheme.caption),
+              _switchTile(
+                icon: Icons.notifications_active_rounded,
+                color: _info,
+                title: "Alertas activas",
+                subtitle: "Recibir notificaciones del sistema",
                 value: alertasActivas,
                 onChanged: (v) async {
                   setState(() => alertasActivas = v);
-                  await service.updateConfig(
-                      "alertas_activas", v.toString());
+                  await service.updateConfig("alertas_activas", v.toString());
                 },
-                activeColor: _info,
               ),
-              const Divider(height: 1),
-              SwitchListTile(
-                title: const Text("🛠️ Modo mantenimiento",
-                    style: AppTheme.title2),
-                subtitle: const Text("Restringir acceso",
-                    style: AppTheme.caption),
+              const Divider(height: 1, indent: 60, endIndent: 16),
+              _switchTile(
+                icon: Icons.build_rounded,
+                color: _warning,
+                title: "Modo mantenimiento",
+                subtitle: "Restringir acceso temporalmente",
                 value: mantenimientoActivo,
                 onChanged: (v) async {
                   setState(() => mantenimientoActivo = v);
                   await service.updateConfig(
                       "modo_mantenimiento", v.toString());
                 },
-                activeColor: _warning,
               ),
-              const Divider(height: 1),
-              SwitchListTile(
-                title: const Text("🚫 Denegación automática",
-                    style: AppTheme.title2),
-                subtitle: const Text(
-                    "Bloquear accesos no autorizados",
-                    style: AppTheme.caption),
+              const Divider(height: 1, indent: 60, endIndent: 16),
+              _switchTile(
+                icon: Icons.block_rounded,
+                color: _danger,
+                title: "Denegación automática",
+                subtitle: "Bloquear accesos no autorizados",
                 value: denegacionActiva,
                 onChanged: (v) async {
                   setState(() => denegacionActiva = v);
                   await service.updateConfig(
                       "denegacion_accesos", v.toString());
                 },
-                activeColor: _danger,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: _soft(_info),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _info.withOpacity(0.2)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.info_outline_rounded,
+                    color: _info, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Tiempo de sesión",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Los usuarios se desconectan tras $sesionTimeout minutos de inactividad.",
+                      style: const TextStyle(fontSize: 12, color: _textSub),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1825,8 +2086,40 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     );
   }
 
+  Widget _switchTile({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return SwitchListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      secondary: Container(
+        padding: const EdgeInsets.all(9),
+        decoration: BoxDecoration(
+          color: _soft(color),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(icon, color: color, size: 20),
+      ),
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 11.5, color: _textSub),
+      ),
+      value: value,
+      onChanged: onChanged,
+      activeColor: color,
+    );
+  }
+
   // =====================================================
-  // ✅ TAB ALERTAS
+  // 🎨 TAB ALERTAS (lista plana + chip "Por X")
   // =====================================================
   Widget _tabAlertas() {
     if (_cargandoAlertas) {
@@ -1973,8 +2266,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.access_time,
-                        size: 12, color: AppTheme.gray400),
+                    Icon(Icons.access_time, size: 12, color: AppTheme.gray400),
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
@@ -1985,24 +2277,28 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                         ),
                       ),
                     ),
+                    // 🏷️ Chip que indica QUIÉN hizo la alerta
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                          horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: origenColor.withOpacity(0.1),
+                        color: origenColor.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: origenColor.withOpacity(0.3),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(origenIcon, size: 10, color: origenColor),
-                          const SizedBox(width: 3),
+                          Icon(origenIcon, size: 11, color: origenColor),
+                          const SizedBox(width: 4),
                           Text(
-                            origenLabel,
+                            "Por $origenLabel",
                             style: TextStyle(
-                              fontSize: 9,
+                              fontSize: 9.5,
                               color: origenColor,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
@@ -2050,6 +2346,245 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
           const SizedBox(height: 12),
           Text(msg, style: AppTheme.body1.copyWith(color: _textSub)),
         ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // FORMULARIO USUARIO (modal)
+  // =====================================================
+  List<DropdownMenuItem<String>> _buildRolItems() {
+    return [
+      const DropdownMenuItem(
+        value: "admin",
+        child: Row(children: [
+          Icon(Icons.admin_panel_settings, size: 18, color: _danger),
+          SizedBox(width: 8),
+          Text("Administrador"),
+        ]),
+      ),
+      const DropdownMenuItem(
+        value: "medico",
+        child: Row(children: [
+          Icon(Icons.medical_services, size: 18, color: _primary),
+          SizedBox(width: 8),
+          Text("Médico"),
+        ]),
+      ),
+      const DropdownMenuItem(
+        value: "paciente",
+        child: Row(children: [
+          Icon(Icons.person, size: 18, color: _success),
+          SizedBox(width: 8),
+          Text("Paciente"),
+        ]),
+      ),
+      const DropdownMenuItem(
+        value: "cuidador",
+        child: Row(children: [
+          Icon(Icons.people_outline, size: 18, color: _cuidador),
+          SizedBox(width: 8),
+          Text("Cuidador"),
+        ]),
+      ),
+    ];
+  }
+
+  void _showUsuarioForm(Map<String, dynamic>? usuario) {
+    final nombreCtrl = TextEditingController(text: usuario?["nombre"] ?? "");
+    final correoCtrl = TextEditingController(text: usuario?["correo"] ?? "");
+    final passCtrl = TextEditingController();
+    String rolSel = usuario?["rol"] ?? "paciente";
+
+    final int? idUsuarioEditar = usuario != null
+        ? int.tryParse(usuario["idUsuario"]?.toString() ?? "")
+        : null;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setModal) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: AppTheme.gray300,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Icon(
+                    usuario == null ? Icons.person_add : Icons.edit,
+                    size: 48,
+                    color: _primary,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    usuario == null ? "Crear Usuario" : "Editar Usuario",
+                    style: AppTheme.title1,
+                  ),
+                  if (idUsuarioEditar != null)
+                    Text(
+                      "ID Usuario: $idUsuarioEditar",
+                      style: AppTheme.caption.copyWith(color: _textSub),
+                    ),
+                  const SizedBox(height: 20),
+                  _buildModalTextField(
+                    controller: nombreCtrl,
+                    label: "Nombre completo",
+                    icon: Icons.person_outline,
+                  ),
+                  const SizedBox(height: 15),
+                  _buildModalTextField(
+                    controller: correoCtrl,
+                    label: "Correo electrónico",
+                    icon: Icons.email_outlined,
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  if (usuario == null) ...[
+                    const SizedBox(height: 15),
+                    _buildModalTextField(
+                      controller: passCtrl,
+                      label: "Contraseña",
+                      icon: Icons.lock_outline,
+                      obscureText: true,
+                    ),
+                  ],
+                  const SizedBox(height: 15),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: _border),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButtonFormField<String>(
+                        value: rolSel,
+                        decoration: const InputDecoration(
+                          labelText: "Rol",
+                          border: InputBorder.none,
+                          prefixIcon: Icon(Icons.assignment_ind, size: 20),
+                        ),
+                        items: _buildRolItems(),
+                        onChanged: (v) {
+                          if (v != null) setModal(() => rolSel = v);
+                        },
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 52,
+                    child: ElevatedButton.icon(
+                      style: AppTheme.primaryButtonStyle,
+                      icon: Icon(usuario == null
+                          ? Icons.person_add
+                          : Icons.save),
+                      label: Text(usuario == null
+                          ? "Crear usuario"
+                          : "Guardar cambios"),
+                      onPressed: () async {
+                        if (nombreCtrl.text.trim().isEmpty ||
+                            correoCtrl.text.trim().isEmpty) {
+                          _snack("Completa todos los campos", isError: true);
+                          return;
+                        }
+
+                        Map<String, dynamic> resultado;
+
+                        if (usuario == null) {
+                          if (passCtrl.text.trim().isEmpty) {
+                            _snack("Ingresa una contraseña", isError: true);
+                            return;
+                          }
+                          resultado = await service.crearUsuario(
+                            nombre: nombreCtrl.text.trim(),
+                            correo: correoCtrl.text.trim(),
+                            password: passCtrl.text.trim(),
+                            rol: rolSel,
+                          );
+                        } else {
+                          if (idUsuarioEditar == null) {
+                            _snack("ID de usuario inválido", isError: true);
+                            return;
+                          }
+                          resultado = await service.editarUsuario(
+                            idUsuario: idUsuarioEditar,
+                            nombre: nombreCtrl.text.trim(),
+                            correo: correoCtrl.text.trim(),
+                            rol: rolSel,
+                          );
+                        }
+
+                        if (!mounted) return;
+                        Navigator.pop(ctx);
+
+                        _snack(
+                          resultado["success"] == true
+                              ? "✓ ${resultado["message"]}"
+                              : "✗ ${resultado["message"]}",
+                          isError: resultado["success"] != true,
+                        );
+
+                        await loadAll(forceConfig: true);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildModalTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType keyboardType = TextInputType.text,
+    bool obscureText = false,
+  }) {
+    return TextField(
+      controller: controller,
+      obscureText: obscureText,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, size: 20, color: _textSub),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: _border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: _border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _primary, width: 2),
+        ),
       ),
     );
   }

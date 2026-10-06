@@ -15,7 +15,7 @@ import '../services/notificacion_service.dart';
 import 'login_screen.dart';
 import 'paciente_detalle_screen.dart';
 import 'mis_horarios_screen.dart';
-import 'chat_paciente_screen.dart'; // ✅ NUEVO: lista de chats con pacientes
+import 'chat_paciente_screen.dart';
 
 class MedicoDashboard extends StatefulWidget {
   final int idUsuario;
@@ -49,19 +49,18 @@ class _MedicoDashboardState extends State<MedicoDashboard>
   List<String> _epsDisponibles = ["Todas"];
   String _ordenPor = "EPS";
 
-  // Animación
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
+
+  // 🎨 Helpers de color
+  Color _soft(Color c) => c.withOpacity(0.10);
+  Color _softer(Color c) => c.withOpacity(0.06);
 
   // ==============================================
   // 📱 UTILIDADES DE RESPONSIVE
   // ==============================================
   bool _isSmallScreen(BuildContext context) =>
       MediaQuery.of(context).size.width < 360;
-
-  bool _isMediumScreen(BuildContext context) =>
-      MediaQuery.of(context).size.width >= 360 &&
-      MediaQuery.of(context).size.width < 600;
 
   double _getSafeFontScale(AccessibilityProvider accessibility) {
     return accessibility.fontScale.clamp(0.85, 1.6);
@@ -222,8 +221,6 @@ class _MedicoDashboardState extends State<MedicoDashboard>
             notificaciones.where((n) => n["leida"] != true).length;
         _cargandoNotificaciones = false;
       });
-      debugPrint(
-          "📬 Notificaciones cargadas: ${notificaciones.length}, pendientes: $notificacionesNoLeidas");
     } catch (e) {
       debugPrint("❌ Error cargando notificaciones: $e");
       if (!mounted) return;
@@ -268,9 +265,6 @@ class _MedicoDashboardState extends State<MedicoDashboard>
     ).then((_) => loadProfile());
   }
 
-  // ==============================================
-  // 🕐 ABRIR MIS HORARIOS
-  // ==============================================
   void abrirMisHorarios() {
     final idProfesional = medico?["idProfesional"];
     if (idProfesional == null) {
@@ -291,9 +285,6 @@ class _MedicoDashboardState extends State<MedicoDashboard>
     );
   }
 
-  // ==============================================
-  // 💬 ABRIR LISTA DE CHATS (UNO POR PACIENTE)
-  // ==============================================
   void abrirChats() {
     final idProfesional = safeId(medico?["idProfesional"]);
     if (idProfesional == null) {
@@ -378,7 +369,7 @@ class _MedicoDashboardState extends State<MedicoDashboard>
     final safeFontScale = _getSafeFontScale(accessibility);
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
+      backgroundColor: isDark ? AppTheme.gray900 : const Color(0xFFF7F8FC),
       appBar: PreferredSize(
         preferredSize: Size.fromHeight(isSmall ? 90.0 : 100.0),
         child: Container(
@@ -397,7 +388,6 @@ class _MedicoDashboardState extends State<MedicoDashboard>
               ),
               child: Row(
                 children: [
-                  // Logo
                   Container(
                     width: isSmall ? 36.0 : 40.0,
                     height: isSmall ? 36.0 : 40.0,
@@ -440,7 +430,6 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                       ],
                     ),
                   ),
-                  // 🔔 Notificaciones
                   _buildAppBarButton(
                     Icons.notifications_outlined,
                     () => _mostrarPanelNotificaciones(),
@@ -450,28 +439,24 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                     isSmall: isSmall,
                   ),
                   const SizedBox(width: 4),
-                  // 💬 Chats ✅ NUEVO
                   _buildAppBarButton(
                     Icons.chat_bubble_outline,
                     abrirChats,
                     isSmall: isSmall,
                   ),
                   const SizedBox(width: 4),
-                  // 🕐 Mis Horarios
                   _buildAppBarButton(
                     Icons.schedule_outlined,
                     abrirMisHorarios,
                     isSmall: isSmall,
                   ),
                   const SizedBox(width: 4),
-                  // ⚙️ Configuración
                   _buildAppBarButton(
                     Icons.settings_outlined,
                     abrirConfiguracion,
                     isSmall: isSmall,
                   ),
                   const SizedBox(width: 4),
-                  // 🚪 Logout
                   _buildAppBarButton(Icons.logout, logout, isSmall: isSmall),
                 ],
               ),
@@ -499,7 +484,7 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                     children: [
                       _buildHeader(accessibility, screen, isDark),
                       Padding(
-                        padding: EdgeInsets.all(isSmall ? 10.0 : 16.0),
+                        padding: EdgeInsets.all(isSmall ? 12.0 : 16.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -508,14 +493,14 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                             _buildAccionesRapidas(accessibility, isDark),
                             const SizedBox(height: 16),
                             _buildFiltrosYOrdenamiento(accessibility, isDark),
-                            const SizedBox(height: 14),
+                            const SizedBox(height: 18),
                             _buildSectionHeader(
-                              "📋 Pacientes asignados",
+                              "Pacientes asignados",
                               pacientesFiltrados.length,
                               accessibility,
                               isDark,
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 12),
                             if (pacientesFiltrados.isEmpty &&
                                 pacientes.isNotEmpty)
                               _buildNoResultados(accessibility, isDark)
@@ -546,20 +531,20 @@ class _MedicoDashboardState extends State<MedicoDashboard>
 
     final acciones = [
       {
-        "label": "Chats", // ✅ NUEVO
-        "icon": Icons.chat_bubble_outline,
+        "label": "Chats",
+        "icon": Icons.chat_bubble_outline_rounded,
         "color": AppTheme.success,
         "onTap": abrirChats,
       },
       {
-        "label": "Mis Horarios",
-        "icon": Icons.schedule_outlined,
+        "label": "Horarios",
+        "icon": Icons.schedule_rounded,
         "color": AppTheme.info,
         "onTap": abrirMisHorarios,
       },
       {
-        "label": "Configuración",
-        "icon": Icons.settings_outlined,
+        "label": "Ajustes",
+        "icon": Icons.tune_rounded,
         "color": AppTheme.primary,
         "onTap": abrirConfiguracion,
       },
@@ -573,55 +558,69 @@ class _MedicoDashboardState extends State<MedicoDashboard>
           child: Container(
             margin: EdgeInsets.only(
                 right: e.key < acciones.length - 1
-                    ? (isSmall ? 6.0 : 10.0)
+                    ? (isSmall ? 8.0 : 10.0)
                     : 0.0),
             child: Material(
-              color: isDark ? AppTheme.gray800 : AppTheme.white,
-              borderRadius: BorderRadius.circular(14),
-              elevation: isDark ? 0 : 1,
+              color: isDark ? AppTheme.gray800 : Colors.white,
+              borderRadius: BorderRadius.circular(16),
               child: InkWell(
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(16),
                 onTap: a["onTap"] as VoidCallback,
                 child: Container(
                   padding: EdgeInsets.symmetric(
-                    vertical: isSmall ? 10.0 : 14.0,
-                    horizontal: isSmall ? 8.0 : 12.0,
+                    vertical: isSmall ? 12.0 : 14.0,
+                    horizontal: isSmall ? 6.0 : 10.0,
                   ),
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+                      color: isDark
+                          ? AppTheme.gray600
+                          : AppTheme.gray200.withOpacity(0.6),
                     ),
+                    boxShadow: isDark
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.03),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
                   ),
-                  child: Row(
+                  child: Column(
                     children: [
                       Container(
-                        padding: EdgeInsets.all(isSmall ? 6.0 : 8.0),
+                        padding: EdgeInsets.all(isSmall ? 8.0 : 10.0),
                         decoration: BoxDecoration(
-                          color: color.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(10),
+                          gradient: LinearGradient(
+                            colors: [
+                              color.withOpacity(0.20),
+                              color.withOpacity(0.08),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           a["icon"] as IconData,
                           color: color,
-                          size: isSmall ? 18.0 : 22.0,
+                          size: isSmall ? 20.0 : 22.0,
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          a["label"] as String,
-                          style: TextStyle(
-                            fontSize:
-                                (isSmall ? 11.0 : 13.0) * safeFontScale,
-                            fontWeight: FontWeight.w600,
-                            color: isDark
-                                ? AppTheme.white
-                                : AppTheme.gray700,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      const SizedBox(height: 8),
+                      Text(
+                        a["label"] as String,
+                        style: TextStyle(
+                          fontSize: (isSmall ? 11.0 : 12.0) * safeFontScale,
+                          fontWeight: FontWeight.w600,
+                          color:
+                              isDark ? AppTheme.white : AppTheme.gray700,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
@@ -664,7 +663,7 @@ class _MedicoDashboardState extends State<MedicoDashboard>
               right: 2,
               top: 2,
               child: Container(
-                padding: const EdgeInsets.all(2.0),
+                padding: const EdgeInsets.all(3.0),
                 decoration: const BoxDecoration(
                   color: AppTheme.danger,
                   shape: BoxShape.circle,
@@ -693,13 +692,21 @@ class _MedicoDashboardState extends State<MedicoDashboard>
     final safeFontScale = _getSafeFontScale(accessibility);
 
     return Container(
-      padding: EdgeInsets.all(isSmall ? 10.0 : 14.0),
+      padding: EdgeInsets.all(isSmall ? 12.0 : 14.0),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.gray800 : AppTheme.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: isDark ? null : AppTheme.subtleShadow,
+        color: isDark ? AppTheme.gray800 : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
         border: Border.all(
-          color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+          color: isDark ? AppTheme.gray600 : AppTheme.gray200.withOpacity(0.6),
         ),
       ),
       child: Column(
@@ -707,89 +714,101 @@ class _MedicoDashboardState extends State<MedicoDashboard>
           // Filtro EPS
           Row(
             children: [
-              Icon(Icons.filter_alt,
-                  size: isSmall ? 16.0 : 18.0, color: AppTheme.primary),
-              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: _soft(AppTheme.primary),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.filter_alt_rounded,
+                    size: isSmall ? 14.0 : 16.0, color: AppTheme.primary),
+              ),
+              const SizedBox(width: 8),
               Text(
-                "Filtrar:",
+                "Filtrar por EPS",
                 style: TextStyle(
-                  fontSize: (isSmall ? 11.0 : 13.0) * safeFontScale,
+                  fontSize: (isSmall ? 11.0 : 12.5) * safeFontScale,
                   fontWeight: FontWeight.w600,
                   color: isDark ? AppTheme.white : AppTheme.gray700,
                 ),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Container(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: isSmall ? 6.0 : 10.0),
-                  decoration: BoxDecoration(
-                    color: isDark ? AppTheme.gray700 : AppTheme.gray50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                        color: isDark
-                            ? AppTheme.gray600
-                            : AppTheme.gray300,
-                        width: 1.0),
-                  ),
-                  child: DropdownButton<String>(
-                    value: _filtroEPS,
-                    isExpanded: true,
-                    underline: const SizedBox(),
-                    style: TextStyle(
-                      fontSize: (isSmall ? 11.0 : 13.0) * safeFontScale,
-                      color: isDark ? AppTheme.white : AppTheme.gray700,
-                    ),
-                    items: _epsDisponibles
-                        .map((eps) => DropdownMenuItem(
-                              value: eps,
-                              child: Text(
-                                eps,
-                                style: TextStyle(
-                                  fontSize: (isSmall ? 11.0 : 13.0) *
-                                      safeFontScale,
-                                  color: isDark
-                                      ? AppTheme.white
-                                      : AppTheme.gray700,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: _cambiarFiltroEPS,
-                  ),
-                ),
-              ),
+              const Spacer(),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+          Container(
+            padding:
+                EdgeInsets.symmetric(horizontal: isSmall ? 10.0 : 12.0),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.gray700 : const Color(0xFFF7F8FC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+              ),
+            ),
+            child: DropdownButton<String>(
+              value: _filtroEPS,
+              isExpanded: true,
+              underline: const SizedBox(),
+              icon: const Icon(Icons.keyboard_arrow_down_rounded,
+                  color: AppTheme.gray500),
+              style: TextStyle(
+                fontSize: (isSmall ? 12.0 : 13.0) * safeFontScale,
+                color: isDark ? AppTheme.white : AppTheme.gray700,
+              ),
+              items: _epsDisponibles
+                  .map((eps) => DropdownMenuItem(
+                        value: eps,
+                        child: Text(
+                          eps,
+                          style: TextStyle(
+                            fontSize: (isSmall ? 12.0 : 13.0) *
+                                safeFontScale,
+                            color: isDark
+                                ? AppTheme.white
+                                : AppTheme.gray700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ))
+                  .toList(),
+              onChanged: _cambiarFiltroEPS,
+            ),
+          ),
+          const SizedBox(height: 14),
           // Orden
           Row(
             children: [
-              Icon(Icons.sort,
-                  size: isSmall ? 16.0 : 18.0, color: AppTheme.primary),
-              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: _soft(AppTheme.info),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(Icons.sort_rounded,
+                    size: isSmall ? 14.0 : 16.0, color: AppTheme.info),
+              ),
+              const SizedBox(width: 8),
               Text(
-                "Orden:",
+                "Ordenar por",
                 style: TextStyle(
-                  fontSize: (isSmall ? 11.0 : 13.0) * safeFontScale,
+                  fontSize: (isSmall ? 11.0 : 12.5) * safeFontScale,
                   fontWeight: FontWeight.w600,
                   color: isDark ? AppTheme.white : AppTheme.gray700,
                 ),
               ),
+              const Spacer(),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildOrdenOption("EPS", "🏥", accessibility, isDark),
               const SizedBox(width: 6),
-              Expanded(
-                child: Row(
-                  children: [
-                    _buildOrdenOption("EPS", "🏥", accessibility, isDark),
-                    const SizedBox(width: 4),
-                    _buildOrdenOption("nombre", "📝", accessibility, isDark),
-                    const SizedBox(width: 4),
-                    _buildOrdenOption("fecha", "📅", accessibility, isDark),
-                  ],
-                ),
-              ),
+              _buildOrdenOption("nombre", "🔤", accessibility, isDark),
+              const SizedBox(width: 6),
+              _buildOrdenOption("fecha", "📅", accessibility, isDark),
             ],
           ),
         ],
@@ -806,38 +825,42 @@ class _MedicoDashboardState extends State<MedicoDashboard>
     return Expanded(
       child: GestureDetector(
         onTap: () => _cambiarOrden(orden),
-        child: Container(
-          padding: EdgeInsets.symmetric(vertical: isSmall ? 4.0 : 6.0),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: EdgeInsets.symmetric(vertical: isSmall ? 8.0 : 10.0),
           decoration: BoxDecoration(
             color: isSelected
-                ? AppTheme.primary.withOpacity(0.12)
-                : (isDark ? AppTheme.gray700 : AppTheme.gray50),
-            borderRadius: BorderRadius.circular(6),
+                ? _soft(AppTheme.primary)
+                : (isDark ? AppTheme.gray700 : const Color(0xFFF7F8FC)),
+            borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isSelected
-                  ? AppTheme.primary
-                  : (isDark ? AppTheme.gray600 : AppTheme.gray300),
+                  ? AppTheme.primary.withOpacity(0.5)
+                  : (isDark
+                      ? AppTheme.gray600
+                      : AppTheme.gray200.withOpacity(0.6)),
               width: isSelected ? 1.5 : 1.0,
             ),
           ),
-          child: Center(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(icono,
-                    style: TextStyle(
-                        fontSize: (isSmall ? 10.0 : 12.0) * safeFontScale)),
-                const SizedBox(width: 3),
-                Text(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(icono,
+                  style: TextStyle(
+                      fontSize: (isSmall ? 11.0 : 13.0) * safeFontScale)),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
                   orden == "EPS"
                       ? "EPS"
                       : orden == "nombre"
                           ? "Nombre"
                           : "Fecha",
                   style: TextStyle(
-                    fontSize: (isSmall ? 8.0 : 10.0) * safeFontScale,
-                    fontWeight:
-                        isSelected ? FontWeight.w700 : FontWeight.w500,
+                    fontSize: (isSmall ? 9.0 : 11.0) * safeFontScale,
+                    fontWeight: isSelected
+                        ? FontWeight.w700
+                        : FontWeight.w500,
                     color: isSelected
                         ? AppTheme.primary
                         : (isDark ? AppTheme.gray400 : AppTheme.gray500),
@@ -845,8 +868,8 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -870,7 +893,7 @@ class _MedicoDashboardState extends State<MedicoDashboard>
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      backgroundColor: isDark ? AppTheme.gray800 : AppTheme.white,
+      backgroundColor: isDark ? AppTheme.gray800 : Colors.white,
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.8,
         minChildSize: 0.5,
@@ -880,9 +903,9 @@ class _MedicoDashboardState extends State<MedicoDashboard>
           return Column(
             children: [
               Container(
-                padding: EdgeInsets.all(isSmall ? 10.0 : 16.0),
+                padding: EdgeInsets.all(isSmall ? 12.0 : 16.0),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.06),
+                  color: _softer(AppTheme.primary),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(28),
                     topRight: Radius.circular(28),
@@ -890,44 +913,74 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.notifications,
-                        color: AppTheme.primary, size: 24),
-                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _soft(AppTheme.primary),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.notifications_rounded,
+                          color: AppTheme.primary, size: 22),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        "Notificaciones",
-                        style: TextStyle(
-                          fontSize: isSmall ? 16.0 : 20.0,
-                          fontWeight: FontWeight.bold,
-                          color:
-                              isDark ? AppTheme.white : AppTheme.gray700,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Notificaciones",
+                            style: TextStyle(
+                              fontSize: isSmall ? 16.0 : 18.0,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? AppTheme.white
+                                  : AppTheme.gray700,
+                            ),
+                          ),
+                          Text(
+                            "${notificaciones.length} en total",
+                            style: TextStyle(
+                              fontSize: isSmall ? 10.0 : 11.5,
+                              color: AppTheme.gray500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     IconButton(
-                      icon: Icon(Icons.close,
-                          size: isSmall ? 22.0 : 28.0,
-                          color: isDark ? AppTheme.white : AppTheme.gray700),
+                      icon: Icon(Icons.close_rounded,
+                          size: isSmall ? 22.0 : 26.0,
+                          color: isDark
+                              ? AppTheme.white
+                              : AppTheme.gray600),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
               ),
-              const Divider(),
+              const SizedBox(height: 6),
               Expanded(
                 child: notificaciones.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.notifications_none,
-                                size: isSmall ? 44.0 : 64.0,
-                                color: AppTheme.gray300),
+                            Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFF1F3F9),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.notifications_none_rounded,
+                                  size: isSmall ? 44.0 : 56.0,
+                                  color: AppTheme.gray400),
+                            ),
                             const SizedBox(height: 14),
                             Text(
                               "No hay notificaciones",
                               style: TextStyle(
-                                fontSize: isSmall ? 14.0 : 16.0,
+                                fontSize: isSmall ? 14.0 : 15.0,
+                                fontWeight: FontWeight.w600,
                                 color: isDark
                                     ? AppTheme.gray400
                                     : AppTheme.gray500,
@@ -938,6 +991,7 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                       )
                     : ListView.builder(
                         controller: scrollController,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
                         itemCount: notificaciones.length,
                         itemBuilder: (context, index) {
                           final n = notificaciones[index];
@@ -950,27 +1004,27 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                           switch (tipo) {
                             case "signo":
                               color = AppTheme.danger;
-                              icono = Icons.monitor_heart;
+                              icono = Icons.monitor_heart_rounded;
                               break;
                             case "sintoma":
                               color = AppTheme.warning;
-                              icono = Icons.healing;
+                              icono = Icons.healing_rounded;
                               break;
                             case "cita":
                               color = AppTheme.info;
-                              icono = Icons.event;
+                              icono = Icons.event_rounded;
                               break;
                             case "alerta":
                               color = AppTheme.danger;
-                              icono = Icons.warning_amber;
+                              icono = Icons.warning_amber_rounded;
                               break;
                             case "recomendacion":
                               color = AppTheme.primary;
-                              icono = Icons.medical_information;
+                              icono = Icons.medical_information_rounded;
                               break;
                             default:
                               color = AppTheme.primary;
-                              icono = Icons.notifications;
+                              icono = Icons.notifications_rounded;
                           }
 
                           return GestureDetector(
@@ -983,33 +1037,49 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                             },
                             child: Container(
                               margin: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              padding: const EdgeInsets.all(12),
+                                  horizontal: 14, vertical: 5),
+                              padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 color: leida
                                     ? (isDark
                                         ? AppTheme.gray700
-                                        : AppTheme.white)
+                                        : Colors.white)
                                     : color.withOpacity(0.06),
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: leida
                                       ? (isDark
                                           ? AppTheme.gray600
-                                          : AppTheme.gray200)
-                                      : color.withOpacity(0.3),
+                                          : AppTheme.gray200
+                                              .withOpacity(0.6))
+                                      : color.withOpacity(0.25),
                                   width: 1.0,
                                 ),
+                                boxShadow: leida
+                                    ? null
+                                    : [
+                                        BoxShadow(
+                                          color: color.withOpacity(0.08),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
                               ),
                               child: Row(
                                 children: [
                                   Container(
                                     padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      color: color.withOpacity(0.12),
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          color.withOpacity(0.20),
+                                          color.withOpacity(0.08),
+                                        ],
+                                      ),
                                       borderRadius: BorderRadius.circular(12),
                                     ),
-                                    child: Icon(icono, color: color, size: 22),
+                                    child:
+                                        Icon(icono, color: color, size: 20),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
@@ -1020,9 +1090,9 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                                         Text(
                                           n["pacienteNombre"] ?? "Paciente",
                                           style: TextStyle(
-                                            fontWeight: FontWeight.bold,
+                                            fontWeight: FontWeight.w700,
                                             fontSize:
-                                                isSmall ? 13.0 : 15.0,
+                                                isSmall ? 13.0 : 14.0,
                                             color: isDark
                                                 ? AppTheme.white
                                                 : AppTheme.gray700,
@@ -1035,24 +1105,35 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                                           n["mensaje"] ?? "",
                                           style: TextStyle(
                                             fontSize:
-                                                isSmall ? 11.0 : 13.0,
+                                                isSmall ? 11.0 : 12.5,
                                             color: isDark
                                                 ? AppTheme.gray300
                                                 : AppTheme.gray500,
+                                            height: 1.3,
                                           ),
                                           maxLines: 2,
                                           overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(height: 3),
-                                        Text(
-                                          _formatFecha(n["fecha"]),
-                                          style: TextStyle(
-                                            fontSize:
-                                                isSmall ? 9.0 : 11.0,
-                                            color: isDark
-                                                ? AppTheme.gray500
-                                                : AppTheme.gray400,
-                                          ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.access_time_rounded,
+                                              size: 11,
+                                              color: AppTheme.gray400,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _formatFecha(n["fecha"]),
+                                              style: TextStyle(
+                                                fontSize:
+                                                    isSmall ? 9.0 : 10.5,
+                                                color: isDark
+                                                    ? AppTheme.gray500
+                                                    : AppTheme.gray400,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -1064,6 +1145,12 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                                       decoration: BoxDecoration(
                                         color: color,
                                         shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: color.withOpacity(0.5),
+                                            blurRadius: 6,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                 ],
@@ -1122,52 +1209,59 @@ class _MedicoDashboardState extends State<MedicoDashboard>
 
     return Container(
       width: double.infinity,
-      color: isDark ? AppTheme.gray800 : AppTheme.white,
+      color: isDark ? AppTheme.gray800 : Colors.white,
       padding: EdgeInsets.fromLTRB(
-        isSmall ? 14.0 : 20.0,
-        isSmall ? 14.0 : 20.0,
-        isSmall ? 14.0 : 20.0,
-        isSmall ? 14.0 : 20.0,
+        isSmall ? 16.0 : 20.0,
+        isSmall ? 14.0 : 18.0,
+        isSmall ? 16.0 : 20.0,
+        isSmall ? 16.0 : 20.0,
       ),
       child: Row(
         children: [
           Container(
-            width: isSmall ? 56.0 : 72.0,
-            height: isSmall ? 56.0 : 72.0,
+            width: isSmall ? 60.0 : 72.0,
+            height: isSmall ? 60.0 : 72.0,
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                  color: AppTheme.primary.withOpacity(0.3), width: 2.0),
-              boxShadow: [
-                BoxShadow(
-                  color: AppTheme.primary.withOpacity(0.3),
-                  blurRadius: 10.0,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.primary.withOpacity(0.35),
+                  AppTheme.primary.withOpacity(0.10),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
-            child: ClipOval(
-              child: Image.asset(
-                "assets/images/medico.jpg",
-                width: isSmall ? 56.0 : 72.0,
-                height: isSmall ? 56.0 : 72.0,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    decoration:
-                        BoxDecoration(gradient: AppTheme.primaryGradient),
-                    child: Center(
-                      child: Text(
-                        inicial,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: isSmall ? 22.0 : 28.0,
-                          fontWeight: FontWeight.bold,
+            child: Container(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+              ),
+              padding: const EdgeInsets.all(2),
+              child: ClipOval(
+                child: Image.asset(
+                  "assets/images/medico.jpg",
+                  width: isSmall ? 52.0 : 64.0,
+                  height: isSmall ? 52.0 : 64.0,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      decoration: BoxDecoration(
+                          gradient: AppTheme.primaryGradient),
+                      child: Center(
+                        child: Text(
+                          inicial,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isSmall ? 22.0 : 28.0,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -1179,33 +1273,57 @@ class _MedicoDashboardState extends State<MedicoDashboard>
                 Text(
                   nombreCompleto,
                   style: TextStyle(
-                    fontSize: (isSmall ? 15.0 : 20.0) * safeFontScale,
+                    fontSize: (isSmall ? 16.0 : 19.0) * safeFontScale,
                     fontWeight: FontWeight.bold,
                     color: isDark ? AppTheme.white : AppTheme.gray700,
+                    height: 1.2,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 3),
-                Text(
-                  especialidad,
-                  style: TextStyle(
-                    fontSize: (isSmall ? 12.0 : 15.0) * safeFontScale,
-                    color: AppTheme.gray500,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  children: [
+                    Icon(Icons.verified_rounded,
+                        size: isSmall ? 12.0 : 14.0,
+                        color: AppTheme.primary),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        especialidad,
+                        style: TextStyle(
+                          fontSize:
+                              (isSmall ? 12.0 : 13.5) * safeFontScale,
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
                 if (correo.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    correo,
-                    style: TextStyle(
-                      fontSize: (isSmall ? 10.0 : 13.0) * safeFontScale,
-                      color: AppTheme.gray400,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.mail_outline_rounded,
+                          size: isSmall ? 11.0 : 12.0,
+                          color: AppTheme.gray400),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(
+                          correo,
+                          style: TextStyle(
+                            fontSize:
+                                (isSmall ? 10.0 : 12.0) * safeFontScale,
+                            color: AppTheme.gray400,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ],
@@ -1213,10 +1331,10 @@ class _MedicoDashboardState extends State<MedicoDashboard>
           ),
           Container(
             padding: EdgeInsets.symmetric(
-                horizontal: isSmall ? 8.0 : 12.0,
-                vertical: isSmall ? 3.0 : 6.0),
+                horizontal: isSmall ? 8.0 : 10.0,
+                vertical: isSmall ? 4.0 : 5.0),
             decoration: BoxDecoration(
-              color: AppTheme.success.withOpacity(0.12),
+              color: _soft(AppTheme.success),
               border: Border.all(color: AppTheme.success.withOpacity(0.3)),
               borderRadius: BorderRadius.circular(20),
             ),
@@ -1224,20 +1342,20 @@ class _MedicoDashboardState extends State<MedicoDashboard>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: isSmall ? 6.0 : 8.0,
-                  height: isSmall ? 6.0 : 8.0,
+                  width: isSmall ? 6.0 : 7.0,
+                  height: isSmall ? 6.0 : 7.0,
                   decoration: const BoxDecoration(
                     color: AppTheme.success,
                     shape: BoxShape.circle,
                   ),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 5),
                 Text(
                   "Activo",
                   style: TextStyle(
                     color: AppTheme.success,
-                    fontSize: (isSmall ? 10.0 : 13.0) * safeFontScale,
-                    fontWeight: FontWeight.w600,
+                    fontSize: (isSmall ? 10.0 : 11.5) * safeFontScale,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -1264,20 +1382,20 @@ class _MedicoDashboardState extends State<MedicoDashboard>
       {
         "label": "Total",
         "value": pacientes.length.toString(),
-        "icon": Icons.people_outline,
-        "color": AppTheme.primary
+        "icon": Icons.people_alt_rounded,
+        "color": AppTheme.primary,
       },
       {
         "label": "Activos",
         "value": activos.toString(),
-        "icon": Icons.check_circle_outline,
-        "color": AppTheme.success
+        "icon": Icons.check_circle_rounded,
+        "color": AppTheme.success,
       },
       {
-        "label": "Prom.",
+        "label": "Promedio",
         "value": "$promedio%",
-        "icon": Icons.analytics_outlined,
-        "color": AppTheme.info
+        "icon": Icons.analytics_rounded,
+        "color": AppTheme.info,
       },
     ];
 
@@ -1289,49 +1407,66 @@ class _MedicoDashboardState extends State<MedicoDashboard>
           child: Container(
             margin: EdgeInsets.only(
                 right: e.key < stats.length - 1
-                    ? (isSmall ? 4.0 : 8.0)
+                    ? (isSmall ? 6.0 : 10.0)
                     : 0.0),
             padding: EdgeInsets.symmetric(
-              vertical: isSmall ? 8.0 : 14.0,
-              horizontal: isSmall ? 4.0 : 10.0,
+              vertical: isSmall ? 12.0 : 16.0,
+              horizontal: isSmall ? 6.0 : 10.0,
             ),
             decoration: BoxDecoration(
-              color: isDark ? AppTheme.gray800 : AppTheme.white,
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: isDark ? null : AppTheme.subtleShadow,
+              color: isDark ? AppTheme.gray800 : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: isDark
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.04),
+                        blurRadius: 12,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
               border: Border.all(
-                color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+                color: isDark
+                    ? AppTheme.gray600
+                    : AppTheme.gray200.withOpacity(0.6),
               ),
             ),
             child: Column(
               children: [
                 Container(
-                  padding: EdgeInsets.all(isSmall ? 6.0 : 10.0),
+                  padding: EdgeInsets.all(isSmall ? 8.0 : 10.0),
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(10),
+                    gradient: LinearGradient(
+                      colors: [
+                        color.withOpacity(0.20),
+                        color.withOpacity(0.08),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
                     s["icon"] as IconData,
                     color: color,
-                    size: isSmall ? 18.0 : 24.0,
+                    size: isSmall ? 20.0 : 22.0,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
                   s["value"] as String,
                   style: TextStyle(
-                    fontSize: (isSmall ? 18.0 : 24.0) * safeFontScale,
+                    fontSize: (isSmall ? 18.0 : 22.0) * safeFontScale,
                     fontWeight: FontWeight.bold,
                     color: color,
+                    height: 1.1,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   s["label"] as String,
                   style: TextStyle(
-                    fontSize: (isSmall ? 8.0 : 11.0) * safeFontScale,
+                    fontSize: (isSmall ? 9.0 : 11.0) * safeFontScale,
                     color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+                    fontWeight: FontWeight.w500,
                   ),
                   textAlign: TextAlign.center,
                   maxLines: 1,
@@ -1355,10 +1490,19 @@ class _MedicoDashboardState extends State<MedicoDashboard>
 
     return Row(
       children: [
+        Container(
+          width: 4,
+          height: isSmall ? 18.0 : 22.0,
+          decoration: BoxDecoration(
+            color: AppTheme.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
         Text(
           titulo,
           style: TextStyle(
-            fontSize: (isSmall ? 14.0 : 18.0) * safeFontScale,
+            fontSize: (isSmall ? 14.0 : 17.0) * safeFontScale,
             fontWeight: FontWeight.bold,
             color: isDark ? AppTheme.white : AppTheme.gray700,
           ),
@@ -1366,18 +1510,18 @@ class _MedicoDashboardState extends State<MedicoDashboard>
         const Spacer(),
         Container(
           padding: EdgeInsets.symmetric(
-              horizontal: isSmall ? 8.0 : 12.0,
-              vertical: isSmall ? 3.0 : 6.0),
+              horizontal: isSmall ? 10.0 : 12.0,
+              vertical: isSmall ? 4.0 : 5.0),
           decoration: BoxDecoration(
-            color: AppTheme.primary.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(16),
+            color: _soft(AppTheme.primary),
+            borderRadius: BorderRadius.circular(20),
           ),
           child: Text(
             "$count",
             style: TextStyle(
-              fontSize: (isSmall ? 11.0 : 14.0) * safeFontScale,
+              fontSize: (isSmall ? 11.0 : 13.0) * safeFontScale,
               color: AppTheme.primary,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
         ),
@@ -1411,150 +1555,180 @@ class _MedicoDashboardState extends State<MedicoDashboard>
     final color = colors[nombre.codeUnitAt(0) % colors.length];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.gray800 : AppTheme.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: isDark ? null : AppTheme.subtleShadow,
+        color: isDark ? AppTheme.gray800 : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
         border: Border.all(
-          color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+          color: isDark ? AppTheme.gray600 : AppTheme.gray200.withOpacity(0.6),
         ),
       ),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: () {
-          if (idPaciente == null) return;
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PacienteDetalleScreen(
-                idPaciente: idPaciente,
-                idMedico: medico?["idProfesional"] ?? 0,
-                idUsuario: widget.idUsuario,
-                idUsuarioPaciente: safeId(p["idUsuario"]) ?? idPaciente,
-                nombre: nombre,
-              ),
-            ),
-          );
-        },
-        child: Padding(
-          padding: EdgeInsets.all(isSmall ? 10.0 : 14.0),
-          child: Row(
-            children: [
-              Container(
-                width: isSmall ? 44.0 : 56.0,
-                height: isSmall ? 44.0 : 56.0,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                      color: color.withOpacity(0.3), width: 2.0),
-                ),
-                child: ClipOval(
-                  child: tieneFoto
-                      ? Image.network(
-                          p["foto"],
-                          width: isSmall ? 44.0 : 56.0,
-                          height: isSmall ? 44.0 : 56.0,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            decoration: BoxDecoration(
-                                color: color.withOpacity(0.15)),
-                            child: Center(
-                              child: Text(
-                                inicial,
-                                style: TextStyle(
-                                  color: color,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: (isSmall ? 16.0 : 22.0) *
-                                      safeFontScale,
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                      : Container(
-                          decoration: BoxDecoration(
-                              color: color.withOpacity(0.15)),
-                          child: Center(
-                            child: Text(
-                              inicial,
-                              style: TextStyle(
-                                color: color,
-                                fontWeight: FontWeight.bold,
-                                fontSize: (isSmall ? 16.0 : 22.0) *
-                                    safeFontScale,
-                              ),
-                            ),
-                          ),
-                        ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () {
+            if (idPaciente == null) return;
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PacienteDetalleScreen(
+                  idPaciente: idPaciente,
+                  idMedico: medico?["idProfesional"] ?? 0,
+                  idUsuario: widget.idUsuario,
+                  idUsuarioPaciente: safeId(p["idUsuario"]) ?? idPaciente,
+                  nombre: nombre,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      nombre,
-                      style: TextStyle(
-                        fontSize: (isSmall ? 14.0 : 17.0) * safeFontScale,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? AppTheme.white : AppTheme.gray700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+            );
+          },
+          child: Padding(
+            padding: EdgeInsets.all(isSmall ? 12.0 : 14.0),
+            child: Row(
+              children: [
+                Container(
+                  width: isSmall ? 46.0 : 54.0,
+                  height: isSmall ? 46.0 : 54.0,
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [
+                        color.withOpacity(0.35),
+                        color.withOpacity(0.10),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
-                    const SizedBox(height: 3),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        "🏥 $eps",
+                  ),
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white,
+                    ),
+                    padding: const EdgeInsets.all(1.5),
+                    child: ClipOval(
+                      child: tieneFoto
+                          ? Image.network(
+                              p["foto"],
+                              width: isSmall ? 42.0 : 50.0,
+                              height: isSmall ? 42.0 : 50.0,
+                              fit: BoxFit.cover,
+                              errorBuilder:
+                                  (context, error, stackTrace) =>
+                                      _avatarFallback(
+                                          inicial, color, isSmall,
+                                          safeFontScale),
+                            )
+                          : _avatarFallback(
+                              inicial, color, isSmall, safeFontScale),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        nombre,
                         style: TextStyle(
-                          fontSize: (isSmall ? 10.0 : 13.0) * safeFontScale,
-                          color: AppTheme.primary,
-                          fontWeight: FontWeight.w500,
+                          fontSize:
+                              (isSmall ? 14.0 : 15.5) * safeFontScale,
+                          fontWeight: FontWeight.w700,
+                          color:
+                              isDark ? AppTheme.white : AppTheme.gray700,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 3,
-                      children: [
-                        if (hipertension.isNotEmpty)
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: _soft(AppTheme.primary),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          "🏥 $eps",
+                          style: TextStyle(
+                            fontSize:
+                                (isSmall ? 10.0 : 11.5) * safeFontScale,
+                            color: AppTheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (hipertension.isNotEmpty)
+                            _chip(
+                              "❤️ HTA",
+                              _soft(AppTheme.warning),
+                              AppTheme.warning,
+                              accessibility,
+                              isSmall,
+                            ),
                           _chip(
-                            "❤️ HTA",
-                            AppTheme.warning.withOpacity(0.12),
-                            AppTheme.warning,
+                            "🎂 $edad",
+                            _soft(AppTheme.info),
+                            AppTheme.info,
                             accessibility,
                             isSmall,
                           ),
-                        _chip(
-                          "🎂 $edad",
-                          AppTheme.info.withOpacity(0.12),
-                          AppTheme.info,
-                          accessibility,
-                          isSmall,
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                size: isSmall ? 20.0 : 24.0,
-                color: isDark ? AppTheme.gray400 : AppTheme.gray400,
-              ),
-            ],
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? AppTheme.gray700
+                        : const Color(0xFFF7F8FC),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    size: isSmall ? 18.0 : 20.0,
+                    color: AppTheme.gray500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _avatarFallback(
+      String inicial, Color color, bool isSmall, double safeFontScale) {
+    return Container(
+      decoration: BoxDecoration(color: _soft(color)),
+      child: Center(
+        child: Text(
+          inicial,
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: (isSmall ? 16.0 : 20.0) * safeFontScale,
           ),
         ),
       ),
@@ -1567,18 +1741,18 @@ class _MedicoDashboardState extends State<MedicoDashboard>
 
     return Container(
       padding: EdgeInsets.symmetric(
-          horizontal: isSmall ? 6.0 : 10.0,
-          vertical: isSmall ? 3.0 : 5.0),
+          horizontal: isSmall ? 8.0 : 10.0,
+          vertical: isSmall ? 3.0 : 4.0),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(20),
       ),
       child: Text(
         text,
         style: TextStyle(
-          fontSize: (isSmall ? 9.0 : 12.0) * safeFontScale,
+          fontSize: (isSmall ? 9.5 : 11.0) * safeFontScale,
           color: textColor,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
         ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -1595,35 +1769,50 @@ class _MedicoDashboardState extends State<MedicoDashboard>
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(isSmall ? 20.0 : 36.0),
+      padding: EdgeInsets.all(isSmall ? 24.0 : 36.0),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.gray800 : AppTheme.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: isDark ? null : AppTheme.subtleShadow,
+        color: isDark ? AppTheme.gray800 : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
         border: Border.all(
-          color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+          color: isDark ? AppTheme.gray600 : AppTheme.gray200.withOpacity(0.6),
         ),
       ),
       child: Column(
         children: [
-          Icon(Icons.people_outline,
-              size: isSmall ? 44.0 : 56.0, color: AppTheme.gray300),
-          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _soft(AppTheme.primary),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.people_outline_rounded,
+                size: isSmall ? 44.0 : 52.0, color: AppTheme.primary),
+          ),
+          const SizedBox(height: 16),
           Text(
             "No tienes pacientes asignados",
             style: TextStyle(
-              fontSize: (isSmall ? 14.0 : 16.0) * safeFontScale,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+              fontSize: (isSmall ? 14.0 : 15.5) * safeFontScale,
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppTheme.white : AppTheme.gray700,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
-            "Los pacientes aparecerán aquí",
+            "Los pacientes aparecerán aquí cuando te asignen alguno",
             style: TextStyle(
-              fontSize: (isSmall ? 11.0 : 13.0) * safeFontScale,
-              color: isDark ? AppTheme.gray500 : AppTheme.gray400,
+              fontSize: (isSmall ? 11.0 : 12.5) * safeFontScale,
+              color: isDark ? AppTheme.gray400 : AppTheme.gray500,
             ),
             textAlign: TextAlign.center,
           ),
@@ -1639,35 +1828,50 @@ class _MedicoDashboardState extends State<MedicoDashboard>
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(isSmall ? 20.0 : 36.0),
+      padding: EdgeInsets.all(isSmall ? 24.0 : 36.0),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.gray800 : AppTheme.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: isDark ? null : AppTheme.subtleShadow,
+        color: isDark ? AppTheme.gray800 : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
         border: Border.all(
-          color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+          color: isDark ? AppTheme.gray600 : AppTheme.gray200.withOpacity(0.6),
         ),
       ),
       child: Column(
         children: [
-          Icon(Icons.filter_alt_off,
-              size: isSmall ? 44.0 : 56.0, color: AppTheme.gray300),
-          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: _soft(AppTheme.warning),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.filter_alt_off_rounded,
+                size: isSmall ? 44.0 : 52.0, color: AppTheme.warning),
+          ),
+          const SizedBox(height: 16),
           Text(
             "No hay pacientes con este filtro",
             style: TextStyle(
-              fontSize: (isSmall ? 14.0 : 16.0) * safeFontScale,
-              fontWeight: FontWeight.w600,
-              color: isDark ? AppTheme.gray400 : AppTheme.gray500,
+              fontSize: (isSmall ? 14.0 : 15.5) * safeFontScale,
+              fontWeight: FontWeight.w700,
+              color: isDark ? AppTheme.white : AppTheme.gray700,
             ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
-            "Prueba con otro filtro",
+            "Prueba cambiando el filtro o el orden",
             style: TextStyle(
-              fontSize: (isSmall ? 11.0 : 13.0) * safeFontScale,
-              color: isDark ? AppTheme.gray500 : AppTheme.gray400,
+              fontSize: (isSmall ? 11.0 : 12.5) * safeFontScale,
+              color: isDark ? AppTheme.gray400 : AppTheme.gray500,
             ),
             textAlign: TextAlign.center,
           ),

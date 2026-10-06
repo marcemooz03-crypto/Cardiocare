@@ -4,6 +4,8 @@ import 'package:cardio_app/config/api_config.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tzdata;
 import 'toma_service.dart';
 
 class RecordatorioService {
@@ -28,6 +30,14 @@ class RecordatorioService {
     }
 
     debugPrint("🔔 Inicializando notificaciones locales...");
+
+    // ✅ Zona horaria (Colombia). Cambia el nombre si lo necesitas.
+    try {
+      tzdata.initializeTimeZones();
+      tz.setLocalLocation(tz.getLocation('America/Bogota'));
+    } catch (e) {
+      debugPrint("⚠️ Error configurando zona horaria: $e");
+    }
 
     const AndroidInitializationSettings androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -54,7 +64,7 @@ class RecordatorioService {
   }
 
   // ==============================================
-  // ✅ PROGRAMAR ALARMA DIARIA
+  // ✅ PROGRAMAR ALARMA DIARIA (a la hora exacta)
   // ==============================================
   static Future<void> programarAlarma({
     required int id,
@@ -72,9 +82,9 @@ class RecordatorioService {
       final int hour = int.parse(partes[0]);
       final int minute = int.parse(partes[1]);
 
-      final now = DateTime.now();
-      DateTime scheduledTime =
-          DateTime(now.year, now.month, now.day, hour, minute);
+      final now = tz.TZDateTime.now(tz.local);
+      var scheduledTime =
+          tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
 
       if (scheduledTime.isBefore(now)) {
         scheduledTime = scheduledTime.add(const Duration(days: 1));
@@ -99,14 +109,20 @@ class RecordatorioService {
         iOS: iosDetails,
       );
 
-      await _notifications.periodicallyShow(
-        id,
-        titulo,
-        cuerpo,
-        RepeatInterval.daily,
-        details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      );
+      // Si ya existía una alarma con este id, la reemplaza
+      await _notifications.cancel(id);
+
+      await _notifications.zonedSchedule(
+  id,
+  titulo,
+  cuerpo,
+  scheduledTime,
+  details,
+  androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+  uiLocalNotificationDateInterpretation:
+      UILocalNotificationDateInterpretation.absoluteTime,
+  matchDateTimeComponents: DateTimeComponents.time, // se repite a diario
+);
 
       debugPrint('✅ Alarma programada: $titulo a las $hora');
     } catch (e) {
@@ -132,8 +148,7 @@ class RecordatorioService {
     }
   }
 
-  static Future<void> mostrarNotificacion(
-      String titulo, String cuerpo) async {
+  static Future<void> mostrarNotificacion(String titulo, String cuerpo) async {
     if (!_inicializado) await init();
 
     const AndroidNotificationDetails androidDetails =
@@ -160,8 +175,8 @@ class RecordatorioService {
 
   Future<List<Map<String, dynamic>>> getActivosByPaciente(
       int idPaciente) async {
-    final res = await http
-        .get(Uri.parse("$baseUrl/paciente/$idPaciente/activos"));
+    final res =
+        await http.get(Uri.parse("$baseUrl/paciente/$idPaciente/activos"));
     _check(res);
     final data = jsonDecode(res.body);
 
@@ -194,17 +209,19 @@ class RecordatorioService {
 
   // ============================================================
   // ✅ CREAR RECORDATORIO → genera tomas de hoy
+  //    Un tratamiento puede tener VARIOS recordatorios
   // ============================================================
   Future<int> crear({
     required int idTratamiento,
     required String hora,
     bool activo = true,
-    int? idPaciente,   // 👈 NUEVO: para regenerar tomas
+    int? idPaciente,
+    String? nombreMedicamento,
   }) async {
     final horaFormateada = _formatearHora(hora);
 
     final res = await http.post(
-      Uri.parse("$baseUrl"),
+      Uri.parse(baseUrl),
       headers: {"Content-Type": "application/json"},
       body: jsonEncode({
         "idTratamiento": idTratamiento,
@@ -215,16 +232,17 @@ class RecordatorioService {
     _check(res);
     final id = int.parse(jsonDecode(res.body)["idRecordatorio"].toString());
 
-    // ✅ Programar alarma si está activo
     if (activo) {
       await programarAlarma(
         id: id,
         titulo: "💊 Tomar medicamento",
-        cuerpo: "Es hora de tu medicamento",
+        cuerpo: nombreMedicamento != null && nombreMedicamento.isNotEmpty
+            ? "Es hora de tomar $nombreMedicamento"
+            : "Es hora de tu medicamento",
         hora: horaFormateada,
       );
 
-      // ✅ Generar la toma del día
+      // ✅ Generar las tomas del día
       if (idPaciente != null) {
         await _generarTomas(idPaciente);
       }
@@ -234,13 +252,14 @@ class RecordatorioService {
   }
 
   // ============================================================
-  // ✅ TOGGLE ACTIVO → genera/elimina tomas
+  // ✅ TOGGLE ACTIVO
+  //    Al desactivar NO se tocan las tomas: siempre quedan activas
   // ============================================================
   Future<void> toggleActivo(
     int idRecordatorio, {
     required bool activo,
     String? hora,
-    int? idPaciente,   // 👈 NUEVO: para regenerar tomas
+    int? idPaciente,
   }) async {
     final res = await http.patch(
       Uri.parse("$baseUrl/$idRecordatorio/toggle"),
@@ -249,12 +268,9 @@ class RecordatorioService {
     );
     _check(res);
 
-    // ✅ Programar o cancelar alarma
     if (activo) {
       final horaFinal = hora ?? await getHora(idRecordatorio);
-      if (horaFinal != null &&
-          horaFinal.isNotEmpty &&
-          horaFinal != '00:00') {
+      if (horaFinal != null && horaFinal.isNotEmpty && horaFinal != '00:00') {
         await programarAlarma(
           id: idRecordatorio,
           titulo: "💊 Tomar medicamento",
@@ -263,17 +279,12 @@ class RecordatorioService {
         );
       }
 
-      // ✅ Generar la toma del día para este paciente
       if (idPaciente != null) {
         await _generarTomas(idPaciente);
       }
     } else {
       await cancelarAlarma(idRecordatorio);
-
-      // ✅ Al desactivar, regenerar (elimina tomas pendientes y vuelve a generar las de los demás)
-      if (idPaciente != null) {
-        await _generarTomas(idPaciente);
-      }
+      // ✅ Las tomas NO se regeneran ni se eliminan al desactivar
     }
   }
 
@@ -283,7 +294,7 @@ class RecordatorioService {
   Future<bool> actualizarHora(
     int idRecordatorio,
     String nuevaHora, {
-    int? idPaciente,   // 👈 NUEVO
+    int? idPaciente,
   }) async {
     try {
       final horaFormateada = _formatearHora(nuevaHora);
@@ -295,7 +306,6 @@ class RecordatorioService {
       );
 
       if (res.statusCode == 200) {
-        // ✅ Reprogramar alarma con nueva hora
         await programarAlarma(
           id: idRecordatorio,
           titulo: "💊 Tomar medicamento",
@@ -303,7 +313,6 @@ class RecordatorioService {
           hora: horaFormateada,
         );
 
-        // ✅ Regenerar tomas con la nueva hora
         if (idPaciente != null) {
           await _generarTomas(idPaciente);
         }
@@ -322,7 +331,6 @@ class RecordatorioService {
     _check(res);
     await cancelarAlarma(idRecordatorio);
 
-    // ✅ Regenerar tomas por si quedaron huérfanas
     if (idPaciente != null) {
       await _generarTomas(idPaciente);
     }
@@ -351,9 +359,9 @@ class RecordatorioService {
       debugPrint("🔄 Generando tomas del día para paciente $idPaciente...");
       final ok = await _tomaService.generarHoy(idPaciente);
       if (ok) {
-        debugPrint("✅ Tomas regeneradas");
+        debugPrint("✅ Tomas generadas");
       } else {
-        debugPrint("⚠️ No se pudieron regenerar las tomas");
+        debugPrint("⚠️ No se pudieron generar las tomas");
       }
     } catch (e) {
       debugPrint("❌ Error generando tomas: $e");
@@ -392,7 +400,6 @@ class RecordatorioService {
   // ==============================================
   // 🔧 UTILIDADES
   // ==============================================
-
   static String _formatearHora(String hora) {
     hora = hora.trim();
 
@@ -427,8 +434,7 @@ class RecordatorioService {
 
   void _check(http.Response res) {
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      debugPrint(
-          "❌ RecordatorioService ${res.statusCode}: ${res.body}");
+      debugPrint("❌ RecordatorioService ${res.statusCode}: ${res.body}");
       throw Exception("Error ${res.statusCode}");
     }
   }

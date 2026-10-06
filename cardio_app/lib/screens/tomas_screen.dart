@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '../app.theme.dart';
+import 'package:provider/provider.dart';
+import 'package:cardio_app/accesibility_provider.dart';
+import 'package:cardio_app/app.theme.dart';
 import '../services/toma_service.dart';
 import '../services/recordatorio_service.dart';
 
@@ -22,8 +24,17 @@ class _TomasScreenState extends State<TomasScreen> {
   List<Map<String, dynamic>> tomas = [];
   List<Map<String, dynamic>> recordatorios = [];
   bool loading = true;
+  bool _error = false;
   bool _modoSeleccion = false;
   Set<int> _tomasSeleccionadas = {};
+
+  static const _dias = [
+    'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'
+  ];
+  static const _meses = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+  ];
 
   @override
   void initState() {
@@ -31,22 +42,81 @@ class _TomasScreenState extends State<TomasScreen> {
     _iniciar();
   }
 
-  // ✅ Solo carga tomas (no regenera)
-  Future<void> _iniciar() async {
-    try {
-      setState(() => loading = true);
-      await _cargarRecordatorios();
-      await _cargarTomas();
-    } catch (e) {
-      debugPrint("❌ ERROR iniciar => $e");
-      if (mounted) setState(() => loading = false);
+  // ==============================
+  // 🔧 HELPERS
+  // ==============================
+  int _id(Map<String, dynamic> t) => int.parse(t["idToma"].toString());
+
+  String _estadoDe(Map<String, dynamic> t) =>
+      t["estado"]?.toString() ?? "Pendiente";
+
+  String _formatearHora(dynamic hora) {
+    if (hora == null) return "--:--";
+    final h = hora.toString();
+    return h.length >= 5 ? h.substring(0, 5) : h;
+  }
+
+  int _minutos(dynamic hora) {
+    final p = _formatearHora(hora).split(':');
+    if (p.length < 2) return 0;
+    return (int.tryParse(p[0]) ?? 0) * 60 + (int.tryParse(p[1]) ?? 0);
+  }
+
+  int get _minutosAhora {
+    final n = DateTime.now();
+    return n.hour * 60 + n.minute;
+  }
+
+  bool _esAtrasada(Map<String, dynamic> t) =>
+      _estadoDe(t) == "Pendiente" && _minutos(t["hora"]) < _minutosAhora;
+
+  String get _fechaHoy {
+    final n = DateTime.now();
+    return '${_dias[n.weekday - 1]}, ${n.day} de ${_meses[n.month - 1]}';
+  }
+
+  /// Datos visuales por estado
+  ({Color color, IconData icon, String label}) _estadoUI(String estado) {
+    switch (estado) {
+      case "Tomado":
+        return (
+          color: AppTheme.success,
+          icon: Icons.check_circle_rounded,
+          label: "Tomado"
+        );
+      case "Omitido":
+        return (
+          color: AppTheme.danger,
+          icon: Icons.cancel_rounded,
+          label: "Omitido"
+        );
+      default:
+        return (
+          color: AppTheme.warning,
+          icon: Icons.schedule_rounded,
+          label: "Pendiente"
+        );
     }
+  }
+
+  // ==============================
+  // 📥 CARGA
+  // ==============================
+  Future<void> _iniciar() async {
+    if (mounted) {
+      setState(() {
+        loading = true;
+        _error = false;
+      });
+    }
+    await _cargarRecordatorios();
+    await _cargarTomas();
   }
 
   Future<void> _cargarRecordatorios() async {
     try {
-      recordatorios = await _recordatorioService.getActivosByPaciente(widget.idPaciente);
-      debugPrint("📋 Recordatorios activos: ${recordatorios.length}");
+      recordatorios =
+          await _recordatorioService.getActivosByPaciente(widget.idPaciente);
     } catch (e) {
       debugPrint("❌ ERROR cargar recordatorios => $e");
     }
@@ -56,28 +126,34 @@ class _TomasScreenState extends State<TomasScreen> {
     try {
       final data = await _tomaService.getTomasHoy(widget.idPaciente);
       if (!mounted) return;
+      final lista = List<Map<String, dynamic>>.from(data)
+        ..sort((a, b) => _minutos(a["hora"]).compareTo(_minutos(b["hora"])));
       setState(() {
-        tomas = data;
+        tomas = lista;
         loading = false;
+        _error = false;
         _tomasSeleccionadas.clear();
       });
-      debugPrint("📋 Tomas cargadas: ${tomas.length}");
     } catch (e) {
       debugPrint("❌ ERROR cargar tomas => $e");
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() {
+          loading = false;
+          _error = true;
+        });
+      }
     }
   }
 
+  // ==============================
+  // ✅ CAMBIAR ESTADO
+  // ==============================
   Future<void> _cambiarEstado(Map<String, dynamic> toma, String estado) async {
     try {
-      final ok = await _tomaService.actualizarEstado(
-        int.parse(toma["idToma"].toString()),
-        estado,
-      );
-      if (ok && mounted) {
-        setState(() {
-          toma["estado"] = estado;
-        });
+      final ok = await _tomaService.actualizarEstado(_id(toma), estado);
+      if (!mounted) return;
+      if (ok) {
+        setState(() => toma["estado"] = estado);
         _mostrarMensaje(
           estado == "Tomado"
               ? "Medicamento registrado como tomado"
@@ -89,604 +165,467 @@ class _TomasScreenState extends State<TomasScreen> {
               : estado == "Omitido"
                   ? AppTheme.warning
                   : AppTheme.info,
+          estado == "Tomado"
+              ? Icons.check_circle_rounded
+              : estado == "Omitido"
+                  ? Icons.warning_amber_rounded
+                  : Icons.info_outline_rounded,
         );
+      } else {
+        _mostrarMensaje("No se pudo actualizar el estado", AppTheme.danger,
+            Icons.error_outline_rounded);
       }
     } catch (e) {
       debugPrint("❌ ERROR cambiarEstado => $e");
-      _mostrarMensaje("Error al actualizar el estado", AppTheme.danger);
+      _mostrarMensaje("Error al actualizar el estado", AppTheme.danger,
+          Icons.error_outline_rounded);
     }
+  }
+
+  // ==============================
+  // 🗑️ ELIMINAR
+  // ==============================
+  Future<bool> _confirmar({
+    required String titulo,
+    required String mensaje,
+  }) async {
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            icon: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppTheme.danger.withAlpha(25),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_outline_rounded,
+                  color: AppTheme.danger, size: 30),
+            ),
+            title: Text(
+              titulo,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+            content: Text(
+              mensaje,
+              textAlign: TextAlign.center,
+              style: const TextStyle(height: 1.4),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text("Cancelar"),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: AppTheme.dangerButtonStyle,
+                child: const Text("Eliminar"),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   Future<void> _eliminarTomasSeleccionadas() async {
     if (_tomasSeleccionadas.isEmpty) return;
 
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: AppTheme.danger, size: 28),
-            const SizedBox(width: 12),
-            Text("Eliminar tomas", style: AppTheme.title2),
-          ],
-        ),
-        content: Text(
-          "¿Estás seguro de eliminar ${_tomasSeleccionadas.length} toma(s)?\nEsta acción no se puede deshacer.",
-          style: AppTheme.body2,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancelar", style: TextStyle(color: AppTheme.gray500)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: AppTheme.dangerButtonStyle,
-            child: const Text("Eliminar"),
-          ),
-        ],
-      ),
+    final cantidad = _tomasSeleccionadas.length;
+    final ok = await _confirmar(
+      titulo: "Eliminar tomas",
+      mensaje:
+          "¿Eliminar $cantidad toma(s)?\nEsta acción no se puede deshacer.",
     );
+    if (!ok || !mounted) return;
 
-    if (confirmar != true || !mounted) return;
-
+    setState(() => loading = true);
     try {
-      setState(() => loading = true);
-
-      for (var id in _tomasSeleccionadas) {
+      for (final id in _tomasSeleccionadas.toList()) {
         await _tomaService.eliminarToma(id);
       }
-
+      if (!mounted) return;
+      setState(() {
+        _modoSeleccion = false;
+        _tomasSeleccionadas.clear();
+      });
       await _cargarTomas();
-      _mostrarMensaje(
-        "${_tomasSeleccionadas.length} toma(s) eliminada(s)",
-        AppTheme.info,
-      );
-      _modoSeleccion = false;
-      _tomasSeleccionadas.clear();
+      _mostrarMensaje("$cantidad toma(s) eliminada(s)", AppTheme.info,
+          Icons.info_outline_rounded);
     } catch (e) {
       debugPrint("❌ ERROR eliminar tomas => $e");
-      _mostrarMensaje("Error al eliminar las tomas", AppTheme.danger);
-    } finally {
-      if (mounted) setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+        _mostrarMensaje("Error al eliminar las tomas", AppTheme.danger,
+            Icons.error_outline_rounded);
+      }
     }
   }
 
   Future<void> _eliminarTomaIndividual(Map<String, dynamic> toma) async {
-    final idToma = int.parse(toma["idToma"].toString());
     final nombre = toma["medicamento"] ?? "Medicamento";
     final hora = _formatearHora(toma["hora"]);
 
-    final confirmar = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Icons.delete_outline, color: AppTheme.danger, size: 28),
-            const SizedBox(width: 12),
-            Text("Eliminar toma", style: AppTheme.title2),
-          ],
-        ),
-        content: Text(
-          "¿Eliminar la toma de '$nombre' a las $hora?\nEsta acción no se puede deshacer.",
-          style: AppTheme.body2,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text("Cancelar", style: TextStyle(color: AppTheme.gray500)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: AppTheme.dangerButtonStyle,
-            child: const Text("Eliminar"),
-          ),
-        ],
-      ),
+    final ok = await _confirmar(
+      titulo: "Eliminar toma",
+      mensaje:
+          "¿Eliminar la toma de '$nombre' de las $hora?\nEsta acción no se puede deshacer.",
     );
-
-    if (confirmar != true || !mounted) return;
+    if (!ok || !mounted) return;
 
     try {
-      final ok = await _tomaService.eliminarToma(idToma);
-      if (ok && mounted) {
-        setState(() {
-          tomas.removeWhere((t) => t["idToma"] == idToma);
-        });
-        _mostrarMensaje("Toma eliminada correctamente", AppTheme.info);
+      final id = _id(toma);
+      final eliminado = await _tomaService.eliminarToma(id);
+      if (!mounted) return;
+      if (eliminado) {
+        setState(() => tomas.removeWhere((t) => _id(t) == id));
+        _mostrarMensaje("Toma eliminada", AppTheme.info,
+            Icons.info_outline_rounded);
+      } else {
+        _mostrarMensaje("No se pudo eliminar la toma", AppTheme.danger,
+            Icons.error_outline_rounded);
       }
     } catch (e) {
       debugPrint("❌ ERROR eliminarToma => $e");
-      _mostrarMensaje("Error al eliminar la toma", AppTheme.danger);
+      _mostrarMensaje("Error al eliminar la toma", AppTheme.danger,
+          Icons.error_outline_rounded);
     }
   }
 
+  // ==============================
+  // ☑️ SELECCIÓN
+  // ==============================
   void _toggleSeleccion(int idToma) {
     setState(() {
-      if (_tomasSeleccionadas.contains(idToma)) {
-        _tomasSeleccionadas.remove(idToma);
-      } else {
+      if (!_tomasSeleccionadas.remove(idToma)) {
         _tomasSeleccionadas.add(idToma);
       }
     });
   }
 
-  void _mostrarMensaje(String mensaje, Color color) {
+  void _salirSeleccion() {
+    setState(() {
+      _modoSeleccion = false;
+      _tomasSeleccionadas.clear();
+    });
+  }
+
+  void _mostrarMensaje(String mensaje, Color color, IconData icono) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Row(
-          children: [
-            Icon(
-              color == AppTheme.success
-                  ? Icons.check_circle
-                  : color == AppTheme.warning
-                      ? Icons.warning_amber_rounded
-                      : Icons.info_outline,
-              color: Colors.white,
-              size: 24,
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Icon(icono, color: Colors.white, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  mensaje,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: color,
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 3),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          margin: const EdgeInsets.all(16),
+        ),
+      );
+  }
+
+  // ==============================
+  // 🧱 BUILD
+  // ==============================
+  @override
+  Widget build(BuildContext context) {
+    final scale = Provider.of<AccessibilityProvider>(context).fontScale;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
+      appBar: AppBar(
+        elevation: 0,
+        centerTitle: true,
+        leading: _modoSeleccion
+            ? IconButton(
+                icon: const Icon(Icons.close_rounded),
+                tooltip: "Cancelar selección",
+                onPressed: _salirSeleccion,
+              )
+            : null,
+        title: Text(
+          _modoSeleccion
+              ? "${_tomasSeleccionadas.length} seleccionada(s)"
+              : "Mis medicamentos",
+          style: TextStyle(
+            fontSize: 20 * scale,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          if (!loading && tomas.isNotEmpty && !_modoSeleccion)
+            IconButton(
+              icon: const Icon(Icons.checklist_rounded),
+              tooltip: "Seleccionar tomas",
+              onPressed: () => setState(() => _modoSeleccion = true),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                mensaje,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+        ],
+      ),
+      bottomNavigationBar:
+          _modoSeleccion ? _buildBarraSeleccion(isDark, scale) : null,
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _iniciar,
+              child: _error
+                  ? _buildError(scale)
+                  : tomas.isEmpty
+                      ? _buildEmptyState(isDark, scale)
+                      : _buildContenido(isDark, scale),
+            ),
+    );
+  }
+
+  Widget _buildContenido(bool isDark, double scale) {
+    const periodos = [
+      ('Mañana', Icons.wb_sunny_outlined, 0, 720),
+      ('Tarde', Icons.wb_twilight_rounded, 720, 1080),
+      ('Noche', Icons.nights_stay_outlined, 1080, 1440),
+    ];
+
+    final secciones = <Widget>[];
+    for (final p in periodos) {
+      final lista = tomas.where((t) {
+        final m = _minutos(t["hora"]);
+        return m >= p.$3 && m < p.$4;
+      }).toList();
+      if (lista.isEmpty) continue;
+
+      secciones.add(Padding(
+        padding: const EdgeInsets.only(left: 4, top: 8, bottom: 10),
+        child: Row(
+          children: [
+            Icon(p.$2, size: 20, color: AppTheme.primary),
+            const SizedBox(width: 8),
+            Text(
+              p.$1,
+              style: TextStyle(
+                fontSize: 16 * scale,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              "${lista.length}",
+              style: TextStyle(
+                fontSize: 14 * scale,
+                color: AppTheme.gray500,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
         ),
-        backgroundColor: color,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        margin: const EdgeInsets.all(16),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      ),
+      ));
+      secciones.addAll(lista.map((t) => _buildTomaCard(t, isDark, scale)));
+    }
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: [
+        _buildResumen(isDark, scale),
+        const SizedBox(height: 14),
+        ...secciones,
+      ],
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final pendientes = tomas.where((t) => t["estado"].toString() == "Pendiente").length;
-    final tomadas = tomas.where((t) => t["estado"].toString() == "Tomado").length;
-    final porcentaje = tomas.isEmpty ? 0 : (tomadas / tomas.length * 100).round();
+  // ==============================
+  // 📊 RESUMEN DEL DÍA
+  // ==============================
+  Widget _buildResumen(bool isDark, double scale) {
+    final total = tomas.length;
+    final tomadas = tomas.where((t) => _estadoDe(t) == "Tomado").length;
+    final omitidas = tomas.where((t) => _estadoDe(t) == "Omitido").length;
+    final pendientes = total - tomadas - omitidas;
+    final progreso = total == 0 ? 0.0 : tomadas / total;
 
-    return Scaffold(
-      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(90),
-        child: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                AppTheme.primary,
-                AppTheme.primary.withOpacity(0.8),
-              ],
-            ),
-            borderRadius: const BorderRadius.only(
-              bottomLeft: Radius.circular(24),
-              bottomRight: Radius.circular(24),
-            ),
-          ),
-          child: SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                children: [
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 28),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ),
-                  const Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          "Mis Medicamentos",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // ✅ Solo botón de modo selección (regenerar eliminado)
-                  if (!loading && tomas.isNotEmpty)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.2),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: Icon(
-                          _modoSeleccion ? Icons.close : Icons.delete_outline,
-                          color: Colors.white,
-                          size: 26,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _modoSeleccion = !_modoSeleccion;
-                            _tomasSeleccionadas.clear();
-                          });
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-      body: loading
-          ? Center(
-              child: CircularProgressIndicator(
-                color: AppTheme.primary,
-                strokeWidth: 4,
-              ),
-            )
-          : RefreshIndicator(
-              onRefresh: _iniciar,
-              color: AppTheme.primary,
-              child: Column(
-                children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        children: [
-                          _buildProgressCard(pendientes, tomadas, porcentaje),
-                          const SizedBox(height: 24),
-                          _buildHeader(tomas.length),
-                          const SizedBox(height: 16),
-                          tomas.isEmpty
-                              ? _buildEmptyState()
-                              : _buildMedicamentosList(),
-                          const SizedBox(height: 30),
-                        ],
-                      ),
-                    ),
-                  ),
-                  if (_modoSeleccion && _tomasSeleccionadas.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      decoration: BoxDecoration(
-                        color: isDark ? AppTheme.gray800 : Colors.white,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 10,
-                            offset: const Offset(0, -4),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              "${_tomasSeleccionadas.length} seleccionada(s)",
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.white : AppTheme.gray700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          TextButton.icon(
-                            onPressed: () {
-                              setState(() {
-                                if (_tomasSeleccionadas.length == tomas.length) {
-                                  _tomasSeleccionadas.clear();
-                                } else {
-                                  _tomasSeleccionadas = tomas.map((t) =>
-                                      int.parse(t["idToma"].toString())
-                                  ).toSet();
-                                }
-                              });
-                            },
-                            icon: Icon(
-                              _tomasSeleccionadas.length == tomas.length
-                                  ? Icons.deselect
-                                  : Icons.select_all,
-                              color: AppTheme.primary,
-                            ),
-                            label: Text(
-                              _tomasSeleccionadas.length == tomas.length
-                                  ? "Deseleccionar"
-                                  : "Seleccionar todo",
-                              style: const TextStyle(color: AppTheme.primary),
-                            ),
-                          ),
-                          ElevatedButton.icon(
-                            onPressed: _eliminarTomasSeleccionadas,
-                            icon: const Icon(Icons.delete, size: 20),
-                            label: Text("Eliminar (${_tomasSeleccionadas.length})"),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTheme.danger,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _buildProgressCard(int pendientes, int tomadas, int porcentaje) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.gray800 : Colors.white;
+    // Siguiente toma pendiente (la primera que aún no se resuelve)
+    Map<String, dynamic>? siguiente;
+    for (final t in tomas) {
+      if (_estadoDe(t) == "Pendiente") {
+        siguiente = t;
+        break;
+      }
+    }
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(
-          color: AppTheme.success.withOpacity(0.2),
-          width: 1.5,
-        ),
+        color: isDark ? AppTheme.gray800 : Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withAlpha(13),
+                  blurRadius: 14,
+                  offset: const Offset(0, 4),
+                ),
+              ],
       ),
       child: Column(
         children: [
           Row(
             children: [
-              _buildStatItem("Total", "${tomas.length}", Icons.medication, AppTheme.primary),
-              _buildDivider(),
-              _buildStatItem("Tomados", "$tomadas", Icons.check_circle, AppTheme.success),
-              _buildDivider(),
-              _buildStatItem("Pendientes", "$pendientes", Icons.access_time, AppTheme.warning),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: LinearProgressIndicator(
-              value: porcentaje / 100,
-              minHeight: 10,
-              backgroundColor: AppTheme.gray200,
-              color: AppTheme.success,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            "Progreso del día: $porcentaje% completado",
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppTheme.gray500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatItem(String label, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: AppTheme.gray500,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Container(
-      width: 1,
-      height: 50,
-      color: AppTheme.gray200,
-    );
-  }
-
-  Widget _buildHeader(int count) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : AppTheme.gray700;
-    final isSmall = MediaQuery.of(context).size.width < 360;
-
-    return Row(
-      children: [
-        Icon(Icons.list_alt, color: AppTheme.primary, size: 24),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Text(
-            "Medicamentos de hoy",
-            style: TextStyle(
-              fontSize: isSmall ? 16 : 18,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
-        ),
-        const Spacer(),
-        if (_modoSeleccion && tomas.isNotEmpty)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppTheme.danger.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              "Selecciona tomas",
-              style: TextStyle(
-                fontSize: isSmall ? 11 : 13,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.danger,
-              ),
-            ),
-          )
-        else
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                "$count medicamentos",
-                style: TextStyle(
-                  fontSize: isSmall ? 11 : 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.primary,
+              SizedBox(
+                width: 92,
+                height: 92,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    CircularProgressIndicator(
+                      value: progreso,
+                      strokeWidth: 10,
+                      backgroundColor: AppTheme.gray200,
+                      color: AppTheme.success,
+                    ),
+                    Center(
+                      child: Text(
+                        "${(progreso * 100).round()}%",
+                        style: TextStyle(
+                          fontSize: 20 * scale,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyState() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.gray800 : Colors.white;
-    final textColor = isDark ? Colors.white : AppTheme.gray700;
-
-    return Container(
-      padding: const EdgeInsets.all(40),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Icon(
-            recordatorios.isEmpty ? Icons.notifications_off : Icons.celebration_outlined,
-            size: 64,
-            color: AppTheme.gray300,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            recordatorios.isEmpty
-                ? "Sin recordatorios activos"
-                : "¡Sin medicamentos por hoy!",
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            recordatorios.isEmpty
-                ? "Activa recordatorios desde tu perfil clínico"
-                : "Has completado todas tus tomas del día",
-            style: TextStyle(
-              fontSize: 14,
-              color: AppTheme.gray500,
-            ),
-          ),
-          if (recordatorios.isEmpty) ...[
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppTheme.warning.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.warning.withOpacity(0.2)),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Hoy, $_fechaHoy",
+                      style: TextStyle(
+                        fontSize: 13 * scale,
+                        color: AppTheme.gray500,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      "$tomadas de $total tomadas",
+                      style: TextStyle(
+                        fontSize: 20 * scale,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        _miniChip("$pendientes pendientes",
+                            AppTheme.warning, scale),
+                        if (omitidas > 0)
+                          _miniChip(
+                              "$omitidas omitidas", AppTheme.danger, scale),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.info_outline, color: AppTheme.warning, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    "Ve a 'Mi Perfil Clínico' > 'Recordatorios'",
+            ],
+          ),
+          const SizedBox(height: 14),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: (siguiente == null ? AppTheme.success : AppTheme.primary)
+                  .withAlpha(22),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  siguiente == null
+                      ? Icons.celebration_rounded
+                      : Icons.notifications_active_rounded,
+                  color:
+                      siguiente == null ? AppTheme.success : AppTheme.primary,
+                  size: 22,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    siguiente == null
+                        ? "¡Terminaste todas tus tomas de hoy!"
+                        : "Siguiente: ${_formatearHora(siguiente["hora"])} • ${siguiente["medicamento"] ?? "Medicamento"}",
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.warning,
+                      fontSize: 14 * scale,
+                      fontWeight: FontWeight.w700,
+                      color: siguiente == null
+                          ? AppTheme.success
+                          : AppTheme.primary,
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMedicamentosList() {
-    return Column(
-      children: tomas.asMap().entries.map((entry) {
-        return _buildMedicamentoCard(entry.value, entry.key + 1);
-      }).toList(),
+  Widget _miniChip(String texto, Color color, double scale) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withAlpha(26),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        texto,
+        style: TextStyle(
+          fontSize: 12 * scale,
+          fontWeight: FontWeight.w700,
+          color: color,
+        ),
+      ),
     );
   }
 
-  Widget _buildMedicamentoCard(Map<String, dynamic> t, int numero) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final idToma = int.parse(t["idToma"].toString());
-    final estado = t["estado"]?.toString() ?? "Pendiente";
+  // ==============================
+  // 💊 TARJETA DE TOMA
+  // ==============================
+  Widget _buildTomaCard(Map<String, dynamic> t, bool isDark, double scale) {
+    final idToma = _id(t);
+    final estado = _estadoDe(t);
+    final ui = _estadoUI(estado);
     final nombre = t["medicamento"]?.toString() ?? "Medicamento";
     final dosis = t["dosis"]?.toString() ?? "";
     final frecuencia = t["frecuencia"]?.toString() ?? "";
     final hora = _formatearHora(t["hora"]);
+    final atrasada = _esAtrasada(t);
+    final seleccionada = _tomasSeleccionadas.contains(idToma);
 
-    final estadoData = _getEstadoData(estado);
-    final Color estadoColor = estadoData["color"];
-    final IconData estadoIcon = estadoData["icon"];
-    final String estadoTexto = estadoData["label"];
-
-    final bgColor = isDark ? AppTheme.gray800 : Colors.white;
-
-    final estaSeleccionada = _tomasSeleccionadas.contains(idToma);
+    final detalle = [dosis, frecuencia].where((s) => s.isNotEmpty).join(' • ');
+    final colorBarra = atrasada ? AppTheme.danger : ui.color;
 
     return GestureDetector(
       onLongPress: () {
@@ -697,390 +636,438 @@ class _TomasScreenState extends State<TomasScreen> {
           });
         }
       },
-      onTap: () {
-        if (_modoSeleccion) {
-          _toggleSeleccion(idToma);
-        }
-      },
+      onTap: _modoSeleccion ? () => _toggleSeleccion(idToma) : null,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        margin: const EdgeInsets.only(bottom: 16),
+        duration: const Duration(milliseconds: 180),
+        margin: const EdgeInsets.only(bottom: 12),
         decoration: BoxDecoration(
-          color: estaSeleccionada
-              ? AppTheme.primary.withOpacity(0.1)
-              : bgColor,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
+          color: seleccionada
+              ? AppTheme.primary.withAlpha(25)
+              : (isDark ? AppTheme.gray800 : Colors.white),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: estaSeleccionada
-                ? AppTheme.primary
-                : estado == "Pendiente"
-                    ? AppTheme.warning.withOpacity(0.3)
-                    : estadoColor.withOpacity(0.3),
-            width: estaSeleccionada ? 2.5 : 1.5,
+            color: seleccionada ? AppTheme.primary : Colors.transparent,
+            width: 2,
           ),
+          boxShadow: isDark
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withAlpha(13),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
         ),
-        child: Column(
-          children: [
-            _buildCardHeader(
-              numero,
-              nombre,
-              estadoIcon,
-              estadoTexto,
-              estadoColor,
-              estaSeleccionada,
-              idToma,
-              t,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 6, color: colorBarra),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (_modoSeleccion) ...[
+                              _checkbox(seleccionada),
+                              const SizedBox(width: 12),
+                            ],
+                            // Hora
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: colorBarra.withAlpha(24),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                hora,
+                                style: TextStyle(
+                                  fontSize: 18 * scale,
+                                  fontWeight: FontWeight.w900,
+                                  color: colorBarra,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    nombre,
+                                    style: TextStyle(
+                                      fontSize: 17 * scale,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  if (detalle.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Text(
+                                        detalle,
+                                        style: TextStyle(
+                                          fontSize: 13.5 * scale,
+                                          color: AppTheme.gray500,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            if (!_modoSeleccion)
+                              PopupMenuButton<String>(
+                                tooltip: "Más opciones",
+                                icon: Icon(Icons.more_vert_rounded,
+                                    color: AppTheme.gray500),
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14)),
+                                onSelected: (v) {
+                                  if (v == 'eliminar') {
+                                    _eliminarTomaIndividual(t);
+                                  }
+                                },
+                                itemBuilder: (_) => const [
+                                  PopupMenuItem(
+                                    value: 'eliminar',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.delete_outline_rounded,
+                                            color: AppTheme.danger),
+                                        SizedBox(width: 10),
+                                        Text("Eliminar toma"),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                        if (!_modoSeleccion) ...[
+                          const SizedBox(height: 12),
+                          estado == "Pendiente"
+                              ? _buildAccionesPendiente(t, atrasada, scale)
+                              : _buildEstadoResuelto(t, ui, scale),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-            _buildCardBody(dosis, frecuencia, hora),
-            if (!_modoSeleccion)
-              _buildCardActions(estado, t, estadoColor),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  Map<String, dynamic> _getEstadoData(String estado) {
-    switch (estado) {
-      case "Tomado":
-        return {"color": AppTheme.success, "icon": Icons.check_circle, "label": "Tomado"};
-      case "Omitido":
-        return {"color": AppTheme.danger, "icon": Icons.cancel, "label": "Omitido"};
-      default:
-        return {"color": AppTheme.warning, "icon": Icons.access_time, "label": "Pendiente"};
-    }
-  }
-
-  Widget _buildCardHeader(
-    int numero,
-    String nombre,
-    IconData estadoIcon,
-    String estadoTexto,
-    Color estadoColor,
-    bool seleccionada,
-    int idToma,
-    Map<String, dynamic> t,
-  ) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
+  Widget _checkbox(bool seleccionada) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: 28,
+      height: 28,
       decoration: BoxDecoration(
-        color: seleccionada
-            ? AppTheme.primary.withOpacity(0.15)
-            : estadoColor.withOpacity(isDark ? 0.15 : 0.08),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(23),
-          topRight: Radius.circular(23),
+        color: seleccionada ? AppTheme.primary : Colors.transparent,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: seleccionada ? AppTheme.primary : AppTheme.gray400,
+          width: 2,
         ),
       ),
-      child: Row(
-        children: [
-          if (_modoSeleccion)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: GestureDetector(
-                onTap: () => _toggleSeleccion(idToma),
-                child: Container(
-                  width: 28,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: seleccionada ? AppTheme.primary : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: seleccionada ? AppTheme.primary : AppTheme.gray400,
-                      width: 2,
+      child: seleccionada
+          ? const Icon(Icons.check_rounded, color: Colors.white, size: 18)
+          : null,
+    );
+  }
+
+  Widget _buildAccionesPendiente(
+      Map<String, dynamic> t, bool atrasada, double scale) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (atrasada)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded,
+                    size: 18, color: AppTheme.danger),
+                const SizedBox(width: 6),
+                Text(
+                  "Esta toma ya pasó de hora",
+                  style: TextStyle(
+                    fontSize: 13 * scale,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.danger,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        Row(
+          children: [
+            Expanded(
+              flex: 3,
+              child: ElevatedButton.icon(
+                onPressed: () => _cambiarEstado(t, "Tomado"),
+                icon: const Icon(Icons.check_circle_rounded, size: 22),
+                label: Text(
+                  "Ya la tomé",
+                  style: TextStyle(
+                    fontSize: 15 * scale,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.success,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              flex: 2,
+              child: OutlinedButton.icon(
+                onPressed: () => _cambiarEstado(t, "Omitido"),
+                icon: const Icon(Icons.close_rounded, size: 20),
+                label: Text(
+                  "Omitir",
+                  style: TextStyle(
+                    fontSize: 15 * scale,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.danger,
+                  side: BorderSide(color: AppTheme.danger.withAlpha(120)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEstadoResuelto(
+    Map<String, dynamic> t,
+    ({Color color, IconData icon, String label}) ui,
+    double scale,
+  ) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: ui.color.withAlpha(26),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(ui.icon, size: 18, color: ui.color),
+              const SizedBox(width: 6),
+              Text(
+                ui.label,
+                style: TextStyle(
+                  fontSize: 14 * scale,
+                  fontWeight: FontWeight.w800,
+                  color: ui.color,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const Spacer(),
+        TextButton.icon(
+          onPressed: () => _cambiarEstado(t, "Pendiente"),
+          icon: const Icon(Icons.undo_rounded, size: 18),
+          label: const Text("Deshacer"),
+          style: TextButton.styleFrom(foregroundColor: AppTheme.gray500),
+        ),
+      ],
+    );
+  }
+
+  // ==============================
+  // 🔘 BARRA DE SELECCIÓN
+  // ==============================
+  Widget _buildBarraSeleccion(bool isDark, double scale) {
+    final todas =
+        tomas.isNotEmpty && _tomasSeleccionadas.length == tomas.length;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.gray800 : Colors.white,
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withAlpha(20),
+                  blurRadius: 12,
+                  offset: const Offset(0, -3),
+                ),
+              ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+          child: Row(
+            children: [
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _tomasSeleccionadas =
+                        todas ? {} : tomas.map(_id).toSet();
+                  });
+                },
+                icon: Icon(
+                  todas ? Icons.deselect_rounded : Icons.select_all_rounded,
+                ),
+                label: Text(todas ? "Ninguna" : "Todas"),
+              ),
+              const Spacer(),
+              ElevatedButton.icon(
+                onPressed: _tomasSeleccionadas.isEmpty
+                    ? null
+                    : _eliminarTomasSeleccionadas,
+                icon: const Icon(Icons.delete_rounded, size: 20),
+                label: Text("Eliminar (${_tomasSeleccionadas.length})"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.danger,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 18, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==============================
+  // 🕳️ VACÍO / ERROR
+  // ==============================
+  Widget _buildEmptyState(bool isDark, double scale) {
+    final sinRecordatorios = recordatorios.isEmpty;
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: (sinRecordatorios
+                              ? AppTheme.warning
+                              : AppTheme.success)
+                          .withAlpha(24),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      sinRecordatorios
+                          ? Icons.notifications_off_rounded
+                          : Icons.celebration_rounded,
+                      size: 52,
+                      color: sinRecordatorios
+                          ? AppTheme.warning
+                          : AppTheme.success,
                     ),
                   ),
-                  child: seleccionada
-                      ? const Icon(Icons.check, color: Colors.white, size: 18)
-                      : null,
-                ),
-              ),
-            ),
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppTheme.primary, AppTheme.primary.withOpacity(0.7)],
-              ),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                "$numero",
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              nombre,
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.bold,
-                color: isDark ? Colors.white : AppTheme.gray700,
-              ),
-            ),
-          ),
-          if (!_modoSeleccion) ...[
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: estadoColor,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    estadoIcon,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 4),
+                  const SizedBox(height: 20),
                   Text(
-                    estadoTexto,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                    sinRecordatorios
+                        ? "Sin recordatorios activos"
+                        : "¡Sin medicamentos por hoy!",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 19 * scale,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    sinRecordatorios
+                        ? "Activa recordatorios desde Mi perfil clínico > Recordatorios."
+                        : "No tienes tomas programadas para hoy.",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14 * scale,
+                      color: AppTheme.gray500,
+                      height: 1.4,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
-            GestureDetector(
-              onTap: () => _eliminarTomaIndividual(t),
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.danger.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.delete_outline,
-                  color: AppTheme.danger,
-                  size: 22,
-                ),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCardBody(String dosis, String frecuencia, String hora) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? Colors.white : AppTheme.gray700;
-    final subTextColor = isDark ? AppTheme.gray400 : AppTheme.gray500;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              _infoIcon(Icons.medication_outlined, AppTheme.primary),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _infoColumn(
-                  "Dosis",
-                  dosis,
-                  textColor: textColor,
-                  subColor: subTextColor,
-                ),
-              ),
-              _infoIcon(Icons.repeat_outlined, AppTheme.info),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _infoColumn(
-                  "Frecuencia",
-                  frecuencia,
-                  textColor: textColor,
-                  subColor: subTextColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _infoIcon(Icons.access_time, AppTheme.warning),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _infoColumn(
-                  "Horario",
-                  hora,
-                  isBold: true,
-                  color: AppTheme.warning,
-                  textColor: textColor,
-                  subColor: subTextColor,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _infoIcon(IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Icon(icon, color: color, size: 24),
-    );
-  }
-
-  Widget _infoColumn(
-    String label,
-    String value, {
-    bool isBold = false,
-    Color? color,
-    Color? textColor,
-    Color? subColor,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: subColor ?? AppTheme.gray500,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          value.isEmpty ? "--" : value,
-          style: TextStyle(
-            fontSize: isBold ? 20 : 16,
-            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
-            color: color ?? textColor ?? AppTheme.gray700,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildCardActions(String estado, Map<String, dynamic> t, Color estadoColor) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: estado == "Pendiente"
-          ? Row(
-              children: [
-                Expanded(
-                  child: _buildActionButton(
-                    "Tomar",
-                    AppTheme.success,
-                    () => _cambiarEstado(t, "Tomado"),
-                    Icons.check_circle,
+  Widget _buildError(double scale) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.7,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.wifi_off_rounded,
+                      size: 56, color: AppTheme.danger),
+                  const SizedBox(height: 16),
+                  Text(
+                    "No se pudieron cargar tus medicamentos",
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 17 * scale,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildActionButton(
-                    "Omitir",
-                    AppTheme.danger,
-                    () => _cambiarEstado(t, "Omitido"),
-                    Icons.cancel,
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    style: AppTheme.primaryButtonStyle,
+                    onPressed: _iniciar,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text("Reintentar"),
                   ),
-                ),
-              ],
-            )
-          : Row(
-              children: [
-                Expanded(
-                  child: _buildActionButton(
-                    "Deshacer",
-                    isDark ? AppTheme.gray600 : Colors.grey,
-                    () => _cambiarEstado(t, "Pendiente"),
-                    Icons.undo,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _buildActionButton(
-                    "Eliminar",
-                    AppTheme.danger,
-                    () => _eliminarTomaIndividual(t),
-                    Icons.delete,
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-
-  Widget _buildActionButton(String texto, Color color, VoidCallback onTap, IconData icon) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-            colors: [color, color.withOpacity(0.8)],
-          ),
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.25),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.white, size: 22),
-            const SizedBox(width: 8),
-            Text(
-              texto,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
+                ],
               ),
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
-  }
-
-  String _formatearHora(dynamic hora) {
-    try {
-      if (hora == null) return "--:--";
-      final h = hora.toString();
-      return h.length >= 5 ? h.substring(0, 5) : h;
-    } catch (e) {
-      return "--:--";
-    }
   }
 }

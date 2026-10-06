@@ -58,44 +58,48 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   bool _mostrarTutorial = false;
   int _pasoTutorial = 0;
 
+  // 🎨 Helpers de color
+  Color _soft(Color c) => c.withOpacity(0.10);
+  Color _softer(Color c) => c.withOpacity(0.06);
+
   final List<Map<String, dynamic>> _pasosTutorial = [
     {
-      'icono': Icons.favorite,
+      'icono': Icons.favorite_rounded,
       'titulo': '👋 Bienvenido a CardioCare',
       'descripcion':
           'Esta es tu aplicación de salud. Aquí encontrarás toda tu información médica en un solo lugar, fácil de entender.',
       'color': AppTheme.primary,
     },
     {
-      'icono': Icons.person,
+      'icono': Icons.person_rounded,
       'titulo': '👤 Tus datos personales',
       'descripcion':
           'Aquí ves tu nombre, tu EPS y el médico que te atiende. Siempre tienes tu información a la mano.',
       'color': AppTheme.info,
     },
     {
-      'icono': Icons.folder_shared,
+      'icono': Icons.folder_shared_rounded,
       'titulo': '📁 Tu perfil clínico',
       'descripcion':
           'Toca el botón "Perfil clínico" para ver todos tus datos médicos: signos vitales, tratamientos y más.',
       'color': AppTheme.primary,
     },
     {
-      'icono': Icons.notifications,
+      'icono': Icons.notifications_rounded,
       'titulo': '🔔 Tus notificaciones',
       'descripcion':
           'Aquí recibes avisos importantes de tu médico: recordatorios, citas y recomendaciones.',
       'color': AppTheme.warning,
     },
     {
-      'icono': Icons.settings,
+      'icono': Icons.settings_rounded,
       'titulo': '⚙️ Configuración',
       'descripcion':
           'Aquí puedes ajustar el tamaño de letra y otras opciones para que la aplicación sea más fácil de usar.',
       'color': AppTheme.info,
     },
     {
-      'icono': Icons.chat,
+      'icono': Icons.chat_bubble_rounded,
       'titulo': '💬 Habla con tu médico',
       'descripcion':
           '¿Tienes alguna duda? Toca "Ir al chat" para enviar un mensaje a tu médico.',
@@ -155,8 +159,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   Future<void> _cargarNotificaciones() async {
     setState(() => _cargandoNotificaciones = true);
     try {
-      final data =
-          await notificacionService.getNotificacionesPaciente(widget.idUsuario);
+      final data = await notificacionService
+          .getNotificacionesPaciente(widget.idUsuario);
       if (!mounted) return;
       setState(() {
         notificaciones = List<Map<String, dynamic>>.from(data);
@@ -193,9 +197,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       }
 
       final data = await tomaService.getTomasHoy(idPaciente!);
-      final pendientes = data
-          .where((t) => t["estado"]?.toString() == "Pendiente")
-          .toList();
+      final pendientes =
+          data.where((t) => t["estado"]?.toString() == "Pendiente").toList();
 
       if (!mounted) return;
       setState(() {
@@ -235,8 +238,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     await notificacionService.marcarComoLeida(idNotificacion);
     if (!mounted) return;
     setState(() {
-      final index =
-          notificaciones.indexWhere((n) => n["id"] == idNotificacion);
+      final index = notificaciones.indexWhere((n) => n["id"] == idNotificacion);
       if (index != -1) {
         notificaciones[index]["leida"] = true;
         notificacionesNoLeidas =
@@ -272,11 +274,21 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Notificaciones limpiadas"),
-            backgroundColor: Colors.green,
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded,
+                    color: Colors.white, size: 20),
+                SizedBox(width: 12),
+                Expanded(child: Text("Notificaciones limpiadas")),
+              ],
+            ),
+            backgroundColor: AppTheme.success,
             behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14)),
+            duration: const Duration(seconds: 2),
+            margin: const EdgeInsets.all(16),
           ),
         );
       }
@@ -311,7 +323,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      backgroundColor: isDark ? AppTheme.gray800 : AppTheme.white,
+      backgroundColor: isDark ? AppTheme.gray800 : Colors.white,
       builder: (context) => DraggableScrollableSheet(
         initialChildSize: 0.8,
         minChildSize: 0.5,
@@ -320,10 +332,11 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         builder: (context, scrollController) {
           return Column(
             children: [
+              // Header del panel
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.06),
+                  color: _softer(AppTheme.primary),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(28),
                     topRight: Radius.circular(28),
@@ -331,17 +344,37 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.notifications,
-                        color: AppTheme.primary, size: 32),
-                    const SizedBox(width: 14),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _soft(AppTheme.primary),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.notifications_rounded,
+                          color: AppTheme.primary, size: 22),
+                    ),
+                    const SizedBox(width: 12),
                     Expanded(
-                      child: Text(
-                        "Notificaciones",
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? AppTheme.white : AppTheme.gray700,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Notificaciones",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color:
+                                  isDark ? AppTheme.white : AppTheme.gray700,
+                            ),
+                          ),
+                          Text(
+                            "${notificaciones.length} en total",
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppTheme.gray500,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     if (notificaciones.isNotEmpty)
@@ -350,46 +383,60 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                           _limpiarTodasLasNotificaciones();
                           Navigator.pop(context);
                         },
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppTheme.danger,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                        ),
                         child: const Text(
-                          "Limpiar todo",
-                          style:
-                              TextStyle(color: AppTheme.danger, fontSize: 16),
+                          "Limpiar",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     IconButton(
-                      icon: Icon(Icons.close,
-                          size: 30,
-                          color:
-                              isDark ? AppTheme.white : AppTheme.gray700),
+                      icon: Icon(Icons.close_rounded,
+                          size: 22,
+                          color: isDark ? AppTheme.white : AppTheme.gray600),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
               ),
-              const Divider(),
+              const SizedBox(height: 6),
               Expanded(
                 child: notificaciones.isEmpty
                     ? Center(
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.notifications_none,
-                                size: 72, color: AppTheme.gray300),
-                            const SizedBox(height: 20),
+                            Container(
+                              padding: const EdgeInsets.all(22),
+                              decoration: BoxDecoration(
+                                color: _soft(AppTheme.primary),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(Icons.notifications_none_rounded,
+                                  size: 52, color: AppTheme.primary),
+                            ),
+                            const SizedBox(height: 18),
                             Text(
                               "No hay notificaciones",
                               style: TextStyle(
-                                fontSize: 18,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
                                 color: isDark
                                     ? AppTheme.gray400
-                                    : AppTheme.gray500,
+                                    : AppTheme.gray600,
                               ),
                             ),
-                            const SizedBox(height: 10),
+                            const SizedBox(height: 6),
                             Text(
                               "Las notificaciones aparecerán aquí",
                               style: TextStyle(
-                                fontSize: 15,
+                                fontSize: 13,
                                 color: isDark
                                     ? AppTheme.gray500
                                     : AppTheme.gray400,
@@ -400,6 +447,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                       )
                     : ListView.builder(
                         controller: scrollController,
+                        padding: const EdgeInsets.only(bottom: 16),
                         itemCount: notificaciones.length,
                         itemBuilder: (context, index) {
                           final n = notificaciones[index];
@@ -412,27 +460,27 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                           switch (tipo) {
                             case "signo":
                               color = AppTheme.danger;
-                              icono = Icons.monitor_heart;
+                              icono = Icons.monitor_heart_rounded;
                               break;
                             case "sintoma":
                               color = AppTheme.warning;
-                              icono = Icons.healing;
+                              icono = Icons.healing_rounded;
                               break;
                             case "cita":
                               color = AppTheme.info;
-                              icono = Icons.event;
+                              icono = Icons.event_rounded;
                               break;
                             case "alerta":
                               color = AppTheme.danger;
-                              icono = Icons.warning_amber;
+                              icono = Icons.warning_amber_rounded;
                               break;
                             case "recomendacion":
                               color = AppTheme.primary;
-                              icono = Icons.lightbulb_outline;
+                              icono = Icons.lightbulb_outline_rounded;
                               break;
                             default:
                               color = AppTheme.primary;
-                              icono = Icons.notifications;
+                              icono = Icons.notifications_rounded;
                           }
 
                           return GestureDetector(
@@ -445,36 +493,51 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                             },
                             child: Container(
                               margin: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 8),
+                                  horizontal: 14, vertical: 5),
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
                                 color: leida
                                     ? (isDark
                                         ? AppTheme.gray700
-                                        : AppTheme.white)
+                                        : Colors.white)
                                     : color.withOpacity(0.06),
-                                borderRadius: BorderRadius.circular(18),
+                                borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: leida
                                       ? (isDark
                                           ? AppTheme.gray600
-                                          : AppTheme.gray200)
-                                      : color.withOpacity(0.3),
-                                  width: 1.5,
+                                          : AppTheme.gray200
+                                              .withOpacity(0.6))
+                                      : color.withOpacity(0.25),
+                                  width: 1,
                                 ),
+                                boxShadow: leida
+                                    ? null
+                                    : [
+                                        BoxShadow(
+                                          color: color.withOpacity(0.08),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ],
                               ),
                               child: Row(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.all(12),
+                                    padding: const EdgeInsets.all(10),
                                     decoration: BoxDecoration(
-                                      color: color.withOpacity(0.12),
-                                      borderRadius: BorderRadius.circular(14),
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          color.withOpacity(0.20),
+                                          color.withOpacity(0.08),
+                                        ],
+                                      ),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                     child:
-                                        Icon(icono, color: color, size: 26),
+                                        Icon(icono, color: color, size: 20),
                                   ),
-                                  const SizedBox(width: 16),
+                                  const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
@@ -483,43 +546,62 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                                         Text(
                                           _getTipoLabel(tipo),
                                           style: TextStyle(
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 17,
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
                                             color: isDark
                                                 ? AppTheme.white
                                                 : AppTheme.gray700,
                                           ),
                                         ),
-                                        const SizedBox(height: 6),
+                                        const SizedBox(height: 3),
                                         Text(
                                           n["mensaje"] ?? "",
                                           style: TextStyle(
-                                            fontSize: 15,
+                                            fontSize: 12.5,
                                             color: isDark
                                                 ? AppTheme.gray300
                                                 : AppTheme.gray500,
+                                            height: 1.3,
                                           ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
-                                        const SizedBox(height: 6),
-                                        Text(
-                                          _formatFecha(n["fecha"]),
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: isDark
-                                                ? AppTheme.gray500
-                                                : AppTheme.gray400,
-                                          ),
+                                        const SizedBox(height: 4),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.access_time_rounded,
+                                              size: 11,
+                                              color: AppTheme.gray400,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              _formatFecha(n["fecha"]),
+                                              style: TextStyle(
+                                                fontSize: 10.5,
+                                                color: isDark
+                                                    ? AppTheme.gray500
+                                                    : AppTheme.gray400,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
                                   ),
                                   if (!leida)
                                     Container(
-                                      width: 12,
-                                      height: 12,
+                                      width: 8,
+                                      height: 8,
                                       decoration: BoxDecoration(
                                         color: color,
                                         shape: BoxShape.circle,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: color.withOpacity(0.5),
+                                            blurRadius: 6,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                 ],
@@ -539,17 +621,17 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   String _getTipoLabel(String tipo) {
     switch (tipo) {
       case "signo":
-        return "📊 Signos vitales";
+        return "Signos vitales";
       case "sintoma":
-        return "🤒 Síntomas";
+        return "Síntomas";
       case "cita":
-        return "📅 Cita médica";
+        return "Cita médica";
       case "alerta":
-        return "⚠️ Alerta de salud";
+        return "Alerta de salud";
       case "recomendacion":
-        return "💡 Recomendación médica";
+        return "Recomendación médica";
       default:
-        return "📨 Notificación";
+        return "Notificación";
     }
   }
 
@@ -641,7 +723,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       debugPrint("❌ Error cargando perfil: $e");
       if (!mounted) return;
       setState(() => loading = false);
-      _mostrarSnackbarPersonalizado("Error al cargar el perfil", isError: true);
+      _mostrarSnackbarPersonalizado("Error al cargar el perfil",
+          isError: true);
     }
   }
 
@@ -652,7 +735,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         content: Row(
           children: [
             Icon(
-              isError ? Icons.error_outline : Icons.check_circle,
+              isError
+                  ? Icons.error_outline_rounded
+                  : Icons.check_circle_rounded,
               color: Colors.white,
               size: 20,
             ),
@@ -662,7 +747,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         ),
         backgroundColor: isError ? AppTheme.danger : AppTheme.success,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         duration: const Duration(seconds: 3),
         margin: const EdgeInsets.all(16),
       ),
@@ -679,7 +764,15 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            Icon(Icons.logout, color: AppTheme.danger, size: 28),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _soft(AppTheme.danger),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.logout_rounded,
+                  color: AppTheme.danger, size: 22),
+            ),
             const SizedBox(width: 12),
             Text("Cerrar sesión", style: AppTheme.title2),
           ],
@@ -759,7 +852,6 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       return;
     }
 
-    // Recargar médicos si no los tenemos
     if (medicos.isEmpty) {
       await _cargarMedicos();
     }
@@ -772,13 +864,11 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       return;
     }
 
-    // Si tiene un solo médico → abrir chat directo
     if (medicos.length == 1) {
       await _abrirChatConMedico(medicos.first);
       return;
     }
 
-    // Si tiene varios → mostrar selector
     _mostrarSelectorMedicos();
   }
 
@@ -796,7 +886,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         return;
       }
 
-      print("🔍 Abriendo chat: paciente(idUsuario=${widget.idUsuario}) con medico(idProfesional=$idMedico)");
+      print(
+          "🔍 Abriendo chat: paciente(idUsuario=${widget.idUsuario}) con medico(idProfesional=$idMedico)");
 
       final convId = await chatService.getOrCreateConversacion(
         widget.idUsuario,
@@ -804,7 +895,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       );
 
       if (convId == null) {
-        _mostrarSnackbarPersonalizado("No se pudo abrir el chat", isError: true);
+        _mostrarSnackbarPersonalizado("No se pudo abrir el chat",
+            isError: true);
         return;
       }
 
@@ -847,7 +939,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.06),
+                  color: _softer(AppTheme.primary),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(24),
                     topRight: Radius.circular(24),
@@ -855,13 +947,20 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.chat_bubble,
-                        color: AppTheme.primary, size: 28),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: _soft(AppTheme.primary),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.chat_bubble_rounded,
+                          color: AppTheme.primary, size: 22),
+                    ),
                     const SizedBox(width: 12),
                     Text(
                       "Seleccione un médico",
                       style: TextStyle(
-                        fontSize: 20,
+                        fontSize: 17,
                         fontWeight: FontWeight.bold,
                         color: isDark ? AppTheme.white : AppTheme.gray700,
                       ),
@@ -869,23 +968,36 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   ],
                 ),
               ),
-              const Divider(height: 1),
+              const SizedBox(height: 6),
               ...medicos.map((med) {
                 final nombreMedico = med["nombre"]?.toString() ?? "Médico";
                 final especialidad = med["especialidad"]?.toString() ?? "";
 
                 return ListTile(
-                  leading: CircleAvatar(
-                    radius: 26,
-                    backgroundColor: AppTheme.primary.withOpacity(0.1),
-                    child: Text(
-                      nombreMedico.isNotEmpty
-                          ? nombreMedico[0].toUpperCase()
-                          : "M",
-                      style: const TextStyle(
-                        color: AppTheme.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 22,
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20, vertical: 6),
+                  leading: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppTheme.primary.withOpacity(0.25),
+                          AppTheme.primary.withOpacity(0.10),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Center(
+                      child: Text(
+                        nombreMedico.isNotEmpty
+                            ? nombreMedico[0].toUpperCase()
+                            : "M",
+                        style: const TextStyle(
+                          color: AppTheme.primary,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 20,
+                        ),
                       ),
                     ),
                   ),
@@ -893,16 +1005,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                     nombreMedico,
                     style: const TextStyle(
                       fontWeight: FontWeight.w600,
-                      fontSize: 17,
+                      fontSize: 15,
                     ),
                   ),
                   subtitle: Text(
-                    especialidad.isNotEmpty
-                        ? especialidad
-                        : "Médico tratante",
-                    style: const TextStyle(fontSize: 14),
+                    especialidad.isNotEmpty ? especialidad : "Médico tratante",
+                    style: const TextStyle(fontSize: 12.5),
                   ),
-                  trailing: const Icon(Icons.chevron_right,
+                  trailing: const Icon(Icons.chevron_right_rounded,
                       color: AppTheme.gray400),
                   onTap: () {
                     Navigator.pop(context);
@@ -946,7 +1056,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     final accessibility = Provider.of<AccessibilityProvider>(context);
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.gray900 : AppTheme.gray100,
+      backgroundColor: isDark ? AppTheme.gray900 : const Color(0xFFF7F8FC),
       appBar: PreferredSize(
         preferredSize: const Size.fromHeight(100),
         child: Container(
@@ -975,7 +1085,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                         'assets/images/Cardiocare.png',
                         fit: BoxFit.contain,
                         errorBuilder: (context, error, stackTrace) {
-                          return const Icon(Icons.favorite,
+                          return const Icon(Icons.favorite_rounded,
                               color: Colors.white, size: 24);
                         },
                       ),
@@ -1008,10 +1118,10 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                       ],
                     ),
                   ),
-                  // 💬 BOTÓN DE CHAT DIRECTO EN LA APP BAR
-                  _buildAppBarButton(Icons.chat_bubble_outline, abrirChat),
+                  _buildAppBarButton(Icons.chat_bubble_outline_rounded, abrirChat),
                   const SizedBox(width: 6),
-                  _buildAppBarButton(Icons.help_outline, _abrirTutorial),
+                  _buildAppBarButton(
+                      Icons.help_outline_rounded, _abrirTutorial),
                   const SizedBox(width: 6),
                   _buildAppBarButton(
                     Icons.notifications_outlined,
@@ -1024,7 +1134,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   _buildAppBarButton(
                       Icons.settings_outlined, openConfiguracion),
                   const SizedBox(width: 6),
-                  _buildAppBarButton(Icons.logout, logout),
+                  _buildAppBarButton(Icons.logout_rounded, logout),
                 ],
               ),
             ),
@@ -1062,15 +1172,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                             children: [
                               _buildInfoCard(accessibility, isDark),
                               const SizedBox(height: 20),
-                              Text(
-                                "Acceso clínico",
-                                style: AppTheme.title1.copyWith(
-                                  fontSize: 18 * accessibility.fontScale,
-                                  color: isDark
-                                      ? AppTheme.white
-                                      : AppTheme.gray700,
-                                ),
-                              ),
+                              _buildSectionTitle(
+                                  "Acceso clínico", accessibility, isDark),
                               const SizedBox(height: 12),
                               _buildAccionesGrid(accessibility, isDark),
                               const SizedBox(height: 20),
@@ -1090,6 +1193,33 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   }
 
   // ==============================
+  // 📋 TITULO DE SECCIÓN
+  // ==============================
+  Widget _buildSectionTitle(
+      String titulo, AccessibilityProvider accessibility, bool isDark) {
+    return Row(
+      children: [
+        Container(
+          width: 4,
+          height: 20,
+          decoration: BoxDecoration(
+            color: AppTheme.primary,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          titulo,
+          style: AppTheme.title1.copyWith(
+            fontSize: 17 * accessibility.fontScale,
+            color: isDark ? AppTheme.white : AppTheme.gray700,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ==============================
   // 💊 ALERTA DE TOMAS PENDIENTES
   // ==============================
   Widget _buildAlertaTomasPendientes(
@@ -1105,7 +1235,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
           gradient: LinearGradient(
             colors: [
               AppTheme.warning.withOpacity(0.15),
-              AppTheme.warning.withOpacity(0.05),
+              AppTheme.warning.withOpacity(0.04),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -1115,6 +1245,13 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             color: AppTheme.warning.withOpacity(0.4),
             width: 1.5,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: AppTheme.warning.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
         child: Row(
           children: [
@@ -1125,9 +1262,9 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(
-                Icons.medication_liquid,
+                Icons.medication_liquid_rounded,
                 color: AppTheme.warning,
-                size: 28,
+                size: 26,
               ),
             ),
             const SizedBox(width: 14),
@@ -1157,7 +1294,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               ),
             ),
             const Icon(
-              Icons.chevron_right,
+              Icons.chevron_right_rounded,
               color: AppTheme.warning,
             ),
           ],
@@ -1172,46 +1309,56 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   Widget _buildTutorial(AccessibilityProvider accessibility) {
     final paso = _pasosTutorial[_pasoTutorial];
     final color = paso['color'] as Color;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Positioned(
       bottom: 20,
       left: 16,
       right: 16,
       child: Material(
-        elevation: 12,
+        elevation: 0,
         borderRadius: BorderRadius.circular(24),
-        color: Colors.white,
+        color: isDark ? AppTheme.gray800 : Colors.white,
         child: Container(
           padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: color.withOpacity(0.3), width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.15),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Puntos de progreso
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children:
-                    List.generate(_pasosTutorial.length, (index) {
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    width: 10,
-                    height: 10,
+                children: List.generate(_pasosTutorial.length, (index) {
+                  final activo = _pasoTutorial == index;
+                  return AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: activo ? 20 : 8,
+                    height: 8,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color:
-                          _pasoTutorial == index ? color : AppTheme.gray300,
+                      color: activo ? color : AppTheme.gray300,
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   );
                 }),
               ),
               const SizedBox(height: 16),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 60,
-                    height: 60,
+                    width: 56,
+                    height: 56,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         colors: [color, color.withOpacity(0.7)],
@@ -1221,10 +1368,10 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                     child: Icon(
                       paso['icono'] as IconData,
                       color: Colors.white,
-                      size: 32,
+                      size: 28,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1232,16 +1379,16 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                         Text(
                           paso['titulo'] as String,
                           style: TextStyle(
-                            fontSize: 18 * accessibility.fontScale,
+                            fontSize: 16 * accessibility.fontScale,
                             fontWeight: FontWeight.bold,
-                            color: AppTheme.gray700,
+                            color: isDark ? AppTheme.white : AppTheme.gray700,
                           ),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
                           paso['descripcion'] as String,
                           style: TextStyle(
-                            fontSize: 15 * accessibility.fontScale,
+                            fontSize: 13.5 * accessibility.fontScale,
                             color: AppTheme.gray500,
                             height: 1.4,
                           ),
@@ -1251,19 +1398,17 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               Row(
                 children: [
                   if (_pasoTutorial > 0)
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: () =>
-                            setState(() => _pasoTutorial--),
+                        onPressed: () => setState(() => _pasoTutorial--),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppTheme.gray500,
-                          side: BorderSide(color: AppTheme.gray300),
-                          padding:
-                              const EdgeInsets.symmetric(vertical: 12),
+                          side: const BorderSide(color: AppTheme.gray300),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -1271,7 +1416,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                         child: Text(
                           "Anterior",
                           style: TextStyle(
-                            fontSize: 14 * accessibility.fontScale,
+                            fontSize: 13.5 * accessibility.fontScale,
                           ),
                         ),
                       ),
@@ -1290,45 +1435,38 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                         backgroundColor: color,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 12),
+                        elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
                       child: Text(
                         _pasoTutorial < _pasosTutorial.length - 1
-                            ? "Siguiente ➜"
-                            : "✓ ¡Entendido!",
-                        style: TextStyle(
-                          fontSize: 15 * accessibility.fontScale,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: TextButton(
-                      onPressed: () =>
-                          setState(() => _mostrarTutorial = false),
-                      style: TextButton.styleFrom(
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: Text(
-                        "Saltar tutorial",
+                            ? "Siguiente"
+                            : "¡Entendido!",
                         style: TextStyle(
                           fontSize: 14 * accessibility.fontScale,
-                          color: AppTheme.gray500,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 6),
+              TextButton(
+                onPressed: () => setState(() => _mostrarTutorial = false),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                ),
+                child: Text(
+                  "Saltar tutorial",
+                  style: TextStyle(
+                    fontSize: 13 * accessibility.fontScale,
+                    color: AppTheme.gray500,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             ],
           ),
@@ -1350,9 +1488,10 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       child: Stack(
         children: [
           IconButton(
-            icon: Icon(icon, color: Colors.white, size: 24),
+            icon: Icon(icon, color: Colors.white, size: 22),
             onPressed: onPressed,
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(9),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
           ),
           if (badge != null && badge > 0)
             Positioned(
@@ -1368,7 +1507,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                   badge > 9 ? "9+" : "$badge",
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 10,
+                    fontSize: 9.5,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -1391,46 +1530,54 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
 
     return Container(
       width: double.infinity,
-      color: isDark ? AppTheme.gray800 : AppTheme.white,
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
+      color: isDark ? AppTheme.gray800 : Colors.white,
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
       child: Row(
         children: [
           Container(
-            width: 70,
-            height: 70,
+            width: 68,
+            height: 68,
+            padding: const EdgeInsets.all(3),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              border: Border.all(
-                  color: AppTheme.primary.withOpacity(0.3), width: 2),
-              boxShadow: [
-                BoxShadow(
-                    color: AppTheme.primary.withOpacity(0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4)),
-              ],
+              gradient: LinearGradient(
+                colors: [
+                  AppTheme.primary.withOpacity(0.35),
+                  AppTheme.primary.withOpacity(0.10),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
-            child: ClipOval(
-              child: Image.asset(
-                "assets/images/profile.jpg",
-                width: 70,
-                height: 70,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    decoration:
-                        BoxDecoration(gradient: AppTheme.primaryGradient),
-                    child: Center(
-                      child: Text(
-                        nombreInicial,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
+            child: Container(
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white,
+              ),
+              padding: const EdgeInsets.all(2),
+              child: ClipOval(
+                child: Image.asset(
+                  "assets/images/profile.jpg",
+                  width: 60,
+                  height: 60,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      decoration: BoxDecoration(
+                          gradient: AppTheme.primaryGradient),
+                      child: Center(
+                        child: Text(
+                          nombreInicial,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -1441,47 +1588,61 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
               children: [
                 Text(
                   "Hola, ${nombreCompleto.split(" ").first}",
-                  style: AppTheme.title1.copyWith(
+                  style: TextStyle(
                     fontSize: 18 * accessibility.fontScale,
+                    fontWeight: FontWeight.bold,
                     color: isDark ? AppTheme.white : AppTheme.gray700,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  "EPS: $eps",
-                  style: AppTheme.body2.copyWith(
-                    fontSize: 14 * accessibility.fontScale,
-                    color: AppTheme.gray500,
-                  ),
+                Row(
+                  children: [
+                    Icon(Icons.local_hospital_rounded,
+                        size: 13,
+                        color: isDark ? AppTheme.gray400 : AppTheme.gray500),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        "EPS: $eps",
+                        style: TextStyle(
+                          fontSize: 12.5 * accessibility.fontScale,
+                          color:
+                              isDark ? AppTheme.gray400 : AppTheme.gray500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: AppTheme.success.withOpacity(0.1),
-              border:
-                  Border.all(color: AppTheme.success.withOpacity(0.3)),
+              color: _soft(AppTheme.success),
+              border: Border.all(color: AppTheme.success.withOpacity(0.3)),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                    width: 8,
-                    height: 8,
-                    decoration: const BoxDecoration(
-                        color: AppTheme.success, shape: BoxShape.circle)),
-                const SizedBox(width: 6),
+                  width: 7,
+                  height: 7,
+                  decoration: const BoxDecoration(
+                    color: AppTheme.success,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
                 Text(
                   "Activo",
                   style: TextStyle(
                     color: AppTheme.success,
-                    fontSize: 12 * accessibility.fontScale,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 11.5 * accessibility.fontScale,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ],
@@ -1497,30 +1658,43 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
   // ==============================
   Widget _buildInfoCard(AccessibilityProvider accessibility, bool isDark) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.gray800 : AppTheme.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: isDark ? null : AppTheme.subtleShadow,
+        color: isDark ? AppTheme.gray800 : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+        border: Border.all(
+          color:
+              isDark ? AppTheme.gray600 : AppTheme.gray200.withOpacity(0.6),
+        ),
       ),
       child: Column(
         children: [
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.all(9),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary.withOpacity(0.1),
+                  color: _soft(AppTheme.primary),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.health_and_safety_outlined,
-                    color: AppTheme.primary, size: 22),
+                child: const Icon(Icons.health_and_safety_rounded,
+                    color: AppTheme.primary, size: 20),
               ),
               const SizedBox(width: 12),
               Text(
                 "Estado de salud",
-                style: AppTheme.title2.copyWith(
-                  fontSize: 16 * accessibility.fontScale,
+                style: TextStyle(
+                  fontSize: 15 * accessibility.fontScale,
+                  fontWeight: FontWeight.bold,
                   color: isDark ? AppTheme.white : AppTheme.gray700,
                 ),
               ),
@@ -1529,23 +1703,35 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: AppTheme.success.withOpacity(0.1),
+                  color: _soft(AppTheme.success),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  "✓ Monitoreo activo",
-                  style: TextStyle(
-                    fontSize: 11 * accessibility.fontScale,
-                    color: AppTheme.success,
-                    fontWeight: FontWeight.w600,
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.check_circle_rounded,
+                        size: 12, color: AppTheme.success),
+                    const SizedBox(width: 4),
+                    Text(
+                      "Monitoreo activo",
+                      style: TextStyle(
+                        fontSize: 10.5 * accessibility.fontScale,
+                        color: AppTheme.success,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          const Divider(height: 1, color: AppTheme.gray200),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+          Divider(
+              height: 1,
+              color: isDark
+                  ? AppTheme.gray600
+                  : AppTheme.gray200.withOpacity(0.6)),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -1578,7 +1764,14 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       AccessibilityProvider accessibility, bool isDark) {
     return Row(
       children: [
-        Icon(icon, color: AppTheme.primary, size: 18),
+        Container(
+          padding: const EdgeInsets.all(7),
+          decoration: BoxDecoration(
+            color: _soft(AppTheme.primary),
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(icon, color: AppTheme.primary, size: 15),
+        ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -1586,16 +1779,18 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             children: [
               Text(
                 label,
-                style: AppTheme.caption.copyWith(
-                  fontSize: 12 * accessibility.fontScale,
+                style: TextStyle(
+                  fontSize: 11 * accessibility.fontScale,
+                  color: AppTheme.gray500,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
                 value,
-                style: AppTheme.body2.copyWith(
-                  fontSize: 14 * accessibility.fontScale,
-                  fontWeight: FontWeight.w600,
+                style: TextStyle(
+                  fontSize: 13.5 * accessibility.fontScale,
+                  fontWeight: FontWeight.w700,
                   color: isDark ? AppTheme.white : AppTheme.gray700,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -1615,25 +1810,25 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
     final items = [
       _AccionItem(
         "Perfil clínico",
-        Icons.folder_shared_outlined,
+        Icons.folder_shared_rounded,
         AppTheme.primary,
         openPerfil,
       ),
       _AccionItem(
         "Mis tomas",
-        Icons.medication_liquid,
-        const Color(0xFF059669),
+        Icons.medication_liquid_rounded,
+        AppTheme.success,
         openTomas,
       ),
       _AccionItem(
         "Chat médico",
-        Icons.chat_bubble_outline,
+        Icons.chat_bubble_rounded,
         AppTheme.info,
         abrirChat,
       ),
       _AccionItem(
         "Configuración",
-        Icons.settings_outlined,
+        Icons.tune_rounded,
         AppTheme.gray500,
         openConfiguracion,
       ),
@@ -1645,7 +1840,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       physics: const NeverScrollableScrollPhysics(),
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 1.2,
+      childAspectRatio: 1.15,
       children: items
           .map((item) => _buildAccionCard(item, accessibility, isDark))
           .toList(),
@@ -1658,11 +1853,21 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
       onTap: item.onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: isDark ? AppTheme.gray800 : AppTheme.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: isDark ? null : AppTheme.subtleShadow,
+          color: isDark ? AppTheme.gray800 : Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: isDark
+              ? null
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 12,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
           border: Border.all(
-            color: isDark ? AppTheme.gray600 : AppTheme.gray200,
+            color: isDark
+                ? AppTheme.gray600
+                : AppTheme.gray200.withOpacity(0.6),
           ),
         ),
         child: Column(
@@ -1671,19 +1876,31 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: item.color.withOpacity(0.1),
+                gradient: LinearGradient(
+                  colors: [
+                    item.color.withOpacity(0.20),
+                    item.color.withOpacity(0.08),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(item.icon, size: 28, color: item.color),
+              child: Icon(item.icon, size: 26, color: item.color),
             ),
             const SizedBox(height: 12),
-            Text(
-              item.title,
-              textAlign: TextAlign.center,
-              style: AppTheme.body2.copyWith(
-                fontSize: 14 * accessibility.fontScale,
-                fontWeight: FontWeight.w600,
-                color: isDark ? AppTheme.white : AppTheme.gray700,
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                item.title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13 * accessibility.fontScale,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? AppTheme.white : AppTheme.gray700,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
@@ -1704,8 +1921,8 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
         boxShadow: [
           BoxShadow(
             color: AppTheme.primary.withOpacity(0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
@@ -1744,7 +1961,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: abrirChat,
-                  icon: const Icon(Icons.chat_bubble_outline, size: 16),
+                  icon: const Icon(Icons.chat_bubble_rounded, size: 16),
                   label: Text(
                     "Ir al chat",
                     style: TextStyle(
@@ -1758,7 +1975,7 @@ class _PacienteDashboardState extends State<PacienteDashboard> {
           ),
           const SizedBox(width: 10),
           const Icon(
-            Icons.medical_information_outlined,
+            Icons.medical_information_rounded,
             color: Colors.white24,
             size: 55,
           ),
