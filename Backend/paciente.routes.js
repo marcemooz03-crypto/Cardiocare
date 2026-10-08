@@ -6,37 +6,69 @@ const db = require("./db");
 // ===============================
 // ⚙️ QUÉ ID GUARDA CADA TABLA
 // ===============================
-// Tu esquema mezcla ids:
 //  - signovital  -> columna idUsuario            (usuario.idUsuario)
 //  - tratamiento -> columna idPaciente, pero FK a usuario.idUsuario
 //  - medicopaciente / cita -> idPaciente real    (paciente.idPaciente)
 //  - sintoma -> aquí se asume idPaciente real.
-//    👉 Si la FK de sintoma apunta a usuario.idUsuario (como tratamiento),
-//       cambia esta constante a 'idUsuario' y listo.
+//    👉 Si la FK de sintoma apunta a usuario.idUsuario, cambia a 'idUsuario'.
 const SINTOMA_USA = "idPaciente"; // "idPaciente" | "idUsuario"
 
+const ROL_CUIDADOR = 4;
+
 
 // ===============================
-// 🧩 HELPER: obtener ids del paciente a partir de idUsuario
-// (FK paciente.idUsuario -> usuario.idUsuario)
-// Devuelve { idPaciente, idUsuario } o null si el usuario no es paciente
+// 🧩 HELPER: query con promesas
 // ===============================
-function getPaciente(idUsuario) {
+function q(sql, params = []) {
   return new Promise((resolve, reject) => {
-    const sql = `
-      SELECT idPaciente, idUsuario
-      FROM paciente
-      WHERE idUsuario = ?
-      LIMIT 1
-    `;
-
-    db.query(sql, [idUsuario], (err, result) => {
-      if (err) return reject(err);
-      if (!result.length) return resolve(null);
-
-      resolve(result[0]);
-    });
+    db.query(sql, params, (err, result) => (err ? reject(err) : resolve(result)));
   });
+}
+
+
+// ===============================
+// 🧩 HELPER: resolver el paciente al que se accede
+//
+//  idSolicitante = usuario logueado (paciente O cuidador)
+//  idPacienteSel = (opcional) paciente elegido cuando un cuidador tiene varios
+//
+//  - Cuidador (rol 4): solo ve pacientes con los que tiene vínculo en
+//    cuidador_paciente (o el cuidador principal guardado en paciente.idCuidador).
+//    Se evalúa el ROL primero, así un ex-paciente que ahora es cuidador
+//    no devuelve su registro viejo de paciente.
+//  - Paciente: su propio registro.
+//
+//  Devuelve { idPaciente, idUsuario } o null.
+// ===============================
+async function getPaciente(idSolicitante, idPacienteSel = null) {
+  const u = await q(`SELECT idRol FROM usuario WHERE idUsuario = ?`, [idSolicitante]);
+  if (!u.length) return null;
+
+  if (Number(u[0].idRol) === ROL_CUIDADOR) {
+    const params = [idSolicitante, idSolicitante];
+    let extra = "";
+    if (idPacienteSel) {
+      extra = "AND p.idPaciente = ?";
+      params.push(idPacienteSel);
+    }
+
+    const r = await q(
+      `SELECT DISTINCT p.idPaciente, p.idUsuario
+       FROM paciente p
+       LEFT JOIN cuidador_paciente cp ON cp.idPaciente = p.idPaciente
+       WHERE (cp.idUsuario = ? OR p.idCuidador = ?) ${extra}
+       ORDER BY p.idPaciente ASC
+       LIMIT 1`,
+      params
+    );
+    return r[0] || null;
+  }
+
+  const r = await q(
+    `SELECT idPaciente, idUsuario FROM paciente WHERE idUsuario = ? LIMIT 1`,
+    [idSolicitante]
+  );
+  return r[0] || null;
 }
 
 // Valor correcto para la columna sintoma.idPaciente
@@ -44,24 +76,62 @@ function idParaSintoma(paciente) {
   return SINTOMA_USA === "idUsuario" ? paciente.idUsuario : paciente.idPaciente;
 }
 
+// Respuesta de error uniforme
+function sinPaciente(res) {
+  return res.status(404).json({
+    ok: false,
+    msg: "Paciente no encontrado o sin vínculo con este usuario"
+  });
+}
+
+
+// ===============================
+// 👥 PACIENTES DE UN CUIDADOR
+// (para cuando un cuidador atiende a varios pacientes)
+// Úsala para armar el selector y luego manda ?idPaciente=X
+// ===============================
+router.get("/cuidador/pacientes/:idUsuario", async (req, res) => {
+  try {
+    const rows = await q(
+      `SELECT DISTINCT
+         p.idPaciente,
+         u.idUsuario,
+         u.nombre,
+         u.correo,
+         p.genero,
+         p.fechaNacimiento,
+         p.tipoHipertension,
+         cp.relacion AS relacionCuidador
+       FROM paciente p
+       JOIN usuario u ON u.idUsuario = p.idUsuario
+       LEFT JOIN cuidador_paciente cp
+              ON cp.idPaciente = p.idPaciente AND cp.idUsuario = ?
+       WHERE cp.idUsuario = ? OR p.idCuidador = ?
+       ORDER BY u.nombre ASC`,
+      [req.params.idUsuario, req.params.idUsuario, req.params.idUsuario]
+    );
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 
 // ===============================
 // 👨‍⚕️ MÉDICOS DEL PACIENTE
 // medicopaciente.idPaciente -> paciente.idPaciente (real)
+// Funciona con idUsuario de paciente o de cuidador
 // ===============================
 router.get("/medicos/:idUsuario", async (req, res) => {
-
   try {
-    const paciente = await getPaciente(req.params.idUsuario);
-
-    if (!paciente) {
-      return res.status(404).json({ ok: false, msg: "Paciente no encontrado" });
-    }
+    const paciente = await getPaciente(req.params.idUsuario, req.query.idPaciente);
+    if (!paciente) return sinPaciente(res);
 
     const sql = `
-      SELECT 
+      SELECT
         ps.idProfesional,
         u.nombre,
+        u.correo,
         ps.especialidad,
         e.nombre AS eps
       FROM medicopaciente mp
@@ -75,24 +145,19 @@ router.get("/medicos/:idUsuario", async (req, res) => {
       if (err) return res.status(500).json(err);
       res.json(results);
     });
-
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
 
 // ===============================
-// 🧠 SÍNTOMAS (PACIENTE)
+// 🧠 SÍNTOMAS
 // ===============================
 router.get("/sintomas/:idUsuario", async (req, res) => {
-
   try {
-    const paciente = await getPaciente(req.params.idUsuario);
-
-    if (!paciente) {
-      return res.status(404).json({ ok: false, msg: "Paciente no encontrado" });
-    }
+    const paciente = await getPaciente(req.params.idUsuario, req.query.idPaciente);
+    if (!paciente) return sinPaciente(res);
 
     const sql = `
       SELECT
@@ -110,40 +175,38 @@ router.get("/sintomas/:idUsuario", async (req, res) => {
       if (err) return res.status(500).json(err);
       res.json(results);
     });
-
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
 
 // ===============================
-// 🫀 SIGNOS VITALES (PACIENTE)
-// ⚠️ signovital se guarda con idUsuario (no idPaciente):
-//    se valida que sea paciente y se filtra por idUsuario
+// 🫀 SIGNOS VITALES
+// signovital se guarda con idUsuario DEL PACIENTE
+// (aunque lo consulte el cuidador, se filtra por el idUsuario del paciente)
 // ===============================
 router.get("/signos/:idUsuario", async (req, res) => {
-
   try {
-    const paciente = await getPaciente(req.params.idUsuario);
-
-    if (!paciente) {
-      return res.status(404).json({ ok: false, msg: "Paciente no encontrado" });
-    }
+    const paciente = await getPaciente(req.params.idUsuario, req.query.idPaciente);
+    if (!paciente) return sinPaciente(res);
 
     const sql = `
       SELECT
-        idSigno,
-        idUsuario,
-        presionSistolica,
-        presionDiastolica,
-        frecuenciaCardiaca,
-        saturacionOxigeno,
-        contexto,
-        fechaRegistro
-      FROM signovital
-      WHERE idUsuario = ?
-      ORDER BY fechaRegistro DESC
+        sv.idSigno,
+        sv.idUsuario,
+        sv.registradoPor,
+        ur.nombre AS nombreRegistrador,
+        sv.presionSistolica,
+        sv.presionDiastolica,
+        sv.frecuenciaCardiaca,
+        sv.saturacionOxigeno,
+        sv.contexto,
+        sv.fechaRegistro
+      FROM signovital sv
+      LEFT JOIN usuario ur ON ur.idUsuario = sv.registradoPor
+      WHERE sv.idUsuario = ?
+      ORDER BY sv.fechaRegistro DESC
       LIMIT 20
     `;
 
@@ -151,19 +214,19 @@ router.get("/signos/:idUsuario", async (req, res) => {
       if (err) return res.status(500).json(err);
       res.json(results);
     });
-
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
 
 // ===============================
 // 🩺 CREAR SÍNTOMA
+// El cuidador puede registrar por el paciente: manda su propio idUsuario
+// (y opcionalmente idPaciente si atiende a varios)
 // ===============================
 router.post("/sintomas", async (req, res) => {
-
-  const { idUsuario, titulo, descripcion, prioridad } = req.body;
+  const { idUsuario, idPaciente, titulo, descripcion, prioridad } = req.body;
 
   if (!idUsuario || !titulo) {
     return res.status(400).json({
@@ -173,16 +236,8 @@ router.post("/sintomas", async (req, res) => {
   }
 
   try {
-    // ✅ Resolver el paciente real (antes el INSERT ... SELECT fallaba en silencio
-    //    si el usuario no era paciente y aun así respondía "registrado")
-    const paciente = await getPaciente(idUsuario);
-
-    if (!paciente) {
-      return res.status(404).json({
-        ok: false,
-        msg: `El usuario ${idUsuario} no está registrado como paciente`
-      });
-    }
+    const paciente = await getPaciente(idUsuario, idPaciente);
+    if (!paciente) return sinPaciente(res);
 
     const sql = `
       INSERT INTO sintoma (idPaciente, titulo, descripcion, prioridad)
@@ -204,9 +259,8 @@ router.post("/sintomas", async (req, res) => {
         });
       }
     );
-
   } catch (err) {
-    res.status(500).json(err);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
