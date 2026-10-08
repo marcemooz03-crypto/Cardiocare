@@ -207,10 +207,13 @@ router.get("/signos/:idUsuario", async (req, res) => {
       LEFT JOIN usuario ur ON ur.idUsuario = sv.registradoPor
       WHERE sv.idUsuario = ?
       ORDER BY sv.fechaRegistro DESC
-      LIMIT 20
+      LIMIT ?
     `;
 
-    db.query(sql, [paciente.idUsuario], (err, results) => {
+    // Historial completo: por defecto hasta 500 registros (?limite=N para cambiarlo)
+    const limite = Math.min(parseInt(req.query.limite, 10) || 500, 2000);
+
+    db.query(sql, [paciente.idUsuario, limite], (err, results) => {
       if (err) return res.status(500).json(err);
       res.json(results);
     });
