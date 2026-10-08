@@ -386,6 +386,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     final relacionCtrl = TextEditingController(text: relacion);
     final passCtrl = TextEditingController();
     String? error;
+    bool verPass = false; // 👁️ mostrar/ocultar contraseña
 
     return showDialog<Map<String, String>>(
       context: context,
@@ -417,11 +418,19 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                 ),
                 TextField(
                   controller: passCtrl,
-                  obscureText: true,
+                  obscureText: !verPass,
                   decoration: InputDecoration(
                     labelText: esNuevo
                         ? "Contraseña"
                         : "Nueva contraseña (opcional)",
+                    suffixIcon: IconButton(
+                      tooltip:
+                          verPass ? "Ocultar contraseña" : "Mostrar contraseña",
+                      icon: Icon(verPass
+                          ? Icons.visibility_off_rounded
+                          : Icons.visibility_rounded),
+                      onPressed: () => setDlg(() => verPass = !verPass),
+                    ),
                   ),
                 ),
                 if (error != null) ...[
@@ -1132,7 +1141,8 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                         color: Colors.transparent,
                         child: InkWell(
                           borderRadius: BorderRadius.circular(16),
-                          onTap: () {},
+                          // 👤 Abre el detalle del usuario
+                          onTap: () => _mostrarDetalleUsuario(u),
                           child: Padding(
                             padding: const EdgeInsets.all(14),
                             child: Row(
@@ -1308,6 +1318,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
           _snack("ID de usuario inválido", isError: true);
           return;
         }
+        if (value == "detalle") _mostrarDetalleUsuario(u);
         if (value == "edit") _editarUsuario(u);
         if (value == "delete") eliminarUsuario(idUsuario, nombre);
         if (value == "admin") cambiarRol(idUsuario, "admin");
@@ -1316,6 +1327,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
         if (value == "cuidador") cambiarRol(idUsuario, "cuidador");
       },
       itemBuilder: (_) => [
+        _popupItem("detalle", Icons.visibility_rounded, "Ver detalles", _info),
         _popupItem("edit", Icons.edit_rounded, "Editar", _primary),
         const PopupMenuDivider(),
         _popupItem("admin", Icons.admin_panel_settings_rounded, "Hacer Admin",
@@ -1344,6 +1356,578 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
           Text(label, style: TextStyle(color: color, fontSize: 13)),
         ],
       ),
+    );
+  }
+
+  // =====================================================
+  // 👤 DETALLE DE USUARIO
+  // =====================================================
+  bool _mismoId(dynamic a, dynamic b) {
+    final x = safeId(a), y = safeId(b);
+    return x != null && x == y;
+  }
+
+  String _prettyKey(String k) {
+    final s = k.replaceAll('_', ' ').replaceAllMapped(
+        RegExp(r'([a-z])([A-Z])'), (m) => '${m[1]} ${m[2]}');
+    return s.isEmpty ? k : s[0].toUpperCase() + s.substring(1);
+  }
+
+  // 🔒 Campos que se muestran ocultos hasta que el admin los revele
+  bool _esSensible(String key) {
+    final k = key.toLowerCase();
+    return k.contains("cedula") ||
+        k.contains("documento") ||
+        k.contains("telefono") ||
+        k.contains("celular") ||
+        k.contains("direccion") ||
+        k.contains("nacimiento");
+  }
+
+  void _mostrarDetalleUsuario(Map<String, dynamic> u) {
+    final rol = (u["rol"] ?? "paciente").toString();
+    final rolData = _getRolData(rol);
+    final rolColor = rolData["color"] as Color;
+    final nombre = (u["nombre"] ?? "Sin nombre").toString();
+    final correo = (u["correo"] ?? "").toString();
+    final idUsuario = safeId(u["idUsuario"]);
+
+    final secciones = <Widget>[];
+
+    // ---------- PACIENTE ----------
+    if (rol == "paciente") {
+      final idPac = safeId(u["idPaciente"]);
+
+      final medicosDe = asignaciones.where((a) =>
+          _mismoId(a["idPaciente"], idPac) ||
+          (a["nombrePaciente"] ?? a["paciente"])?.toString() == nombre);
+
+      final cuidadoresDe = asignacionesCuidadores
+          .where((c) => _mismoId(c["idPaciente"], idPac));
+
+      final alertasDe = alertas
+          .where((a) =>
+              _mismoId(a["idPaciente"], idPac) ||
+              a["nombre_paciente"]?.toString() == nombre)
+          .toList();
+      final pendientes = alertasDe
+          .where((a) =>
+              (a["estado"] ?? "").toString().toUpperCase() != "ATENDIDA")
+          .length;
+
+      secciones.addAll([
+        _detalleSeccion(
+          "Médicos asignados",
+          Icons.medical_services_rounded,
+          _primary,
+          medicosDe
+              .map((a) => _detalleItem(
+                    Icons.medical_services_rounded,
+                    _primary,
+                    (a["nombreMedico"] ?? a["medico"] ?? "Médico").toString(),
+                    _fechaCorta(a["fechaAsignacion"] ?? a["fecha"]),
+                  ))
+              .toList(),
+          vacio: "Sin médico asignado",
+        ),
+        _detalleSeccion(
+          "Cuidadores",
+          Icons.people_outline_rounded,
+          _cuidador,
+          cuidadoresDe
+              .map((c) => _detalleItem(
+                    Icons.people_outline_rounded,
+                    _cuidador,
+                    (c["nombreCuidador"] ?? c["nombre"] ?? "Cuidador")
+                        .toString(),
+                    (c["relacionCuidador"] ?? "").toString(),
+                  ))
+              .toList(),
+          vacio: "Sin cuidadores",
+        ),
+        _detalleSeccion(
+          "Alertas (${alertasDe.length} · $pendientes pendientes)",
+          Icons.notifications_active_rounded,
+          _warning,
+          alertasDe
+              .take(3)
+              .map((a) => _detalleItem(
+                    Icons.warning_amber_rounded,
+                    _warning,
+                    (a["tipo"] ?? "Alerta").toString(),
+                    _formatFecha(a["fecha"]),
+                  ))
+              .toList(),
+          vacio: "Sin alertas",
+        ),
+      ]);
+    }
+
+    // ---------- MÉDICO ----------
+    if (rol == "medico") {
+      final idProf = safeId(u["idProfesional"]);
+      final pacientesDe = asignaciones.where((a) =>
+          _mismoId(a["idProfesional"], idProf) ||
+          (a["nombreMedico"] ?? a["medico"])?.toString() == nombre);
+
+      secciones.add(_detalleSeccion(
+        "Pacientes asignados (${pacientesDe.length})",
+        Icons.person_rounded,
+        _success,
+        pacientesDe
+            .map((a) => _detalleItem(
+                  Icons.person_rounded,
+                  _success,
+                  (a["nombrePaciente"] ?? a["paciente"] ?? "Paciente")
+                      .toString(),
+                  _fechaCorta(a["fechaAsignacion"] ?? a["fecha"]),
+                ))
+            .toList(),
+        vacio: "Sin pacientes asignados",
+      ));
+    }
+
+    // ---------- CUIDADOR ----------
+    if (rol == "cuidador") {
+      final idCuid = _idCuidadorDe(u);
+      final aCargo = asignacionesCuidadores
+          .where((c) => idCuid != null && _idCuidadorDe(c) == idCuid)
+          .toList();
+
+      secciones.add(_detalleSeccion(
+        "Pacientes a su cargo (${aCargo.length})",
+        Icons.person_rounded,
+        _success,
+        aCargo
+            .map((c) => _detalleItem(
+                  Icons.person_rounded,
+                  _success,
+                  (c["paciente_nombre"] ?? "Paciente").toString(),
+                  (c["relacionCuidador"] ?? "").toString(),
+                ))
+            .toList(),
+        vacio: "Sin pacientes asignados",
+      ));
+    }
+
+    // ---------- SESIÓN Y ACTIVIDAD ----------
+    secciones.add(_seccionSesion(u));
+
+    // ---------- OTROS CAMPOS DEL BACKEND ----------
+    const ocultos = {
+      "rol",
+      "rolLabel",
+      "nombre",
+      "correo",
+      "idUsuario",
+      "ultimo_login",
+      "ultimoLogin",
+      "ultima_conexion",
+      "ultimaConexion",
+      "last_login",
+      "lastLogin",
+    };
+    final extras = u.entries.where((e) {
+      final k = e.key.toLowerCase();
+      return !ocultos.contains(e.key) &&
+          !k.contains("pass") &&
+          !k.contains("contra") &&
+          !k.contains("hash") &&
+          !k.contains("token") &&
+          e.value != null &&
+          e.value is! Map &&
+          e.value is! List &&
+          e.value.toString().trim().isNotEmpty;
+    }).toList();
+
+    if (extras.isNotEmpty) {
+      secciones.add(_detalleSeccion(
+        "Información adicional",
+        Icons.info_outline_rounded,
+        _info,
+        extras.map<Widget>((e) {
+          final esFecha = e.key.toLowerCase().contains("fecha");
+          final valor =
+              esFecha ? _formatFecha(e.value) : e.value.toString();
+
+          // 🔒 Datos personales: ocultos por defecto, con ojito
+          if (_esSensible(e.key)) {
+            return _DatoSensible(
+              label: _prettyKey(e.key),
+              valor: valor,
+            );
+          }
+          return _detalleFila(_prettyKey(e.key), valor);
+        }).toList(),
+      ));
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.7,
+        minChildSize: 0.4,
+        maxChildSize: 0.92,
+        expand: false,
+        builder: (ctx, scroll) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFFF7F8FC),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: ListView(
+            controller: scroll,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppTheme.gray300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              // Cabecera
+              Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: _soft(rolColor),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Icon(rolData["icon"] as IconData,
+                        color: rolColor, size: 30),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(nombre,
+                            style: const TextStyle(
+                                fontSize: 18, fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(correo,
+                            style: const TextStyle(
+                                fontSize: 12.5, color: _textSub)),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: _soft(rolColor),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                (rolData["label"] as String),
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: rolColor),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text("ID $idUsuario",
+                                style: const TextStyle(
+                                    fontSize: 11, color: _textSub)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              ...secciones,
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: _botonAccion(
+                      label: "Editar",
+                      icon: Icons.edit_rounded,
+                      color: _primary,
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _editarUsuario(u);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: SizedBox(
+                      height: 48,
+                      child: OutlinedButton.icon(
+                        onPressed: idUsuario == null
+                            ? null
+                            : () {
+                                Navigator.pop(ctx);
+                                eliminarUsuario(idUsuario, nombre);
+                              },
+                        icon: const Icon(Icons.delete_outline_rounded,
+                            size: 18),
+                        label: const Text("Eliminar"),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _danger,
+                          side: const BorderSide(color: _danger),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _detalleSeccion(
+    String titulo,
+    IconData icon,
+    Color color,
+    List<Widget> hijos, {
+    String? vacio,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(titulo,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: color)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (hijos.isEmpty)
+            Text(vacio ?? "Sin datos",
+                style: const TextStyle(fontSize: 12, color: _textSub))
+          else
+            ...hijos,
+        ],
+      ),
+    );
+  }
+
+  Widget _detalleItem(IconData icon, Color color, String titulo, String sub) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _celdaPersona(
+        icon: icon,
+        color: color,
+        titulo: titulo,
+        subtitulo: sub,
+      ),
+    );
+  }
+
+  Widget _detalleFila(String label, String valor) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(label,
+                style: const TextStyle(fontSize: 12, color: _textSub)),
+          ),
+          Expanded(
+            child: Text(valor,
+                style: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // =====================================================
+  // 🔐 SESIÓN Y ACTIVIDAD DEL USUARIO
+  // =====================================================
+  dynamic _pick(Map<String, dynamic> m, List<String> keys) {
+    for (final k in keys) {
+      final v = m[k];
+      if (v != null && v.toString().trim().isNotEmpty) return v;
+    }
+    return null;
+  }
+
+  DateTime? _fechaLog(Map<String, dynamic> l) {
+    final raw = _pick(l, ["fecha", "created_at", "timestamp", "fechaHora"]);
+    return raw == null ? null : DateTime.tryParse(raw.toString());
+  }
+
+  List<Map<String, dynamic>> _logsDeUsuario(Map<String, dynamic> u) {
+    final id = safeId(u["idUsuario"]);
+    final correo = (u["correo"] ?? "").toString().toLowerCase();
+    final nombre = (u["nombre"] ?? "").toString().toLowerCase();
+
+    final res = logs.where((l) {
+      if (id != null &&
+          _mismoId(_pick(l, ["idUsuario", "id_usuario", "usuario_id"]), id)) {
+        return true;
+      }
+      final c = (_pick(l, ["correo", "email", "usuario_correo"]) ?? "")
+          .toString()
+          .toLowerCase();
+      if (correo.isNotEmpty && c == correo) return true;
+
+      final n = (_pick(l, [
+                "nombre",
+                "usuario",
+                "nombreUsuario",
+                "usuario_nombre"
+              ]) ??
+              "")
+          .toString()
+          .toLowerCase();
+      return nombre.isNotEmpty && n == nombre;
+    }).toList();
+
+    res.sort((a, b) {
+      final fa = _fechaLog(a), fb = _fechaLog(b);
+      if (fa == null && fb == null) return 0;
+      if (fa == null) return 1;
+      if (fb == null) return -1;
+      return fb.compareTo(fa); // más reciente primero
+    });
+    return res;
+  }
+
+  bool _esLogin(Map<String, dynamic> l) {
+    final t = (_pick(l, ["accion", "evento", "tipo", "descripcion"]) ?? "")
+        .toString()
+        .toLowerCase();
+    return t.contains("login") ||
+        t.contains("inicio") ||
+        t.contains("sesion") ||
+        t.contains("sesión");
+  }
+
+  Widget _seccionSesion(Map<String, dynamic> u) {
+    final misLogs = _logsDeUsuario(u);
+    final logins = misLogs.where(_esLogin).toList();
+    final ultimo = logins.isNotEmpty
+        ? logins.first
+        : (misLogs.isNotEmpty ? misLogs.first : null);
+
+    final ip = ultimo == null
+        ? null
+        : _pick(ultimo, ["ip", "direccion_ip", "ip_address"]);
+    final dispositivo = ultimo == null
+        ? null
+        : _pick(ultimo, ["dispositivo", "device", "user_agent", "userAgent"]);
+
+    // Datos de sesión que ya pueda traer el propio usuario
+    final ultimaConexionUsuario = _pick(u, [
+      "ultimo_login",
+      "ultimoLogin",
+      "ultima_conexion",
+      "ultimaConexion",
+      "last_login",
+      "lastLogin",
+    ]);
+
+    final fechaUltimo = ultimo != null
+        ? _fechaLog(ultimo)
+        : (ultimaConexionUsuario != null
+            ? DateTime.tryParse(ultimaConexionUsuario.toString())
+            : null);
+
+    final reciente = fechaUltimo != null &&
+        DateTime.now().difference(fechaUltimo.toLocal()).inMinutes <
+            sesionTimeout;
+
+    final filas = <Widget>[
+      _detalleFila("Nombre", (u["nombre"] ?? "Sin nombre").toString()),
+      _detalleFila("Correo", (u["correo"] ?? "—").toString()),
+      _detalleFila(
+        "Estado",
+        fechaUltimo == null
+            ? "Sin actividad registrada"
+            : (reciente ? "🟢 Activo recientemente" : "⚪ Inactivo"),
+      ),
+      _detalleFila(
+        "Último acceso",
+        fechaUltimo == null
+            ? "—"
+            : _formatFecha(fechaUltimo.toIso8601String()),
+      ),
+      if (ip != null) _detalleFila("Última IP", ip.toString()),
+      if (dispositivo != null)
+        _detalleFila("Dispositivo", dispositivo.toString()),
+      _detalleFila("Inicios de sesión", "${logins.length}"),
+      _detalleFila("Eventos totales", "${misLogs.length}"),
+    ];
+
+    final recientes = misLogs.take(5).map((l) {
+      final accion = (_pick(l, ["accion", "evento", "tipo", "descripcion"]) ??
+              "Evento")
+          .toString();
+      final f = _fechaLog(l);
+      final ipLog = _pick(l, ["ip", "direccion_ip", "ip_address"]);
+      final sub = [
+        if (f != null) _formatFecha(f.toIso8601String()),
+        if (ipLog != null) ipLog.toString(),
+      ].join(" · ");
+      return _detalleItem(
+        _esLogin(l) ? Icons.login_rounded : Icons.history_rounded,
+        _esLogin(l) ? _success : _textSub,
+        accion,
+        sub,
+      );
+    }).toList();
+
+    return Column(
+      children: [
+        _detalleSeccion(
+          "Sesión",
+          Icons.vpn_key_rounded,
+          _info,
+          filas,
+        ),
+        _detalleSeccion(
+          "Actividad reciente",
+          Icons.history_rounded,
+          _textSub,
+          recientes,
+          vacio: "Sin actividad registrada",
+        ),
+      ],
     );
   }
 
@@ -2496,9 +3080,8 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                     height: 52,
                     child: ElevatedButton.icon(
                       style: AppTheme.primaryButtonStyle,
-                      icon: Icon(usuario == null
-                          ? Icons.person_add
-                          : Icons.save),
+                      icon: Icon(
+                          usuario == null ? Icons.person_add : Icons.save),
                       label: Text(usuario == null
                           ? "Crear usuario"
                           : "Guardar cambios"),
@@ -2559,6 +3142,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     );
   }
 
+  // 👁️ Campo de texto del modal; si es de contraseña muestra el ojito
   Widget _buildModalTextField({
     required TextEditingController controller,
     required String label,
@@ -2566,25 +3150,98 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     TextInputType keyboardType = TextInputType.text,
     bool obscureText = false,
   }) {
-    return TextField(
-      controller: controller,
-      obscureText: obscureText,
-      keyboardType: keyboardType,
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, size: 20, color: _textSub),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _border),
+    bool oculto = obscureText;
+
+    return StatefulBuilder(
+      builder: (context, setLocal) => TextField(
+        controller: controller,
+        obscureText: oculto,
+        keyboardType: keyboardType,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, size: 20, color: _textSub),
+          suffixIcon: obscureText
+              ? IconButton(
+                  tooltip:
+                      oculto ? "Mostrar contraseña" : "Ocultar contraseña",
+                  icon: Icon(
+                    oculto
+                        ? Icons.visibility_rounded
+                        : Icons.visibility_off_rounded,
+                    size: 20,
+                    color: _textSub,
+                  ),
+                  onPressed: () => setLocal(() => oculto = !oculto),
+                )
+              : null,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: _border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: _border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: _primary, width: 2),
+          ),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: _border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: _primary, width: 2),
-        ),
+      ),
+    );
+  }
+}
+
+// =====================================================
+// 🔒 DATO SENSIBLE (oculto por defecto, con ojito)
+// =====================================================
+class _DatoSensible extends StatefulWidget {
+  final String label;
+  final String valor;
+
+  const _DatoSensible({required this.label, required this.valor});
+
+  @override
+  State<_DatoSensible> createState() => _DatoSensibleState();
+}
+
+class _DatoSensibleState extends State<_DatoSensible> {
+  bool _visible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              widget.label,
+              style: const TextStyle(fontSize: 12, color: AppTheme.gray500),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              _visible ? widget.valor : "••••••••",
+              style: const TextStyle(
+                  fontSize: 12.5, fontWeight: FontWeight.w600),
+            ),
+          ),
+          IconButton(
+            tooltip: _visible ? "Ocultar" : "Mostrar",
+            visualDensity: VisualDensity.compact,
+            icon: Icon(
+              _visible
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+              size: 18,
+              color: AppTheme.gray500,
+            ),
+            onPressed: () => setState(() => _visible = !_visible),
+          ),
+        ],
       ),
     );
   }
