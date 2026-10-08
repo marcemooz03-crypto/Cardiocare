@@ -1229,8 +1229,7 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
                                     ],
                                   ),
                                 ),
-                                _popupMenuUsuario(
-                                    u, idUsuario, nombre, rolColor),
+                                _accionesUsuario(u, idUsuario, nombre, rolColor),
                               ],
                             ),
                           ),
@@ -1301,17 +1300,34 @@ class _AdminDetalleScreenState extends State<AdminDetalleScreen>
     );
   }
 
+  // 👁️ + ⋯ : acciones compactas y siempre visibles en celular
+  Widget _accionesUsuario(
+      Map<String, dynamic> u, int? idUsuario, String nombre, Color rolColor) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 36,
+          height: 36,
+          child: IconButton(
+            tooltip: "Ver detalles",
+            padding: EdgeInsets.zero,
+            icon: Icon(Icons.visibility_rounded, size: 20, color: _info),
+            onPressed: () => _mostrarDetalleUsuario(u),
+          ),
+        ),
+        _popupMenuUsuario(u, idUsuario, nombre, rolColor),
+      ],
+    );
+  }
+
   Widget _popupMenuUsuario(
       Map<String, dynamic> u, int? idUsuario, String nombre, Color rolColor) {
     return PopupMenuButton<String>(
-      icon: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: const Color(0xFFF1F3F9),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(Icons.more_horiz_rounded, size: 18, color: _textSub),
-      ),
+      tooltip: "Más opciones",
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(minWidth: 180),
+      icon: const Icon(Icons.more_vert_rounded, size: 22, color: _textSub),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       onSelected: (value) {
         if (idUsuario == null) {
