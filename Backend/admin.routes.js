@@ -430,6 +430,11 @@ router.get('/pacientes', (req, res) => {
 
 // ==============================================
 // 👤 OBTENER PACIENTE POR USUARIO
+// (si el usuario es cuidador, devuelve el paciente que cuida)
+//
+// ✅ CORREGIDO: la respuesta SIEMPRE trae el idPaciente real y el
+// idUsuario del PACIENTE. El id de quien consulta (ej. el cuidador 18)
+// viaja aparte en idUsuarioSolicitante.
 // ==============================================
 router.get('/paciente/usuario/:idUsuario', (req, res) => {
   const { idUsuario } = req.params;
@@ -455,14 +460,23 @@ router.get('/paciente/usuario/:idUsuario', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
 
+    // El usuario ES paciente
     if (results.length > 0) {
-      console.log("✅ Paciente encontrado para usuario:", results[0].nombre);
-      return res.json(results[0]);
+      const p = results[0];
+      console.log("✅ Paciente encontrado para usuario:", p.nombre);
+      return res.json({
+        ...p,
+        idUsuarioPaciente: p.idUsuario,
+        idUsuarioSolicitante: Number(idUsuario),
+        esCuidador: false,
+      });
     }
 
     console.log("ℹ️ Usuario no es paciente, verificando si es cuidador...");
 
     // ✅ Acepta cuidador de la tabla nueva O del campo antiguo paciente.idCuidador
+    // Se elige primero el idPaciente (subconsulta) y luego se arma la fila,
+    // así no se mezclan joins del cuidador con los del paciente.
     const sqlCuidador = `
       SELECT
         p.idPaciente,
@@ -474,10 +488,16 @@ router.get('/paciente/usuario/:idUsuario', (req, res) => {
         e.nombre as eps, e.idEps
       FROM paciente p
       JOIN usuario u ON p.idUsuario = u.idUsuario
-      LEFT JOIN cuidador_paciente cp ON cp.idPaciente = p.idPaciente
       LEFT JOIN eps e ON p.idEps = e.idEps
       ${JOIN_CUIDADOR_PRINCIPAL}
-      WHERE cp.idUsuario = ? OR p.idCuidador = ?
+      WHERE p.idPaciente = (
+        SELECT p3.idPaciente
+        FROM paciente p3
+        LEFT JOIN cuidador_paciente cp3 ON cp3.idPaciente = p3.idPaciente
+        WHERE cp3.idUsuario = ? OR p3.idCuidador = ?
+        ORDER BY p3.idPaciente ASC
+        LIMIT 1
+      )
       LIMIT 1
     `;
 
@@ -496,8 +516,11 @@ router.get('/paciente/usuario/:idUsuario', (req, res) => {
       console.log("✅ Paciente encontrado para cuidador:", c.paciente_nombre);
 
       res.json({
-        idPaciente: c.idPaciente,
-        idUsuario: c.paciente_idUsuario,
+        idPaciente: c.idPaciente,                 // ✅ usar ESTE para todo lo del paciente
+        idUsuario: c.paciente_idUsuario,          // idUsuario del PACIENTE
+        idUsuarioPaciente: c.paciente_idUsuario,
+        idUsuarioSolicitante: Number(idUsuario),  // el cuidador que consultó (ej. 18)
+        esCuidador: true,
         nombre: c.paciente_nombre,
         correo: c.paciente_correo,
         genero: c.genero,
@@ -505,7 +528,7 @@ router.get('/paciente/usuario/:idUsuario', (req, res) => {
         tipoHipertension: c.tipoHipertension,
         eps: c.eps,
         idEps: c.idEps,
-        idCuidador: c.idCuidador,
+        idCuidador: c.idCuidador,                 // cuidador principal
         nombreCuidador: c.nombreCuidador,
         relacionCuidador: c.relacionCuidador,
       });
@@ -515,6 +538,8 @@ router.get('/paciente/usuario/:idUsuario', (req, res) => {
 
 // ==============================================
 // 👤 OBTENER PACIENTE POR CUIDADOR
+// ✅ CORREGIDO: igual que arriba, devuelve ids del paciente
+// y el id del cuidador en idUsuarioSolicitante.
 // ==============================================
 router.get('/paciente/cuidador/:idCuidador', (req, res) => {
   const { idCuidador } = req.params;
@@ -528,10 +553,16 @@ router.get('/paciente/cuidador/:idCuidador', (req, res) => {
       ${COLS_CUIDADOR_PRINCIPAL}
     FROM paciente p
     JOIN usuario u ON p.idUsuario = u.idUsuario
-    LEFT JOIN cuidador_paciente cp ON cp.idPaciente = p.idPaciente
     LEFT JOIN eps e ON p.idEps = e.idEps
     ${JOIN_CUIDADOR_PRINCIPAL}
-    WHERE cp.idUsuario = ? OR p.idCuidador = ?
+    WHERE p.idPaciente = (
+      SELECT p3.idPaciente
+      FROM paciente p3
+      LEFT JOIN cuidador_paciente cp3 ON cp3.idPaciente = p3.idPaciente
+      WHERE cp3.idUsuario = ? OR p3.idCuidador = ?
+      ORDER BY p3.idPaciente ASC
+      LIMIT 1
+    )
     LIMIT 1
   `;
 
@@ -546,7 +577,12 @@ router.get('/paciente/cuidador/:idCuidador', (req, res) => {
       return res.status(404).json({ message: "Paciente no encontrado para este cuidador" });
     }
 
-    res.json(results[0]);
+    res.json({
+      ...results[0],
+      idUsuarioPaciente: results[0].idUsuario,
+      idUsuarioSolicitante: Number(idCuidador),
+      esCuidador: true,
+    });
   });
 });
 

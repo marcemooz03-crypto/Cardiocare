@@ -6,9 +6,15 @@
 // no es cuidador (paciente, médico, admin) no se toca nada.
 //
 // Uso en un router (solo rutas de DATOS del paciente, no de perfil):
-//   const { paramCuidador, bodyCuidador } = require("./cuidador.middleware");
+//   const { paramCuidador, bodyCuidador, queryCuidador } = require("./cuidador.middleware");
 //   router.param("idUsuario", paramCuidador);   // GET /ruta/:idUsuario
-//   router.use(bodyCuidador);                   // POST con idUsuario en el body
+//   router.use(express.json());
+//   router.use(bodyCuidador);                   // POST/PUT con idUsuario en el body
+//   router.use(queryCuidador);                  // GET /ruta?idUsuario=18
+//
+// En todos los casos, si el solicitante es cuidador, queda disponible:
+//   req.cuidadorId      -> id del cuidador (ej. 18)
+//   req.pacienteResuelto -> { idPaciente, idUsuario } del paciente
 //
 // Si el cuidador atiende a varios pacientes: ?idPaciente=X (o body.idPaciente)
 // ---------------------------------------------------------------
@@ -30,9 +36,9 @@ async function pacienteDeCuidador(idSolicitante, idPacienteSel = null) {
 
   const params = [idSolicitante, idSolicitante];
   let extra = "";
-  if (idPacienteSel) {
+  if (idPacienteSel && /^\d+$/.test(String(idPacienteSel))) {
     extra = "AND p.idPaciente = ?";
-    params.push(idPacienteSel);
+    params.push(Number(idPacienteSel));
   }
 
   const r = await q(
@@ -55,15 +61,16 @@ function paramCuidador(req, res, next, value) {
     .then((p) => {
       if (p) {
         req.cuidadorId = Number(value);
+        req.pacienteResuelto = p;
         req.params.idUsuario = String(p.idUsuario);
-        console.log(`👥 Cuidador ${value} → paciente (idUsuario ${p.idUsuario})`);
+        console.log(`👥 Cuidador ${value} → paciente ${p.idPaciente} (idUsuario ${p.idUsuario})`);
       }
       next();
     })
     .catch(next);
 }
 
-// router.use(bodyCuidador): para POST/PUT con idUsuario en el body.
+// router.use(bodyCuidador): POST/PUT con idUsuario en el body.
 // Conserva quién registra: si no viene registradoPor, queda el cuidador.
 function bodyCuidador(req, res, next) {
   const b = req.body;
@@ -74,12 +81,33 @@ function bodyCuidador(req, res, next) {
       if (p) {
         if (!b.registradoPor) b.registradoPor = b.idUsuario;
         req.cuidadorId = Number(b.idUsuario);
+        req.pacienteResuelto = p;
         b.idUsuario = p.idUsuario;
-        console.log(`👥 Cuidador ${req.cuidadorId} registra para paciente (idUsuario ${p.idUsuario})`);
+        b.idPaciente = p.idPaciente; // siempre el id del PACIENTE, nunca el del cuidador
+        console.log(`👥 Cuidador ${req.cuidadorId} registra para paciente ${p.idPaciente} (idUsuario ${p.idUsuario})`);
       }
       next();
     })
     .catch(next);
 }
 
-module.exports = { pacienteDeCuidador, paramCuidador, bodyCuidador };
+// router.use(queryCuidador): GET /ruta?idUsuario=18
+function queryCuidador(req, res, next) {
+  const v = req.query.idUsuario;
+  if (!v || !/^\d+$/.test(String(v))) return next();
+
+  pacienteDeCuidador(v, req.query.idPaciente)
+    .then((p) => {
+      if (p) {
+        req.cuidadorId = Number(v);
+        req.pacienteResuelto = p;
+        req.query.idUsuario = String(p.idUsuario);
+        req.query.idPaciente = String(p.idPaciente);
+        console.log(`👥 Cuidador ${v} consulta paciente ${p.idPaciente} (idUsuario ${p.idUsuario})`);
+      }
+      next();
+    })
+    .catch(next);
+}
+
+module.exports = { pacienteDeCuidador, paramCuidador, bodyCuidador, queryCuidador };

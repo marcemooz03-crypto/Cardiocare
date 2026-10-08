@@ -7,6 +7,10 @@ import '../models/user_session.dart';
 class AuthService {
   static const String baseUrl = "${ApiConfig.baseUrl}/api/auth";
 
+  // Claves extra guardadas dentro de user_session (NO pisan idUsuario)
+  static const String kIdPacienteActivo = 'idPacienteActivo';
+  static const String kIdUsuarioPacienteActivo = 'idUsuarioPacienteActivo';
+
   // =========================
   // 🔐 LOGIN
   // =========================
@@ -31,10 +35,18 @@ class AuthService {
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final userSession = UserSession.fromJson(data);
-        
+
         // ✅ GUARDAR SESIÓN LOCALMENTE
         await _guardarSesion(userSession);
-        
+
+        // ✅ Si es cuidador, resolver y guardar el paciente que cuida
+        if (_esCuidador(data)) {
+          final idCuidador = _toInt(data['idUsuario']);
+          if (idCuidador != null) {
+            await resolverPacienteDeCuidador(idCuidador);
+          }
+        }
+
         return userSession;
       }
 
@@ -43,6 +55,76 @@ class AuthService {
       print("❌ ERROR LOGIN: $e");
       return null;
     }
+  }
+
+  // =========================
+  // 👥 HELPERS CUIDADOR
+  // =========================
+  bool _esCuidador(Map<String, dynamic> data) {
+    final rol = (data['rol'] ?? '').toString().toLowerCase();
+    final idRol = _toInt(data['idRol']);
+    return rol.contains('cuidador') || idRol == 4;
+  }
+
+  int? _toInt(dynamic v) {
+    if (v == null) return null;
+    if (v is int) return v;
+    return int.tryParse(v.toString());
+  }
+
+  /// Busca el paciente que cuida este cuidador y guarda SUS ids en la
+  /// sesión con claves propias. No toca el idUsuario del cuidador.
+  Future<bool> resolverPacienteDeCuidador(int idCuidador) async {
+    try {
+      final res = await http
+          .get(
+            Uri.parse(
+                "${ApiConfig.baseUrl}/api/admin/paciente/usuario/$idCuidador"),
+            headers: {"Content-Type": "application/json"},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      print("👥 RESOLVER PACIENTE CUIDADOR: ${res.statusCode} ${res.body}");
+
+      if (res.statusCode != 200) return false;
+
+      final d = jsonDecode(res.body);
+      if (d is! Map) return false;
+
+      final idPaciente = _toInt(d['idPaciente']);
+      if (idPaciente == null) return false;
+
+      return await updateSessionData({
+        kIdPacienteActivo: idPaciente,
+        kIdUsuarioPacienteActivo: _toInt(d['idUsuario']),
+      });
+    } catch (e) {
+      print("❌ ERROR resolverPacienteDeCuidador: $e");
+      return false;
+    }
+  }
+
+  /// idPaciente con el que se deben consultar/guardar los datos del paciente.
+  /// Cuidador → el de su paciente. Paciente → null (usa su propio flujo).
+  Future<int?> getIdPacienteActivo() async {
+    final user = await getCurrentUser();
+    return _toInt(user?[kIdPacienteActivo]);
+  }
+
+  /// idUsuario del paciente (para rutas que reciben :idUsuario de paciente).
+  Future<int?> getIdUsuarioPacienteActivo() async {
+    final user = await getCurrentUser();
+    return _toInt(user?[kIdUsuarioPacienteActivo]);
+  }
+
+  /// Para rutas que piden el idUsuario "dueño de los datos":
+  /// cuidador → idUsuario del paciente; resto → su propio idUsuario.
+  Future<int?> getIdUsuarioDatos() async {
+    final user = await getCurrentUser();
+    if (user == null) return null;
+    final delPaciente = _toInt(user[kIdUsuarioPacienteActivo]);
+    if (delPaciente != null) return delPaciente;
+    return _toInt(user['idUsuario']);
   }
 
   // =========================
@@ -94,13 +176,13 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final userJson = prefs.getString('user_session');
-      
+
       if (userJson != null) {
         final data = jsonDecode(userJson);
         print('✅ Usuario actual: ${data['nombre']}');
         return data;
       }
-      
+
       print('⚠️ No hay sesión guardada');
       return null;
     } catch (e) {
@@ -137,14 +219,13 @@ class AuthService {
   }
 
   // =========================
-  // 👤 OBTENER ID DEL USUARIO ACTUAL
+  // 👤 OBTENER ID DEL USUARIO ACTUAL (el que inició sesión)
+  // Para un cuidador esto devuelve el id del CUIDADOR.
+  // Para datos del paciente usa getIdPacienteActivo() o getIdUsuarioDatos().
   // =========================
   Future<int?> getIdUsuario() async {
     final user = await getCurrentUser();
-    if (user != null && user['idUsuario'] != null) {
-      return user['idUsuario'] as int;
-    }
-    return null;
+    return _toInt(user?['idUsuario']);
   }
 
   // =========================
@@ -171,22 +252,10 @@ class AuthService {
   // =========================
   Future<bool> validateToken(String token) async {
     try {
-      // Opción 1: Verificar localmente
       final user = await getCurrentUser();
       if (user != null && user['token'] == token) {
         return true;
       }
-      
-      // Opción 2: Validar con el servidor (descomentar si tienes endpoint)
-      // final res = await http.get(
-      //   Uri.parse("$baseUrl/validate"),
-      //   headers: {
-      //     "Authorization": "Bearer $token",
-      //     "Content-Type": "application/json",
-      //   },
-      // );
-      // return res.statusCode == 200;
-      
       return false;
     } catch (e) {
       print('❌ Error validateToken: $e');
@@ -240,12 +309,13 @@ class AuthService {
 
   // =========================
   // 📊 ACTUALIZAR DATOS DEL USUARIO EN SESIÓN
+  // IMPORTANTE: nunca le pases la respuesta completa de /paciente/usuario/...
+  // porque trae idUsuario/nombre del paciente y pisaría los del cuidador.
   // =========================
   Future<bool> updateSessionData(Map<String, dynamic> newData) async {
     try {
       final currentUser = await getCurrentUser();
       if (currentUser != null) {
-        // Actualizar solo los campos que vienen en newData
         final updatedUser = {...currentUser, ...newData};
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user_session', jsonEncode(updatedUser));
@@ -339,9 +409,8 @@ class AuthService {
       );
 
       print("👤 ACTUALIZAR PERFIL: ${res.body}");
-      
+
       if (res.statusCode == 200) {
-        // Actualizar sesión local con los nuevos datos
         await updateSessionData(data);
         return true;
       }
@@ -374,9 +443,8 @@ class AuthService {
       );
 
       print("📧 CAMBIAR EMAIL: ${res.body}");
-      
+
       if (res.statusCode == 200) {
-        // Actualizar email en sesión local
         await updateSessionData({"correo": nuevoEmail});
         return true;
       }
