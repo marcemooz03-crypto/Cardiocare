@@ -44,46 +44,51 @@ exports.login = (req, res) => {
       { expiresIn: "1d" }
     );
 
+        // ============================
+    // 👤 CASO CUIDADOR
+    // Lee de cuidador_paciente (y de paciente.idCuidador como respaldo)
     // ============================
-    // 👤 CASO CUIDADOR (CORREGIDO)
-    // ============================
-    if (user.nombreRol === "cuidador") {
+    if (String(user.nombreRol).toLowerCase() === "cuidador") {
       db.query(
-        `SELECT p.idPaciente, p.idUsuario 
-         FROM paciente p 
-         WHERE p.idCuidador = ? 
-         LIMIT 1`,
-        [user.idUsuario],
+        `SELECT DISTINCT
+            p.idPaciente,
+            p.idUsuario,
+            u.nombre,
+            cp.relacion
+         FROM paciente p
+         JOIN usuario u ON u.idUsuario = p.idUsuario
+         LEFT JOIN cuidador_paciente cp
+                ON cp.idPaciente = p.idPaciente AND cp.idUsuario = ?
+         WHERE cp.idUsuario = ? OR p.idCuidador = ?
+         ORDER BY p.idPaciente ASC`,
+        [user.idUsuario, user.idUsuario, user.idUsuario],
         (err2, rows) => {
           if (err2) {
             console.error('❌ ERROR buscando paciente para cuidador:', err2);
             return res.status(500).json({ msg: "Error al obtener datos del paciente" });
           }
-          
-          if (rows.length === 0) {
-            // Cuidador sin paciente asignado
-            return res.json({
-              token,
-              idUsuario: user.idUsuario,
-              rol: user.nombreRol,
-              nombre: user.nombre,
-              idPaciente: null,
-              idUsuarioPaciente: null,
-            });
-          }
 
-          // Cuidador con paciente asignado
+          const principal = rows[0] || null;
+
           return res.json({
             token,
             idUsuario: user.idUsuario,
             rol: user.nombreRol,
             nombre: user.nombre,
-            idPaciente: rows[0].idPaciente,
-            idUsuarioPaciente: rows[0].idUsuario,
+            idPaciente: principal ? principal.idPaciente : null,
+            idUsuarioPaciente: principal ? principal.idUsuario : null,
+            nombrePaciente: principal ? principal.nombre : null,
+            // Por si un cuidador atiende a varios pacientes
+            pacientes: rows.map(r => ({
+              idPaciente: r.idPaciente,
+              idUsuario: r.idUsuario,
+              nombre: r.nombre,
+              relacion: r.relacion
+            }))
           });
         }
       );
-      return; // ✅ Salir para no ejecutar el resto
+      return;
     }
 
     // ============================
