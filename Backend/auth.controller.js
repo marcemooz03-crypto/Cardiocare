@@ -27,7 +27,7 @@ exports.login = (req, res) => {
       console.error('❌ ERROR login:', err);
       return res.status(500).json({ msg: "Error servidor" });
     }
-    
+
     if (results.length === 0) {
       return res.status(404).json({ msg: "Usuario no existe" });
     }
@@ -38,15 +38,19 @@ exports.login = (req, res) => {
       return res.status(401).json({ msg: "Contraseña incorrecta" });
     }
 
+    // El token SIEMPRE lleva el id real de quien inició sesión
     const token = jwt.sign(
       { id: user.idUsuario, rol: user.nombreRol },
       SECRET,
       { expiresIn: "1d" }
     );
 
-        // ============================
+    // ============================
     // 👤 CASO CUIDADOR
-    // Lee de cuidador_paciente (y de paciente.idCuidador como respaldo)
+    // Lee de cuidador_paciente (y de paciente.idCuidador como respaldo).
+    // ✅ La app recibe como `idUsuario` el del PACIENTE, así todo lo que
+    //    use ese id queda apuntando al paciente. El id real del cuidador
+    //    viaja en `idUsuarioReal` (solo para perfil / contraseña / correo).
     // ============================
     if (String(user.nombreRol).toLowerCase() === "cuidador") {
       db.query(
@@ -72,9 +76,12 @@ exports.login = (req, res) => {
 
           return res.json({
             token,
-            idUsuario: user.idUsuario,
+            // Con paciente: idUsuario = el del paciente. Sin paciente: el propio.
+            idUsuario: principal ? principal.idUsuario : user.idUsuario,
+            idUsuarioReal: user.idUsuario,          // el id del cuidador (ej. 18)
+            esCuidador: true,
             rol: user.nombreRol,
-            nombre: user.nombre,
+            nombre: user.nombre,                    // nombre del cuidador
             idPaciente: principal ? principal.idPaciente : null,
             idUsuarioPaciente: principal ? principal.idUsuario : null,
             nombrePaciente: principal ? principal.nombre : null,
@@ -92,7 +99,7 @@ exports.login = (req, res) => {
     }
 
     // ============================
-    // 👤 CASO ADMIN / MÉDICO
+    // 👤 CASO ADMIN / MÉDICO / PACIENTE
     // ============================
     return res.json({
       token,
@@ -175,7 +182,7 @@ exports.register = async (req, res) => {
         (idUsuario, fechaNacimiento, genero, tipoHipertension, idEps, idCuidador)
         VALUES (?, ?, ?, ?, ?, ?)
       `;
-      
+
       const pacienteResult = await new Promise((resolve, reject) => {
         db.query(sqlPaciente,
           [idUsuario, fechaNacimiento || null, genero || null, tipoHipertension || null, idEps || null, idCuidador || null],
@@ -186,8 +193,8 @@ exports.register = async (req, res) => {
         );
       });
 
-      return res.json({ 
-        msg: "Paciente registrado correctamente", 
+      return res.json({
+        msg: "Paciente registrado correctamente",
         idUsuario,
         idPaciente: pacienteResult.insertId
       });
@@ -202,7 +209,7 @@ exports.register = async (req, res) => {
         (idUsuario, especialidad, telefono, idEps)
         VALUES (?, ?, ?, ?)
       `;
-      
+
       await new Promise((resolve, reject) => {
         db.query(sqlMedico,
           [idUsuario, especialidad || null, telefono || null, idEps || null],
@@ -213,9 +220,9 @@ exports.register = async (req, res) => {
         );
       });
 
-      return res.json({ 
-        msg: "Médico registrado correctamente", 
-        idUsuario 
+      return res.json({
+        msg: "Médico registrado correctamente",
+        idUsuario
       });
     }
 
@@ -223,8 +230,8 @@ exports.register = async (req, res) => {
     // 👤 CUIDADOR (idRol = 4)
     // ============================
     if (idRol == 4) {
-      return res.json({ 
-        msg: "Cuidador registrado correctamente", 
+      return res.json({
+        msg: "Cuidador registrado correctamente",
         idUsuario,
         idCuidador: idUsuario
       });
@@ -233,27 +240,29 @@ exports.register = async (req, res) => {
     // ============================
     // 👑 ADMIN (idRol = 1)
     // ============================
-    return res.json({ 
-      msg: "Administrador registrado correctamente", 
-      idUsuario 
+    return res.json({
+      msg: "Administrador registrado correctamente",
+      idUsuario
     });
 
   } catch (error) {
     console.error('❌ ERROR register:', error);
-    
+
     if (error.code === "ER_DUP_ENTRY") {
       return res.status(409).json({ msg: "El correo ya está registrado" });
     }
-    
-    return res.status(500).json({ 
+
+    return res.status(500).json({
       msg: "Error al registrar el usuario",
-      error: error.message 
+      error: error.message
     });
   }
 };
 
 // ============================
 // 🔑 CAMBIAR CONTRASEÑA
+// ⚠️ La app debe enviar `idUsuarioReal` (el del cuidador), no el idUsuario
+//    que recibe en el login, porque ese es el del paciente.
 // ============================
 exports.cambiarPassword = async (req, res) => {
   const { idUsuario, actual, nueva } = req.body;
@@ -270,7 +279,7 @@ exports.cambiarPassword = async (req, res) => {
         console.error('❌ ERROR cambiarPassword:', err);
         return res.status(500).json({ msg: "Error servidor" });
       }
-      
+
       if (results.length === 0) {
         return res.status(404).json({ msg: "Usuario no existe" });
       }
@@ -284,8 +293,8 @@ exports.cambiarPassword = async (req, res) => {
       const hash = await bcrypt.hash(nueva, 10);
 
       const updateSql = `
-        UPDATE usuario 
-        SET contrasena = ? 
+        UPDATE usuario
+        SET contrasena = ?
         WHERE idUsuario = ?
       `;
 
@@ -294,9 +303,9 @@ exports.cambiarPassword = async (req, res) => {
           console.error('❌ ERROR actualizando contraseña:', err2);
           return res.status(500).json({ msg: "Error actualizando contraseña" });
         }
-        return res.json({ 
-          ok: true, 
-          msg: "Contraseña actualizada correctamente" 
+        return res.json({
+          ok: true,
+          msg: "Contraseña actualizada correctamente"
         });
       });
     });
@@ -319,14 +328,14 @@ exports.verificarToken = (req, res) => {
 
   try {
     const decoded = jwt.verify(token, SECRET);
-    return res.json({ 
-      ok: true, 
-      usuario: decoded 
+    return res.json({
+      ok: true,
+      usuario: decoded
     });
   } catch (error) {
-    return res.status(401).json({ 
-      ok: false, 
-      msg: "Token inválido o expirado" 
+    return res.status(401).json({
+      ok: false,
+      msg: "Token inválido o expirado"
     });
   }
 };

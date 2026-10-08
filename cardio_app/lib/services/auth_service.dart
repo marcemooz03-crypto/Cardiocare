@@ -39,12 +39,18 @@ class AuthService {
         // ✅ GUARDAR SESIÓN LOCALMENTE
         await _guardarSesion(userSession);
 
-        // ✅ Si es cuidador, resolver y guardar el paciente que cuida
-        if (_esCuidador(data)) {
-          final idCuidador = _toInt(data['idUsuario']);
-          if (idCuidador != null) {
-            await resolverPacienteDeCuidador(idCuidador);
-          }
+        // ✅ Cuidador: el backend ya manda idUsuario = el del PACIENTE y
+        // idUsuarioReal = el del cuidador. UserSession.toJson() puede descartar
+        // campos que no conoce, por eso se guardan aparte.
+        if (data['idUsuarioReal'] != null) {
+          await updateSessionData({
+            'idUsuarioReal': _toInt(data['idUsuarioReal']),
+            'idPaciente': _toInt(data['idPaciente']),
+            kIdPacienteActivo: _toInt(data['idPaciente']),
+            kIdUsuarioPacienteActivo: _toInt(data['idUsuarioPaciente']),
+            'nombrePaciente': data['nombrePaciente'],
+            'pacientes': data['pacientes'],
+          });
         }
 
         return userSession;
@@ -226,6 +232,16 @@ class AuthService {
   Future<int?> getIdUsuario() async {
     final user = await getCurrentUser();
     return _toInt(user?['idUsuario']);
+  }
+
+  // =========================
+  // 👤 ID REAL DE LA CUENTA (para perfil, contraseña y correo)
+  // Cuidador → su propio id (ej. 18). Resto → su idUsuario normal.
+  // Para el cuidador, getIdUsuario() devuelve el del PACIENTE.
+  // =========================
+  Future<int?> getIdUsuarioReal() async {
+    final user = await getCurrentUser();
+    return _toInt(user?['idUsuarioReal']) ?? _toInt(user?['idUsuario']);
   }
 
   // =========================
