@@ -5,12 +5,76 @@ function query(sql, params = []) {
 }
 
 // ==========================================
+// 🔧 GENERACIÓN DE TOMAS DE HOY (idempotente)
+// ------------------------------------------
+// Crea la toma de HOY para cada recordatorio ACTIVO que todavía no la tenga.
+// - Con idPaciente: solo para ese paciente.
+// - Sin idPaciente: para todos (lo usa el scheduler diario).
+// Se puede llamar las veces que sea: nunca duplica (NOT EXISTS).
+//
+// OPCIONAL pero recomendado, para blindar contra duplicados por
+// peticiones simultáneas (ejecutar una vez en MySQL):
+//   ALTER TABLE tomamedicamento
+//     ADD UNIQUE KEY uq_toma_dia (idRecordatorio, idTratamientoMedicamento, fechaProgramada);
+// ==========================================
+async function generarTomasHoy(idPaciente = null) {
+  const params = [];
+  let filtroPaciente = "";
+  if (idPaciente !== null) {
+    filtroPaciente = "AND t.idPaciente = ?";
+    params.push(Number(idPaciente));
+  }
+
+  const [result] = await query(
+    `
+    INSERT IGNORE INTO tomamedicamento (
+      idRecordatorio,
+      idTratamientoMedicamento,
+      fechaProgramada,
+      estado
+    )
+    SELECT
+      r.idRecordatorio,
+      tmed.id,
+      CONCAT(CURDATE(), ' ', r.hora),
+      'Pendiente'
+    FROM recordatorio r
+    INNER JOIN tratamiento t ON t.idTratamiento = r.idTratamiento
+    INNER JOIN tratamientomedicamento tmed ON tmed.idTratamiento = t.idTratamiento
+    WHERE r.activo = 1
+      ${filtroPaciente}
+      AND NOT EXISTS (
+        SELECT 1 FROM tomamedicamento x
+        WHERE x.idRecordatorio = r.idRecordatorio
+          AND x.idTratamientoMedicamento = tmed.id
+          AND DATE(x.fechaProgramada) = CURDATE()
+      )
+    `,
+    params
+  );
+
+  return result.affectedRows;
+}
+
+// Genera sin romper la consulta si algo falla
+async function asegurarTomasHoy(idPaciente) {
+  try {
+    const n = await generarTomasHoy(idPaciente);
+    if (n > 0) console.log(`🟨 Tomas de hoy generadas automáticamente (paciente ${idPaciente}): ${n}`);
+  } catch (e) {
+    console.error("⚠️ No se pudieron generar las tomas de hoy:", e.message);
+  }
+}
+
+// ==========================================
 // ✅ GET /api/tomas/paciente/:idPaciente
 // ==========================================
 async function listarHoy(req, res) {
   try {
     const { idPaciente } = req.params;
     console.log("🟦 ID PACIENTE:", idPaciente);
+
+    await asegurarTomasHoy(idPaciente);
 
     const [rows] = await query(
       `
@@ -54,6 +118,8 @@ async function listarTodas(req, res) {
     const { idPaciente } = req.params;
     console.log("🟦 ID PACIENTE (TODAS):", idPaciente);
 
+    await asegurarTomasHoy(idPaciente);
+
     const [rows] = await query(
       `
       SELECT 
@@ -94,6 +160,8 @@ async function listarPendientesHoy(req, res) {
   try {
     const { idPaciente } = req.params;
     console.log("🟦 ID PACIENTE (PENDIENTES):", idPaciente);
+
+    await asegurarTomasHoy(idPaciente);
 
     const [rows] = await query(
       `
@@ -138,13 +206,15 @@ async function contarTomasPorEstado(req, res) {
     const { idPaciente } = req.params;
     console.log("🟦 CONTANDO TOMAS PARA:", idPaciente);
 
+    await asegurarTomasHoy(idPaciente);
+
     const [rows] = await query(
       `
       SELECT 
         COUNT(*) AS total,
-        SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END) AS pendientes,
-        SUM(CASE WHEN estado = 'Tomado' THEN 1 ELSE 0 END) AS tomados,
-        SUM(CASE WHEN estado = 'Omitido' THEN 1 ELSE 0 END) AS omitidos
+        COALESCE(SUM(CASE WHEN estado = 'Pendiente' THEN 1 ELSE 0 END), 0) AS pendientes,
+        COALESCE(SUM(CASE WHEN estado = 'Tomado' THEN 1 ELSE 0 END), 0) AS tomados,
+        COALESCE(SUM(CASE WHEN estado = 'Omitido' THEN 1 ELSE 0 END), 0) AS omitidos
       FROM tomamedicamento tm
       INNER JOIN recordatorio r ON r.idRecordatorio = tm.idRecordatorio
       INNER JOIN tratamiento t ON t.idTratamiento = r.idTratamiento
@@ -168,58 +238,14 @@ async function contarTomasPorEstado(req, res) {
 
 // ==========================================
 // ✅ POST /api/tomas/generar/:idPaciente
+// (se mantiene por compatibilidad con la app)
 // ==========================================
 async function generarHoy(req, res) {
   try {
     const { idPaciente } = req.params;
     console.log("🟦 GENERANDO TOMAS PARA:", idPaciente);
 
-    const [medicamentos] = await query(
-      `
-      SELECT 
-        r.idRecordatorio,
-        r.hora,
-        tmed.id AS idTratamientoMedicamento
-      FROM recordatorio r
-      INNER JOIN tratamiento t ON t.idTratamiento = r.idTratamiento
-      INNER JOIN tratamientomedicamento tmed ON tmed.idTratamiento = t.idTratamiento
-      WHERE t.idPaciente = ?
-        AND r.activo = 1
-      `,
-      [Number(idPaciente)]
-    );
-
-    console.log("🟨 MEDICAMENTOS ENCONTRADOS:", medicamentos.length);
-
-    let creados = 0;
-
-    for (const row of medicamentos) {
-      const [existe] = await query(
-        `
-        SELECT idToma FROM tomamedicamento
-        WHERE idRecordatorio = ?
-          AND idTratamientoMedicamento = ?
-          AND DATE(fechaProgramada) = CURDATE()
-        `,
-        [row.idRecordatorio, row.idTratamientoMedicamento]
-      );
-
-      if (existe.length === 0) {
-        await query(
-          `
-          INSERT INTO tomamedicamento (
-            idRecordatorio,
-            idTratamientoMedicamento,
-            fechaProgramada,
-            estado
-          )
-          VALUES (?, ?, CONCAT(CURDATE(), ' ', ?), 'Pendiente')
-          `,
-          [row.idRecordatorio, row.idTratamientoMedicamento, row.hora]
-        );
-        creados++;
-      }
-    }
+    const creados = await generarTomasHoy(idPaciente);
 
     console.log("✅ TOMAS CREADAS:", creados);
     return res.status(200).json({
@@ -267,6 +293,8 @@ async function actualizarEstado(req, res) {
 
 // ==========================================
 // ✅ DELETE /api/tomas/:idToma
+// ⚠️ Si la toma es de HOY y su recordatorio sigue activo, se vuelve a
+//    generar en la próxima consulta. Para "saltarla" usa estado 'Omitido'.
 // ==========================================
 async function eliminarToma(req, res) {
   try {
@@ -359,6 +387,8 @@ async function obtenerHorariosHoy(req, res) {
     const { idPaciente } = req.params;
     console.log("🟦 HORARIOS PARA:", idPaciente);
 
+    await asegurarTomasHoy(idPaciente);
+
     const [rows] = await query(
       `
       SELECT DISTINCT r.hora
@@ -389,6 +419,8 @@ async function verificarTomasHoy(req, res) {
   try {
     const { idPaciente } = req.params;
     console.log("🟦 VERIFICANDO TOMAS PARA:", idPaciente);
+
+    await asegurarTomasHoy(idPaciente);
 
     const [rows] = await query(
       `
@@ -423,4 +455,6 @@ module.exports = {
   eliminarTomasHoy,
   obtenerHorariosHoy,
   verificarTomasHoy,
+  // Para el scheduler
+  generarTomasHoy,
 };
