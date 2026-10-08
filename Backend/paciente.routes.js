@@ -1,6 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const db = require("./db");
+const { paramCuidador, bodyCuidador } = require("./cuidador.middleware");
+
+// 👥 El cuidador ve lo mismo que su paciente:
+// si llega el idUsuario de un cuidador, se cambia por el del paciente que cuida
+router.param("idUsuario", paramCuidador);
+router.use(bodyCuidador);
 
 
 // ===============================
