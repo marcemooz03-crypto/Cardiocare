@@ -49,13 +49,14 @@ function resolverPaciente({ idUsuario, idPaciente }, callback) {
 
 /**
  * Verifica que el síntoma exista Y pertenezca a ese paciente
- * (sintoma.idPaciente -> paciente.idPaciente)
+ * (sintoma.idUsuario -> paciente.idUsuario)
  */
 function sintomaPerteneceAPaciente(idSintoma, idPaciente, callback) {
   const sql = `
-    SELECT idSintoma
-    FROM sintoma
-    WHERE idSintoma = ? AND idPaciente = ?
+    SELECT s.idSintoma
+    FROM sintoma s
+    JOIN paciente p ON p.idUsuario = s.idUsuario
+    WHERE s.idSintoma = ? AND p.idPaciente = ?
   `;
   db.query(sql, [idSintoma, idPaciente], (err, result) => {
     if (err) return callback(err, false);
@@ -466,11 +467,11 @@ exports.obtenerSintomas = (req, res) => {
     const sql = `
       SELECT idSintoma, titulo, descripcion
       FROM sintoma
-      WHERE idPaciente = ?
+      WHERE idUsuario = ?
       ORDER BY fecha DESC
     `;
 
-    db.query(sql, [paciente.idPaciente], (err, result) => {
+    db.query(sql, [paciente.idUsuario], (err, result) => {
       if (err) {
         console.log("❌ ERROR obtenerSintomas:", err);
         return res.status(500).json({ ok: false, error: err.sqlMessage || err.message });

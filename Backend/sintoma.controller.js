@@ -63,7 +63,7 @@ function crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad, nombrePa
 }
 
 // ============================
-// ➤ CREAR SÍNTOMA (guarda idPaciente real)
+// ➤ CREAR SÍNTOMA
 // ============================
 exports.crearSintoma = (req, res) => {
   const {
@@ -120,13 +120,13 @@ exports.crearSintoma = (req, res) => {
       : nombreUsuario;
     const prio = prioridad || 'MEDIA';
 
-    // 2️⃣ Insertar síntoma con idUsuario + idPaciente
+    // 2️⃣ Insertar síntoma (se enlaza al paciente por idUsuario)
     const sqlSintoma = `
-      INSERT INTO sintoma (idUsuario, idPaciente, titulo, descripcion, prioridad, fecha)
-      VALUES (?, ?, ?, ?, ?, NOW())
+      INSERT INTO sintoma (idUsuario, titulo, descripcion, prioridad, fecha)
+      VALUES (?, ?, ?, ?, NOW())
     `;
 
-    db.query(sqlSintoma, [idUsuario, idPaciente, titulo, descripcion, prio], (err2, result) => {
+    db.query(sqlSintoma, [idUsuario, titulo, descripcion, prio], (err2, result) => {
       if (err2) {
         console.error('❌ Error creando síntoma:', err2);
         return res.status(500).json({
@@ -150,17 +150,16 @@ exports.crearSintoma = (req, res) => {
 };
 
 // ============================
-// ➤ OBTENER SÍNTOMAS POR USUARIO (filtrados por su idPaciente)
+// ➤ OBTENER SÍNTOMAS POR USUARIO 
 // ============================
 exports.obtenerPorUsuario = (req, res) => {
   const { idUsuario } = req.params;
 
   const sql = `
-    SELECT s.*
-    FROM sintoma s
-    JOIN paciente p ON p.idPaciente = s.idPaciente
-    WHERE p.idUsuario = ?
-    ORDER BY s.fecha DESC
+    SELECT *
+    FROM sintoma
+    WHERE idUsuario = ?
+    ORDER BY fecha DESC
   `;
 
   db.query(sql, [idUsuario], (err, result) => {
@@ -182,10 +181,11 @@ exports.obtenerPorPaciente = (req, res) => {
   const { idPaciente } = req.params;
 
   const sql = `
-    SELECT *
-    FROM sintoma
-    WHERE idPaciente = ?
-    ORDER BY fecha DESC
+    SELECT s.*
+    FROM sintoma s
+    JOIN paciente p ON p.idUsuario = s.idUsuario
+    WHERE p.idPaciente = ?
+    ORDER BY s.fecha DESC
   `;
 
   db.query(sql, [idPaciente], (err, result) => {
