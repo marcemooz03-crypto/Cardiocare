@@ -35,7 +35,7 @@ function crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad, nombrePa
     // ✅ CREAR ALERTA PARA CADA MÉDICO
     for (const medico of medicos) {
       const descripcionCompleta = `${titulo}: ${descripcion}`;
-      
+
       const sql = `
         INSERT INTO alerta (
           idPaciente,
@@ -63,13 +63,13 @@ function crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad, nombrePa
 }
 
 // ============================
-// ➤ CREAR SÍNTOMA
+// ➤ CREAR SÍNTOMA (guarda idPaciente real)
 // ============================
 exports.crearSintoma = (req, res) => {
-  const { 
-    idUsuario, 
-    titulo, 
-    descripcion, 
+  const {
+    idUsuario,
+    titulo,
+    descripcion,
     prioridad,
     nombrePaciente
   } = req.body;
@@ -82,59 +82,66 @@ exports.crearSintoma = (req, res) => {
   console.log('  nombrePaciente:', nombrePaciente);
 
   if (!idUsuario || !titulo || !descripcion) {
-    return res.status(400).json({ 
-      ok: false, 
-      message: "Faltan datos" 
+    return res.status(400).json({
+      ok: false,
+      message: "Faltan datos"
     });
   }
 
-  const sqlSintoma = `
-    INSERT INTO sintoma (idUsuario, titulo, descripcion, prioridad, fecha)
-    VALUES (?, ?, ?, ?, NOW())
+  // 1️⃣ Resolver el paciente real primero
+  const sqlPaciente = `
+    SELECT p.idPaciente, u.nombre AS nombre_usuario
+    FROM paciente p
+    JOIN usuario u ON p.idUsuario = u.idUsuario
+    WHERE p.idUsuario = ?
   `;
 
-  db.query(sqlSintoma, [idUsuario, titulo, descripcion, prioridad || 'MEDIA'], (err, result) => {
+  db.query(sqlPaciente, [idUsuario], (err, rows) => {
     if (err) {
-      console.error('❌ Error creando síntoma:', err);
-      return res.status(500).json({ 
-        ok: false, 
-        error: err.sqlMessage || err.message 
+      console.error('❌ Error buscando paciente:', err);
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
       });
     }
 
-    const idSintoma = result.insertId;
+    if (rows.length === 0) {
+      console.log(`⚠️ No se encontró paciente para idUsuario=${idUsuario}`);
+      return res.status(400).json({
+        ok: false,
+        message: `El usuario ${idUsuario} no está registrado como paciente`
+      });
+    }
 
-    // ✅ OBTENER idPaciente
-    const sqlPaciente = `
-      SELECT p.idPaciente, u.nombre as nombre_usuario
-      FROM paciente p
-      JOIN usuario u ON p.idUsuario = u.idUsuario
-      WHERE p.idUsuario = ?
+    const idPaciente = rows[0].idPaciente;
+    const nombreUsuario = rows[0].nombre_usuario || 'Paciente';
+    const nombreFinal = nombrePaciente && nombrePaciente.trim() !== ''
+      ? nombrePaciente
+      : nombreUsuario;
+    const prio = prioridad || 'MEDIA';
+
+    // 2️⃣ Insertar síntoma con idUsuario + idPaciente
+    const sqlSintoma = `
+      INSERT INTO sintoma (idUsuario, idPaciente, titulo, descripcion, prioridad, fecha)
+      VALUES (?, ?, ?, ?, ?, NOW())
     `;
 
-    db.query(sqlPaciente, [idUsuario], (err2, rows) => {
-      if (err2 || rows.length === 0) {
-        console.log(`⚠️ No se encontró paciente para idUsuario=${idUsuario}`);
-        return res.status(200).json({
-          ok: true,
-          message: 'Síntoma registrado (sin alerta)',
-          idSintoma,
+    db.query(sqlSintoma, [idUsuario, idPaciente, titulo, descripcion, prio], (err2, result) => {
+      if (err2) {
+        console.error('❌ Error creando síntoma:', err2);
+        return res.status(500).json({
+          ok: false,
+          error: err2.sqlMessage || err2.message
         });
       }
 
-      const idPaciente = rows[0].idPaciente;
-      const nombreUsuario = rows[0].nombre_usuario || 'Paciente';
-      const nombreFinal = nombrePaciente && nombrePaciente.trim() !== '' 
-        ? nombrePaciente 
-        : nombreUsuario;
-
-      // ✅ CREAR ALERTA CON MÉDICOS ASOCIADOS
-      crearAlertaSintoma(idPaciente, titulo, descripcion, prioridad || 'MEDIA', nombreFinal);
+      // 3️⃣ Alerta a los médicos asociados al paciente
+      crearAlertaSintoma(idPaciente, titulo, descripcion, prio, nombreFinal);
 
       res.status(201).json({
         ok: true,
         message: 'Síntoma registrado + alerta generada',
-        idSintoma,
+        idSintoma: result.insertId,
         idPaciente,
         nombrePaciente: nombreFinal
       });
@@ -143,23 +150,50 @@ exports.crearSintoma = (req, res) => {
 };
 
 // ============================
-// ➤ OBTENER SÍNTOMAS POR USUARIO
+// ➤ OBTENER SÍNTOMAS POR USUARIO (filtrados por su idPaciente)
 // ============================
 exports.obtenerPorUsuario = (req, res) => {
   const { idUsuario } = req.params;
 
   const sql = `
-    SELECT * FROM sintoma 
-    WHERE idUsuario = ? 
-    ORDER BY fecha DESC
+    SELECT s.*
+    FROM sintoma s
+    JOIN paciente p ON p.idPaciente = s.idPaciente
+    WHERE p.idUsuario = ?
+    ORDER BY s.fecha DESC
   `;
 
   db.query(sql, [idUsuario], (err, result) => {
     if (err) {
       console.error('❌ ERROR obtenerPorUsuario:', err);
-      return res.status(500).json({ 
-        ok: false, 
-        error: err.sqlMessage || err.message 
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
+      });
+    }
+    res.json(result);
+  });
+};
+
+// ============================
+// ➤ OBTENER SÍNTOMAS POR idPaciente
+// ============================
+exports.obtenerPorPaciente = (req, res) => {
+  const { idPaciente } = req.params;
+
+  const sql = `
+    SELECT *
+    FROM sintoma
+    WHERE idPaciente = ?
+    ORDER BY fecha DESC
+  `;
+
+  db.query(sql, [idPaciente], (err, result) => {
+    if (err) {
+      console.error('❌ ERROR obtenerPorPaciente:', err);
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
       });
     }
     res.json(result);
@@ -177,14 +211,14 @@ exports.eliminarSintoma = (req, res) => {
   db.query(sql, [idSintoma], (err) => {
     if (err) {
       console.error('❌ ERROR eliminarSintoma:', err);
-      return res.status(500).json({ 
-        ok: false, 
-        error: err.sqlMessage || err.message 
+      return res.status(500).json({
+        ok: false,
+        error: err.sqlMessage || err.message
       });
     }
-    res.json({ 
-      ok: true, 
-      message: 'Síntoma eliminado' 
+    res.json({
+      ok: true,
+      message: 'Síntoma eliminado'
     });
   });
 };

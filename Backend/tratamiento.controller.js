@@ -104,7 +104,7 @@ function listarPorIdPaciente(res, idPaciente, etiquetaLog) {
 // ======================================================
 exports.crearTratamiento = (req, res) => {
   const {
-    idUsuario,        // 👈 preferido (como en signos): se convierte a idPaciente
+    idUsuario,        // 👈 preferido: se convierte a idPaciente
     idPaciente,       // 👈 alternativa: idPaciente real
     idSintoma,        // 👈 puede venir null / undefined
     fechaInicio,
@@ -146,8 +146,7 @@ exports.crearTratamiento = (req, res) => {
     const insertar = () => {
       console.log(
         `🔎 TRATAMIENTO ids => body.idUsuario: ${idUsuario}, body.idPaciente: ${idPaciente} | ` +
-        `paciente.idPaciente: ${paciente.idPaciente}, paciente.idUsuario: ${paciente.idUsuario} | ` +
-        `se inserta en tratamiento.idPaciente: ${paciente.idPaciente}`
+        `paciente.idPaciente: ${paciente.idPaciente}, paciente.idUsuario: ${paciente.idUsuario}`
       );
       const sql = `
         INSERT INTO tratamiento
@@ -168,8 +167,8 @@ exports.crearTratamiento = (req, res) => {
           fechaInicio || null,
           fechaFin || null,
           descripcion,
-          idSintoma || null,      // 👈 null si no se seleccionó síntoma
-          paciente.idPaciente,    // 👈 idPaciente REAL (paciente.idPaciente)
+          idSintoma || null,
+          paciente.idPaciente,
           estado || 'Activo'
         ],
         (err, result) => {
@@ -286,7 +285,7 @@ exports.obtenerPorPaciente = (req, res) => {
 };
 
 // ======================================================
-// 👤 OBTENER POR USUARIO (idUsuario -> idPaciente, como en signos)
+// 👤 OBTENER POR USUARIO (idUsuario -> idPaciente)
 // ======================================================
 exports.obtenerPorUsuario = (req, res) => {
   const { idUsuario } = req.params;
@@ -430,38 +429,21 @@ exports.obtenerMedicamentos = (req, res) => {
 };
 
 // ======================================================
-// 🩺 OBTENER SÍNTOMAS (para el dropdown) - FILTRADOS POR PACIENTE
-// Acepta: /sintomas/usuario/:idUsuario  |  ?idUsuario=  |  ?idPaciente=
+// 🩺 OBTENER SÍNTOMAS (para el dropdown) - SOLO DEL PACIENTE
+// Acepta: /sintomas/usuario/:idUsuario | /sintomas/paciente/:idPaciente
+//         ?idUsuario= | ?idPaciente=
+// Ya NO devuelve todos los síntomas: siempre exige paciente.
 // ======================================================
 exports.obtenerSintomas = (req, res) => {
   const idUsuario = req.params.idUsuario || req.query.idUsuario;
-  const idPaciente = req.query.idPaciente;
+  const idPaciente = req.params.idPaciente || req.query.idPaciente;
 
-  const listar = (idPacienteReal) => {
-    let sql = `
-      SELECT idSintoma, titulo, descripcion
-      FROM sintoma
-    `;
-    const params = [];
-
-    if (idPacienteReal) {
-      sql += " WHERE idPaciente = ?";
-      params.push(idPacienteReal);
-    }
-
-    sql += " ORDER BY descripcion ASC";
-
-    db.query(sql, params, (err, result) => {
-      if (err) {
-        console.log("❌ ERROR obtenerSintomas:", err);
-        return res.status(500).json({ ok: false, error: err.sqlMessage || err.message });
-      }
-      res.json(result);
+  if (!idUsuario && !idPaciente) {
+    return res.status(400).json({
+      ok: false,
+      message: "Se requiere idUsuario o idPaciente"
     });
-  };
-
-  // Sin filtro -> comportamiento anterior (todos los síntomas)
-  if (!idUsuario && !idPaciente) return listar(null);
+  }
 
   resolverPaciente({ idUsuario, idPaciente }, (errPac, pacienteExiste, paciente) => {
     if (errPac) {
@@ -481,23 +463,31 @@ exports.obtenerSintomas = (req, res) => {
       });
     }
 
-    listar(paciente.idPaciente);
+    const sql = `
+      SELECT idSintoma, titulo, descripcion
+      FROM sintoma
+      WHERE idPaciente = ?
+      ORDER BY fecha DESC
+    `;
+
+    db.query(sql, [paciente.idPaciente], (err, result) => {
+      if (err) {
+        console.log("❌ ERROR obtenerSintomas:", err);
+        return res.status(500).json({ ok: false, error: err.sqlMessage || err.message });
+      }
+      res.json(result);
+    });
   });
 };
 
 // ======================================================
-// ✏️ EDITAR TRATAMIENTO (VALIDA EXISTENCIA Y SÍNTOMA)
+// ✏️ EDITAR TRATAMIENTO (solo actualiza los campos enviados)
 // ======================================================
 exports.editarTratamiento = (req, res) => {
   const { idTratamiento } = req.params;
-  const {
-    descripcion,
-    fechaInicio,
-    fechaFin,
-    estado,
-    observaciones,
-    idSintoma,
-  } = req.body;
+  const body = req.body;
+
+  console.log("✏️ EDITAR TRATAMIENTO", idTratamiento, body);
 
   if (!idTratamiento) {
     return res.status(400).json({
@@ -526,33 +516,37 @@ exports.editarTratamiento = (req, res) => {
         });
       }
 
-      const idPacienteTrat = filas[0].idPaciente; // idPaciente REAL (paciente.idPaciente)
+      const idPacienteTrat = filas[0].idPaciente; // idPaciente REAL
 
-      // 2️⃣ UPDATE (se ejecuta después de validar el síntoma)
+      // 2️⃣ Construir el UPDATE solo con los campos enviados
+      const campos = [];
+      const valores = [];
+
+      for (const c of ['descripcion', 'fechaInicio', 'fechaFin', 'estado']) {
+        if (body[c] !== undefined) {
+          campos.push(`${c} = ?`);
+          valores.push(body[c] === '' ? null : body[c]);
+        }
+      }
+
+      if (body.idSintoma !== undefined) {
+        campos.push('idSintoma = ?');
+        valores.push(body.idSintoma || null); // null = quitar síntoma
+      }
+
+      if (!campos.length) {
+        return res.status(400).json({
+          ok: false,
+          message: "No hay campos para actualizar"
+        });
+      }
+
       const actualizar = () => {
-        const sql = `
-          UPDATE tratamiento
-          SET
-            descripcion   = ?,
-            fechaInicio   = ?,
-            fechaFin      = ?,
-            estado        = ?,
-            observaciones = ?,
-            idSintoma     = ?
-          WHERE idTratamiento = ?
-        `;
+        valores.push(idTratamiento);
 
         db.query(
-          sql,
-          [
-            descripcion ?? null,
-            fechaInicio ?? null,
-            fechaFin ?? null,
-            estado ?? null,
-            observaciones ?? null,
-            idSintoma || null,
-            idTratamiento
-          ],
+          `UPDATE tratamiento SET ${campos.join(', ')} WHERE idTratamiento = ?`,
+          valores,
           (err) => {
             if (err) {
               console.log("❌ ERROR UPDATE TRATAMIENTO:", err);
@@ -566,10 +560,10 @@ exports.editarTratamiento = (req, res) => {
         );
       };
 
-      if (!idSintoma) return actualizar();
+      if (!body.idSintoma) return actualizar();
 
-      // El síntoma debe existir y ser del mismo paciente del tratamiento
-      sintomaPerteneceAPaciente(idSintoma, idPacienteTrat, (errSin, pertenece) => {
+      // 3️⃣ El síntoma debe existir y ser del mismo paciente del tratamiento
+      sintomaPerteneceAPaciente(body.idSintoma, idPacienteTrat, (errSin, pertenece) => {
         if (errSin) {
           console.log("❌ Error verificando síntoma:", errSin);
           return res.status(500).json({
@@ -581,7 +575,7 @@ exports.editarTratamiento = (req, res) => {
         if (!pertenece) {
           return res.status(400).json({
             ok: false,
-            message: `El síntoma ${idSintoma} no existe o no pertenece al paciente de este tratamiento`
+            message: `El síntoma ${body.idSintoma} no existe o no pertenece al paciente de este tratamiento`
           });
         }
 
